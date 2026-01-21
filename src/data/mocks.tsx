@@ -10,6 +10,11 @@ import {
   UserCircle,
   Heart,
   BarChart3,
+  Laptop,
+  Smartphone,
+  Box,
+  Monitor,
+  Car,
 } from "lucide-react";
 import {
   Employee,
@@ -564,4 +569,74 @@ export const MOCK_TAX_BRACKETS: TaxBracket[] = [
   { range: "₦1,100,001 - ₦1,600,000", rate: 19 },
   { range: "₦1,600,001 - ₦3,200,000", rate: 21 },
   { range: "Over ₦3,200,000", rate: 24 },
+];
+
+export interface Asset {
+  id: string;
+  name: string;
+  category: "Laptop" | "Phone" | "Monitor" | "Vehicle" | "Other";
+  serialNumber: string;
+  status: "Available" | "Assigned" | "Maintenance" | "Retired";
+  purchaseDate: string;
+  value: number;
+  assignedTo?: string; // Employee ID
+  image?: string;
+  condition: "New" | "Good" | "Fair" | "Poor";
+}
+
+export const MOCK_ASSETS: Asset[] = [
+  {
+    id: "AST-001",
+    name: "MacBook Pro M3 Max",
+    category: "Laptop",
+    serialNumber: "FVFXL1J2H3",
+    status: "Assigned",
+    purchaseDate: "2024-01-15",
+    value: 3500000,
+    assignedTo: "001", // Nneka
+    image:
+      "https://images.unsplash.com/photo-1517336714731-489689fd1ca4?auto=format&fit=crop&q=80&w=100",
+    condition: "Good",
+  },
+  {
+    id: "AST-002",
+    name: "Dell UltraSharp 32",
+    category: "Monitor",
+    serialNumber: "DL-32-4K-001",
+    status: "Assigned",
+    purchaseDate: "2023-11-20",
+    value: 450000,
+    assignedTo: "001",
+    condition: "Good",
+  },
+  {
+    id: "AST-003",
+    name: "iPhone 15 Pro",
+    category: "Phone",
+    serialNumber: "IP15-P-992",
+    status: "Available",
+    purchaseDate: "2024-02-01",
+    value: 1200000,
+    condition: "New",
+  },
+  {
+    id: "AST-004",
+    name: "Toyota Corolla (Fleet)",
+    category: "Vehicle",
+    serialNumber: "LND-123-AB",
+    status: "Maintenance",
+    purchaseDate: "2022-06-10",
+    value: 15000000,
+    condition: "Fair",
+  },
+  {
+    id: "AST-005",
+    name: "HP EliteBook G9",
+    category: "Laptop",
+    serialNumber: "HP-EB-882",
+    status: "Available",
+    purchaseDate: "2023-09-15",
+    value: 850000,
+    condition: "Good",
+  },
 ];

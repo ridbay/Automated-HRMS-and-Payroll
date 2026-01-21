@@ -17,6 +17,7 @@ import Reports from "./features/admin/Reports";
 import Settings from "./features/core/Settings";
 import LoginPage from "./features/core/LoginPage";
 import Profile from "./features/employee/Profile";
+import AssetManagement from "./features/admin/AssetManagement";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { NavigationProvider, useNavigation } from "./context/NavigationContext";
 
@@ -59,6 +60,8 @@ const AppContent: React.FC = () => {
         return <Payroll />;
       case "recruitment":
         return <Recruitment />;
+      case "assets":
+        return <AssetManagement />;
       case "attendance":
         return <Attendance />;
       case "performance":

@@ -9,6 +9,7 @@ import {
   Clock,
   Calendar,
   Wallet,
+  Box,
   Trophy,
   FileText,
   Users,
@@ -74,6 +75,7 @@ const Sidebar: React.FC = () => {
     },
     { name: "Team Calendar", icon: <Calendar size={20} />, path: "attendance" },
     { name: "Budget & Payroll", icon: <Wallet size={20} />, path: "payroll" },
+    { name: "Assets", icon: <Box size={20} />, path: "assets" }, // Added Assets menu item
     { name: "Reports", icon: <BarChart3 size={20} />, path: "reports" },
     { name: "Goals & OKRs", icon: <Target size={20} />, path: "goals" },
     { name: "Settings", icon: <Settings size={20} />, path: "settings" },

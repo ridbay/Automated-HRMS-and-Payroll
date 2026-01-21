@@ -36,8 +36,10 @@ import {
   Shield,
   Umbrella,
   Users,
+  Box,
 } from "lucide-react";
 import { Employee } from "../../types/index";
+import { MOCK_ASSETS } from "../../data/mocks";
 import {
   Skeleton,
   CardSkeleton,
@@ -103,7 +105,16 @@ const EmployeeDetail: React.FC<Props> = ({ employee, onBack }) => {
     { id: "compensation", label: "Comp", icon: <DollarSign size={16} /> },
     { id: "attendance", label: "Time", icon: <Clock size={16} /> },
     { id: "performance", label: "Perf", icon: <Trophy size={16} /> },
-    { id: "documents", label: "Docs", icon: <FileText size={16} /> },
+    {
+      id: "documents",
+      label: "Documents",
+      icon: <FileText size={16} />,
+    },
+    {
+      id: "assets",
+      label: "Assets",
+      icon: <Box size={16} />,
+    },
     { id: "payroll", label: "Payroll", icon: <Wallet size={16} /> },
     { id: "benefits", label: "Benefits", icon: <Heart size={16} /> },
     { id: "training", label: "Development", icon: <BookOpen size={16} /> },
@@ -892,6 +903,67 @@ const EmployeeDetail: React.FC<Props> = ({ employee, onBack }) => {
                         </p>
                       </div>
                     ))}
+                  </div>
+                </div>
+              )}
+
+              {activeTab === "assets" && (
+                <div className="bg-white p-10 rounded-[3rem] border border-slate-200 shadow-sm">
+                  <h3 className="text-xl font-black text-slate-800 uppercase tracking-widest mb-8 flex items-center gap-2">
+                    <Box className="text-indigo-600" /> Assigned Assets
+                  </h3>
+                  <div className="space-y-6">
+                    {MOCK_ASSETS.filter(
+                      (asset) => asset.assignedTo === employee.id,
+                    ).length > 0 ? (
+                      MOCK_ASSETS.filter(
+                        (asset) => asset.assignedTo === employee.id,
+                      ).map((asset) => (
+                        <div
+                          key={asset.id}
+                          className="flex items-center gap-6 p-6 bg-slate-50 rounded-2xl border border-slate-100"
+                        >
+                          <div className="w-16 h-16 bg-white rounded-xl flex items-center justify-center shrink-0 border border-slate-100">
+                            {asset.image ? (
+                              <img
+                                src={asset.image}
+                                className="w-12 h-12 object-contain"
+                              />
+                            ) : (
+                              <Box className="text-slate-300" />
+                            )}
+                          </div>
+                          <div className="flex-1">
+                            <h4 className="text-sm font-black text-slate-800">
+                              {asset.name}
+                            </h4>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                              SN: {asset.serialNumber}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-lg text-[10px] font-black uppercase tracking-widest">
+                              {asset.condition}
+                            </span>
+                            <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">
+                              {asset.purchaseDate}
+                            </p>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-center py-12">
+                        <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                          <Box className="text-slate-300" />
+                        </div>
+                        <p className="text-slate-400 font-bold text-sm">
+                          No assets assigned to this employee.
+                        </p>
+                        <button className="mt-4 px-6 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-100 transition-all">
+                          Assign Asset
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
