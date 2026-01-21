@@ -1,0 +1,7 @@
+{
+  "name": "ZenHR - Automated HRMS & Payroll",
+  "description": "A comprehensive multi-tenant SaaS HRMS with a virtual wallet-based payroll system, automated recruitment pipelines, and performance management.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
