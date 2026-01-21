@@ -11,6 +11,8 @@ import Performance from "./features/employee/Performance";
 import EmployeePortal from "./features/employee/EmployeePortal";
 import ManagerDashboard from "./features/manager/ManagerDashboard";
 import Benefits from "./features/employee/Benefits";
+import Leave from "./features/employee/Leave";
+import MyPayroll from "./features/employee/MyPayroll";
 import Reports from "./features/admin/Reports";
 import Settings from "./features/core/Settings";
 import LoginPage from "./features/core/LoginPage";
@@ -47,7 +49,12 @@ const AppContent: React.FC = () => {
       case "manager-dashboard":
         return <ManagerDashboard />;
       case "workforce":
+        if (user.role === "MANAGER") return <ManagerDashboard />;
         return <Workforce />;
+      case "approvals":
+        return <ManagerDashboard />;
+      case "goals":
+        return <ManagerDashboard />;
       case "payroll":
         return <Payroll />;
       case "recruitment":
@@ -55,10 +62,16 @@ const AppContent: React.FC = () => {
       case "attendance":
         return <Attendance />;
       case "performance":
+        if (user.role === "MANAGER") return <ManagerDashboard />;
         return <Performance />;
       case "benefits":
         return <Benefits />;
+      case "leave":
+        return <Leave />;
+      case "my-payroll":
+        return <MyPayroll />;
       case "reports":
+        if (user.role === "MANAGER") return <ManagerDashboard />;
         return <Reports />;
       case "portal":
         return <EmployeePortal />;

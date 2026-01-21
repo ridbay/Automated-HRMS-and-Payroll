@@ -53,6 +53,7 @@ import {
   MOCK_PAYROLL_ENTRIES,
 } from "../../data/mocks";
 import Celebration from "../../components/Celebration";
+import { useNavigation } from "../../context/NavigationContext";
 
 const QuickActionBtn = ({
   icon: Icon,
@@ -78,7 +79,8 @@ const QuickActionBtn = ({
 );
 
 const EmployeePortal: React.FC = () => {
-  const [activeTab, setActiveTab] = useState("dashboard");
+  const { setActiveTab } = useNavigation();
+  const [activeTab, setLocalActiveTab] = useState("dashboard");
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isClockedIn, setIsClockedIn] = useState(false);
   const [celebrating, setCelebrating] = useState(false);
@@ -291,7 +293,10 @@ const EmployeePortal: React.FC = () => {
           <p className="text-[10px] text-indigo-200 font-medium mb-4">
             Est. Date: {nextPayDate.toLocaleDateString()}
           </p>
-          <button className="text-[10px] font-black text-white uppercase tracking-widest flex items-center gap-1 hover:gap-2 transition-all bg-white/10 w-fit px-3 py-1.5 rounded-lg hover:bg-white/20">
+          <button
+            onClick={() => setActiveTab("my-payroll")}
+            className="text-[10px] font-black text-white uppercase tracking-widest flex items-center gap-1 hover:gap-2 transition-all bg-white/10 w-fit px-3 py-1.5 rounded-lg hover:bg-white/20"
+          >
             View Payslip <ChevronRight size={12} />
           </button>
         </motion.div>
@@ -317,6 +322,7 @@ const EmployeePortal: React.FC = () => {
                 icon={Umbrella}
                 label="Request Leave"
                 color="amber"
+                onClick={() => setActiveTab("leave")}
               />
               <QuickActionBtn
                 icon={Receipt}
@@ -327,6 +333,7 @@ const EmployeePortal: React.FC = () => {
                 icon={FileText}
                 label="View Payslips"
                 color="indigo"
+                onClick={() => setActiveTab("my-payroll")}
               />
               <QuickActionBtn icon={Target} label="My Goals" color="violet" />
               <QuickActionBtn icon={FileCheck} label="Documents" color="blue" />
