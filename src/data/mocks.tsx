@@ -190,99 +190,6 @@ export const MOCK_BADGES: Badge[] = [
   },
 ];
 
-export const MOCK_EMPLOYEES: Employee[] = [
-  {
-    id: "001",
-    name: "Nneka Onwuka",
-    lastName: "Onwuka",
-    email: "nneka@zenhr.com",
-    phone: "+234 803 111 2222",
-    role: "Product Designer",
-    department: "Engineering",
-    location: "Lagos HQ",
-    employmentType: "Full-time",
-    status: "active",
-    salary: 450000,
-    baseSalary: 380000,
-    hireDate: "2022-01-12",
-    managerName: "Ada Obi",
-    performanceRating: 4.8,
-    avatar: "https://i.pravatar.cc/150?u=nneka",
-    badges: [MOCK_BADGES[0], MOCK_BADGES[1], MOCK_BADGES[3]],
-    emergencyContacts: [
-      {
-        name: "Chudi Onwuka",
-        relationship: "Spouse",
-        phone: "+234 803 333 4444",
-        isPrimary: true,
-      },
-    ],
-    salaryHistory: [
-      { date: "2023-01-01", amount: 420000, reason: "Annual Appraisal" },
-    ],
-    bankDetails: {
-      bankName: "GTBank",
-      accountNumber: "0123456789",
-      accountName: "Nneka Onwuka",
-      method: "Bank transfer",
-    },
-  },
-  {
-    id: "002",
-    name: "Emeka Okafor",
-    lastName: "Okafor",
-    email: "emeka@zenhr.com",
-    role: "Fullstack Dev",
-    department: "Engineering",
-    location: "Remote",
-    employmentType: "Full-time",
-    status: "active",
-    salary: 520000,
-    hireDate: "2021-06-15",
-    managerName: "Ada Obi",
-    performanceRating: 4.5,
-    avatar: "https://i.pravatar.cc/150?u=emeka",
-    bankDetails: {
-      bankName: "Zenith Bank",
-      accountNumber: "2001234567",
-      accountName: "Emeka Okafor",
-      method: "Automated Wallet",
-    },
-  },
-  {
-    id: "003",
-    name: "Funke Akindele",
-    lastName: "Akindele",
-    email: "funke@zenhr.com",
-    role: "HR Specialist",
-    department: "People",
-    location: "Lagos Hub",
-    employmentType: "Full-time",
-    status: "on_leave",
-    salary: 380000,
-    hireDate: "2023-03-01",
-    managerName: "Ibrahim Musa",
-    performanceRating: 4.2,
-    avatar: "https://i.pravatar.cc/150?u=funke",
-  },
-  {
-    id: "004",
-    name: "Seyi Makinde",
-    lastName: "Makinde",
-    email: "seyi@zenhr.com",
-    role: "Sales Lead",
-    department: "Sales",
-    location: "Abuja Office",
-    employmentType: "Full-time",
-    status: "active",
-    salary: 600000,
-    hireDate: "2020-11-20",
-    managerName: "Ngozi Okonjo",
-    performanceRating: 4.9,
-    avatar: "https://i.pravatar.cc/150?u=seyi",
-  },
-];
-
 export const MOCK_PAYROLL_ENTRIES: PayrollEntry[] = [
   {
     employeeId: "001",
@@ -571,6 +478,291 @@ export const MOCK_TAX_BRACKETS: TaxBracket[] = [
   { range: "Over ₦3,200,000", rate: 24 },
 ];
 
+export const MOCK_EMPLOYEES: Employee[] = [
+  {
+    id: "001",
+    name: "Nneka",
+    lastName: "Onwuka",
+    email: "nneka.onwuka@zenhr.com",
+    role: "Software Engineer",
+    department: "Engineering",
+    location: "Lagos, Nigeria",
+    employmentType: "Full-time",
+    status: "active",
+    phone: "+2348012345678",
+    dob: "1990-01-15",
+    gender: "Female",
+    nationality: "Nigerian",
+    maritalStatus: "Married",
+    salary: 7500000,
+    hireDate: "2022-03-01",
+    managerName: "Chidi Okoro",
+    managerId: "003",
+    performanceRating: 4.5,
+    avatar:
+      "https://images.unsplash.com/photo-1494790108377-be9c29b29329?auto=format&fit=crop&q=80&w=100",
+    badges: [MOCK_BADGES[0]],
+    emergencyContacts: [
+      {
+        name: "Chudi Onwuka",
+        relationship: "Spouse",
+        phone: "+2348011223344",
+        isPrimary: true,
+      },
+    ],
+    education: [
+      {
+        degree: "B.Sc. Computer Science",
+        institution: "University of Lagos",
+        field: "Computer Science",
+        year: "2012",
+      },
+    ],
+    experience: [
+      {
+        role: "Software Developer",
+        company: "Tech Solutions Inc.",
+        duration: "5 years",
+      },
+    ],
+    salaryHistory: [
+      { date: "2022-03-01", amount: 6000000, reason: "Initial Hire" },
+      { date: "2023-03-01", amount: 7500000, reason: "Annual Review" },
+    ],
+    bankDetails: {
+      bankName: "Zenith Bank",
+      accountNumber: "1234567890",
+      accountName: "Nneka Onwuka",
+      method: "Bank transfer",
+    },
+  },
+  {
+    id: "002",
+    name: "Ahmed",
+    lastName: "Musa",
+    email: "ahmed.musa@zenhr.com",
+    role: "Product Manager",
+    department: "Product",
+    location: "Lagos, Nigeria",
+    employmentType: "Full-time",
+    status: "active",
+    phone: "+2348098765432",
+    dob: "1988-05-20",
+    gender: "Male",
+    nationality: "Nigerian",
+    maritalStatus: "Single",
+    salary: 8000000,
+    hireDate: "2021-08-15",
+    managerName: "Chidi Okoro",
+    managerId: "003",
+    performanceRating: 4.2,
+    avatar:
+      "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=100",
+    badges: [MOCK_BADGES[1]],
+    emergencyContacts: [
+      {
+        name: "Fatima Musa",
+        relationship: "Sister",
+        phone: "+2348011223355",
+        isPrimary: true,
+      },
+    ],
+    education: [
+      {
+        degree: "MBA",
+        institution: "Lagos Business School",
+        field: "Business",
+        year: "2018",
+      },
+    ],
+    experience: [
+      {
+        role: "Associate Product Manager",
+        company: "Innovate Corp",
+        duration: "3 years",
+      },
+    ],
+    salaryHistory: [
+      { date: "2021-08-15", amount: 7000000, reason: "Initial Hire" },
+      { date: "2022-08-15", amount: 8000000, reason: "Annual Review" },
+    ],
+    bankDetails: {
+      bankName: "GTBank",
+      accountNumber: "0987654321",
+      accountName: "Ahmed Musa",
+      method: "Bank transfer",
+    },
+  },
+  {
+    id: "003",
+    name: "Chidi",
+    lastName: "Okoro",
+    email: "chidi.okoro@zenhr.com",
+    role: "Head of Engineering",
+    department: "Engineering",
+    location: "Lagos, Nigeria",
+    employmentType: "Full-time",
+    status: "active",
+    phone: "+2348033445566",
+    dob: "1985-11-10",
+    gender: "Male",
+    nationality: "Nigerian",
+    maritalStatus: "Married",
+    salary: 12000000,
+    hireDate: "2020-01-01",
+    managerName: "CEO", // Top level
+    performanceRating: 4.8,
+    avatar:
+      "https://images.unsplash.com/photo-1535713875002-d1d0cfdfeeab?auto=format&fit=crop&q=80&w=100",
+    badges: [MOCK_BADGES[2]],
+    emergencyContacts: [
+      {
+        name: "Ada Okoro",
+        relationship: "Spouse",
+        phone: "+2348011223366",
+        isPrimary: true,
+      },
+    ],
+    education: [
+      {
+        degree: "M.Sc. Software Engineering",
+        institution: "University of Ibadan",
+        field: "Software Engineering",
+        year: "2010",
+      },
+    ],
+    experience: [
+      {
+        role: "Engineering Manager",
+        company: "Global Tech",
+        duration: "7 years",
+      },
+    ],
+    salaryHistory: [
+      { date: "2020-01-01", amount: 10000000, reason: "Initial Hire" },
+      { date: "2021-01-01", amount: 11000000, reason: "Annual Review" },
+      { date: "2022-01-01", amount: 12000000, reason: "Annual Review" },
+    ],
+    bankDetails: {
+      bankName: "First Bank",
+      accountNumber: "1122334455",
+      accountName: "Chidi Okoro",
+      method: "Bank transfer",
+    },
+  },
+  {
+    id: "004",
+    name: "Fatima",
+    lastName: "Ali",
+    email: "fatima.ali@zenhr.com",
+    role: "HR Manager",
+    department: "Human Resources",
+    location: "Lagos, Nigeria",
+    employmentType: "Full-time",
+    status: "active",
+    phone: "+2348077889900",
+    dob: "1992-07-01",
+    gender: "Female",
+    nationality: "Nigerian",
+    maritalStatus: "Single",
+    salary: 6000000,
+    hireDate: "2023-01-10",
+    managerName: "CEO", // Top level
+    performanceRating: 4.0,
+    avatar:
+      "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=100",
+    badges: [MOCK_BADGES[3]],
+    emergencyContacts: [
+      {
+        name: "Aminu Ali",
+        relationship: "Brother",
+        phone: "+2348011223377",
+        isPrimary: true,
+      },
+    ],
+    education: [
+      {
+        degree: "M.Sc. Human Resources",
+        institution: "University of Abuja",
+        field: "HR",
+        year: "2016",
+      },
+    ],
+    experience: [
+      {
+        role: "HR Generalist",
+        company: "Corporate Services Ltd.",
+        duration: "4 years",
+      },
+    ],
+    salaryHistory: [
+      { date: "2023-01-10", amount: 6000000, reason: "Initial Hire" },
+    ],
+    bankDetails: {
+      bankName: "UBA",
+      accountNumber: "2233445566",
+      accountName: "Fatima Ali",
+      method: "Bank transfer",
+    },
+  },
+  {
+    id: "005",
+    name: "David",
+    lastName: "Eze",
+    email: "david.eze@zenhr.com",
+    role: "Junior Software Engineer",
+    department: "Engineering",
+    location: "Lagos, Nigeria",
+    employmentType: "Full-time",
+    status: "active",
+    phone: "+2348011223344",
+    dob: "1995-03-25",
+    gender: "Male",
+    nationality: "Nigerian",
+    maritalStatus: "Single",
+    salary: 4000000,
+    hireDate: "2024-01-01",
+    managerName: "Nneka Onwuka",
+    managerId: "001",
+    performanceRating: 3.8,
+    avatar:
+      "https://images.unsplash.com/photo-1507003211169-e695c6edd65d?auto=format&fit=crop&q=80&w=100",
+    badges: [],
+    emergencyContacts: [
+      {
+        name: "Grace Eze",
+        relationship: "Mother",
+        phone: "+2348011223388",
+        isPrimary: true,
+      },
+    ],
+    education: [
+      {
+        degree: "B.Sc. Computer Engineering",
+        institution: "Covenant University",
+        field: "Engineering",
+        year: "2017",
+      },
+    ],
+    experience: [
+      {
+        role: "Intern Software Engineer",
+        company: "Startup Hub",
+        duration: "1 year",
+      },
+    ],
+    salaryHistory: [
+      { date: "2024-01-01", amount: 4000000, reason: "Initial Hire" },
+    ],
+    bankDetails: {
+      bankName: "Access Bank",
+      accountNumber: "3344556677",
+      accountName: "David Eze",
+      method: "Bank transfer",
+    },
+  },
+];
+
 export interface Asset {
   id: string;
   name: string;
@@ -638,5 +830,137 @@ export const MOCK_ASSETS: Asset[] = [
     purchaseDate: "2023-09-15",
     value: 850000,
     condition: "Good",
+  },
+];
+
+export interface Task {
+  id: string;
+  title: string;
+  status: "pending" | "completed";
+  category: "IT" | "HR" | "Finance" | "Admin";
+  dueDate: string;
+  assignedTo: string;
+}
+
+export interface Workflow {
+  id: string;
+  type: "Onboarding" | "Offboarding";
+  employeeId: string;
+  employeeName: string;
+  stage:
+    | "Pre-boarding"
+    | "Orientation"
+    | "Equipment"
+    | "Training"
+    | "Final Review"
+    | "Exit Interview"
+    | "Asset Return"
+    | "Account Deactivation";
+  status: "Active" | "Completed";
+  progress: number;
+  startDate: string;
+  tasks: Task[];
+}
+
+export const MOCK_WORKFLOWS: Workflow[] = [
+  {
+    id: "wf1",
+    type: "Onboarding",
+    employeeId: "005",
+    employeeName: "David Eze",
+    stage: "Equipment",
+    status: "Active",
+    progress: 45,
+    startDate: "2024-05-20",
+    tasks: [
+      {
+        id: "t1",
+        title: "Sign Offer Letter",
+        status: "completed",
+        category: "HR",
+        dueDate: "2024-05-21",
+        assignedTo: "David Eze",
+      },
+      {
+        id: "t2",
+        title: "Setup Work Laptop",
+        status: "pending",
+        category: "IT",
+        dueDate: "2024-05-25",
+        assignedTo: "IT Support",
+      },
+      {
+        id: "t3",
+        title: "Enroll in Benefits",
+        status: "pending",
+        category: "HR",
+        dueDate: "2024-05-30",
+        assignedTo: "David Eze",
+      },
+    ],
+  },
+  {
+    id: "wf2",
+    type: "Onboarding",
+    employeeId: "004",
+    employeeName: "Fatima Ali",
+    stage: "Training",
+    status: "Active",
+    progress: 75,
+    startDate: "2024-05-10",
+    tasks: [
+      {
+        id: "t4",
+        title: "HR Orientation",
+        status: "completed",
+        category: "HR",
+        dueDate: "2024-05-12",
+        assignedTo: "Fatima Ali",
+      },
+      {
+        id: "t5",
+        title: "Compliance Training",
+        status: "completed",
+        category: "HR",
+        dueDate: "2024-05-15",
+        assignedTo: "Fatima Ali",
+      },
+      {
+        id: "t6",
+        title: "Department Introduction",
+        status: "pending",
+        category: "Admin",
+        dueDate: "2024-05-26",
+        assignedTo: "Manager",
+      },
+    ],
+  },
+  {
+    id: "wf3",
+    type: "Offboarding",
+    employeeId: "001",
+    employeeName: "Sarah Connor",
+    stage: "Asset Return",
+    status: "Active",
+    progress: 30,
+    startDate: "2024-05-22",
+    tasks: [
+      {
+        id: "t7",
+        title: "Resignation Letter",
+        status: "completed",
+        category: "HR",
+        dueDate: "2024-05-22",
+        assignedTo: "Sarah Connor",
+      },
+      {
+        id: "t8",
+        title: "Return Laptop",
+        status: "pending",
+        category: "IT",
+        dueDate: "2024-06-01",
+        assignedTo: "Sarah Connor",
+      },
+    ],
   },
 ];
