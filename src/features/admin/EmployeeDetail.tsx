@@ -84,13 +84,13 @@ const EmployeeDetail: React.FC<Props> = ({ employee, onBack }) => {
       },
       {
         label: "Education History",
-        filled: (employee.education?.length || 0) > 0,
+        filled: false, // Future feature
       },
       {
         label: "Experience Records",
-        filled: (employee.experience?.length || 0) > 0,
+        filled: false, // Future feature
       },
-      { label: "Bank Details", filled: !!employee.bankDetails?.accountNumber },
+      { label: "Bank Details", filled: !!employee.accountNumber },
     ];
     const completed = items.filter((i) => i.filled).length;
     const percent = Math.round((completed / items.length) * 100);
@@ -182,7 +182,7 @@ const EmployeeDetail: React.FC<Props> = ({ employee, onBack }) => {
             <div className="flex flex-col md:flex-row items-end gap-8">
               <div className="relative group">
                 <img
-                  src={employee.avatar}
+                  src={employee.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(employee.name + ' ' + (employee.lastName || ''))}&background=random`}
                   className="w-44 h-44 rounded-[4rem] border-8 border-white shadow-2xl object-cover"
                 />
                 <div
@@ -296,10 +296,10 @@ const EmployeeDetail: React.FC<Props> = ({ employee, onBack }) => {
                           </div>
                           <div>
                             <p className="text-sm font-black text-slate-800">
-                              Automated Wallet
+                              {employee.payoutMethod || 'Automated Wallet'}
                             </p>
                             <p className="text-[10px] font-bold text-slate-400 uppercase">
-                              Instant Disbursal
+                              {employee.bankName || 'Instant Disbursal'}
                             </p>
                           </div>
                         </div>
@@ -314,10 +314,10 @@ const EmployeeDetail: React.FC<Props> = ({ employee, onBack }) => {
                           </div>
                           <div>
                             <p className="text-sm font-black text-slate-800">
-                              LIRS Verified
+                              {employee.tin ? 'LIRS Verified' : 'Pending Verification'}
                             </p>
                             <p className="text-[10px] font-bold text-slate-400 uppercase">
-                              TIN Registered
+                              {employee.tin ? 'TIN Registered' : 'TIN Required'}
                             </p>
                           </div>
                         </div>

@@ -1,4 +1,5 @@
 import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core';
+import { relations } from 'drizzle-orm';
 import { companies } from './company.model';
 
 export const employees = sqliteTable('employees', {
@@ -50,3 +51,14 @@ export const emergencyContacts = sqliteTable('emergency_contacts', {
   email: text('email'),
   isPrimary: integer('is_primary', { mode: 'boolean' }).notNull().default(false),
 });
+
+export const employeesRelations = relations(employees, ({ many }) => ({
+  emergencyContacts: many(emergencyContacts),
+}));
+
+export const emergencyContactsRelations = relations(emergencyContacts, ({ one }) => ({
+  employee: one(employees, {
+    fields: [emergencyContacts.employeeId],
+    references: [employees.id],
+  }),
+}));

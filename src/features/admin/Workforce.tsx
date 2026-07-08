@@ -1088,7 +1088,7 @@ const Workforce: React.FC = () => {
                 <div className="relative mb-6 pt-4">
                   <div className="relative mx-auto w-32 h-32">
                     <img
-                      src={emp.avatar}
+                      src={emp.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(emp.name + ' ' + (emp.lastName || ''))}&background=random`}
                       className="w-full h-full rounded-[2.5rem] object-cover border-8 border-white shadow-2xl"
                     />
                     <div
@@ -1183,7 +1183,7 @@ const Workforce: React.FC = () => {
                     <td className="px-6 py-5">
                       <div className="flex items-center gap-4">
                         <img
-                          src={emp.avatar}
+                          src={emp.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(emp.name + ' ' + (emp.lastName || ''))}&background=random`}
                           className="w-10 h-10 rounded-xl object-cover shadow-md"
                         />
                         <div>
@@ -1253,92 +1253,59 @@ const Workforce: React.FC = () => {
         {viewMode === "org" && (
           <div className="bg-slate-50 p-20 rounded-[4rem] border border-slate-200 min-h-[600px] overflow-auto flex justify-center">
             <div className="flex flex-col items-center">
-              {/* CEO Node */}
-              <div className="relative mb-12 flex flex-col items-center group cursor-pointer">
-                <div className="w-20 h-20 rounded-[2rem] bg-white border-4 border-slate-200 shadow-xl overflow-hidden mb-3 relative z-10 group-hover:border-indigo-600 transition-colors">
-                  <img
-                    src="https://i.pravatar.cc/150?u=ceo"
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <div className="text-center relative z-10 bg-slate-50 px-2">
-                  <h4 className="text-sm font-black text-slate-800">
-                    Richard Hendricks
-                  </h4>
-                  <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">
-                    Chief Executive Officer
-                  </p>
-                </div>
-                {/* Connector */}
-                <div className="absolute top-full left-1/2 -translate-x-1/2 h-12 w-0.5 bg-slate-300 -z-0" />
-              </div>
-
-              {/* Level 2 Container */}
-              <div className="flex gap-16 relative">
-                {/* Horizontal Bar */}
-                <div className="absolute -top-12 left-10 right-10 h-0.5 bg-slate-300" />
-
-                {[
-                  {
-                    name: "Jared Dunn",
-                    role: "Head of Operations",
-                    img: "https://i.pravatar.cc/150?u=jared",
-                  },
-                  {
-                    name: "Monica Hall",
-                    role: "Head of Product",
-                    img: "https://i.pravatar.cc/150?u=monica",
-                  },
-                  {
-                    name: "Bertram Gilfoyle",
-                    role: "CTO",
-                    img: "https://i.pravatar.cc/150?u=gilfoyle",
-                  },
-                ].map((exec, i) => (
-                  <div key={i} className="flex flex-col items-center relative">
-                    <div className="absolute -top-12 left-1/2 -translate-x-1/2 h-12 w-0.5 bg-slate-300" />
-                    <div className="w-16 h-16 rounded-2xl bg-white border-4 border-slate-200 shadow-lg overflow-hidden mb-2 hover:border-indigo-400 transition-colors">
+              {filteredEmployees.length > 0 ? (
+                <>
+                  <div className="relative mb-12 flex flex-col items-center group cursor-pointer">
+                    <div className="w-20 h-20 rounded-[2rem] bg-white border-4 border-slate-200 shadow-xl overflow-hidden mb-3 relative z-10 group-hover:border-indigo-600 transition-colors">
                       <img
-                        src={exec.img}
+                        src={filteredEmployees[0].avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(filteredEmployees[0].name + ' ' + (filteredEmployees[0].lastName || ''))}&background=random`}
                         className="w-full h-full object-cover"
                       />
                     </div>
-                    <div className="text-center">
-                      <h4 className="text-xs font-black text-slate-800">
-                        {exec.name}
+                    <div className="text-center relative z-10 bg-slate-50 px-2">
+                      <h4 className="text-sm font-black text-slate-800">
+                        {filteredEmployees[0].name} {filteredEmployees[0].lastName}
                       </h4>
-                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tight">
-                        {exec.role}
+                      <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">
+                        {filteredEmployees[0].role}
                       </p>
                     </div>
-                    {exec.role === "CTO" && (
-                      <div className="mt-8 flex flex-col items-center relative">
-                        <div className="h-8 w-0.5 bg-slate-300" />
-                        <div className="flex gap-8 relative pt-8">
-                          <div className="absolute top-0 left-6 right-6 h-0.5 bg-slate-300" />
-                          {filteredEmployees.slice(0, 3).map((emp, j) => (
-                            <div
-                              key={j}
-                              className="flex flex-col items-center relative"
-                            >
-                              <div className="absolute -top-8 left-1/2 -translate-x-1/2 h-8 w-0.5 bg-slate-300" />
-                              <div className="w-12 h-12 rounded-xl bg-white border-2 border-slate-200 shadow-md overflow-hidden mb-1">
-                                <img
-                                  src={emp.avatar}
-                                  className="w-full h-full object-cover"
-                                />
-                              </div>
-                              <p className="text-[9px] font-black text-slate-700">
-                                {emp.name.split(" ")[0]}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
+                    {filteredEmployees.length > 1 && (
+                      <div className="absolute top-full left-1/2 -translate-x-1/2 h-12 w-0.5 bg-slate-300 -z-0" />
                     )}
                   </div>
-                ))}
-              </div>
+
+                  {filteredEmployees.length > 1 && (
+                    <div className="flex gap-8 relative flex-wrap justify-center max-w-4xl">
+                      <div className="absolute -top-12 left-10 right-10 h-0.5 bg-slate-300" />
+                      
+                      {filteredEmployees.slice(1).map((emp, i) => (
+                        <div key={i} className="flex flex-col items-center relative min-w-[120px]">
+                          <div className="absolute -top-12 left-1/2 -translate-x-1/2 h-12 w-0.5 bg-slate-300" />
+                          <div className="w-16 h-16 rounded-2xl bg-white border-4 border-slate-200 shadow-lg overflow-hidden mb-2 hover:border-indigo-400 transition-colors">
+                            <img
+                              src={emp.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(emp.name + ' ' + (emp.lastName || ''))}&background=random`}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                          <div className="text-center">
+                            <h5 className="text-xs font-black text-slate-800">
+                              {emp.name}
+                            </h5>
+                            <p className="text-[9px] font-bold text-slate-500 uppercase">
+                              {emp.role}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="text-slate-400 font-bold uppercase tracking-widest text-sm">
+                  No employees available to map.
+                </div>
+              )}
             </div>
           </div>
         )}

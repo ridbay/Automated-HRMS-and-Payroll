@@ -11,11 +11,12 @@ export class EmployeeService {
   }
 
   async getAllByCompany(companyId: string) {
-    return this.db
-      .select()
-      .from(schema.employees)
-      .where(eq(schema.employees.companyId, companyId))
-      .all();
+    return this.db.query.employees.findMany({
+      where: eq(schema.employees.companyId, companyId),
+      with: {
+        emergencyContacts: true,
+      },
+    });
   }
 
   async createForCompany(companyId: string, payload: any) {
