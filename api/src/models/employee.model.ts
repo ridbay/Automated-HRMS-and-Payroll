@@ -27,4 +27,26 @@ export const employees = sqliteTable('employees', {
   managerName: text('manager_name'),
   workEmail: text('work_email'),
   performanceRating: real('performance_rating'),
+  
+  // Tax & Statutory
+  tin: text('tin'),
+  pfa: text('pfa'),
+  pensionId: text('pension_id'),
+  
+  // Banking & Payout
+  bankName: text('bank_name'),
+  accountNumber: text('account_number'),
+  accountName: text('account_name'),
+  payoutMethod: text('payout_method'),
+});
+
+export const emergencyContacts = sqliteTable('emergency_contacts', {
+  id: text('id').primaryKey(),
+  companyId: text('company_id').notNull().references(() => companies.id),
+  employeeId: text('employee_id').notNull().references(() => employees.id),
+  name: text('name').notNull(),
+  relationship: text('relationship').notNull(),
+  phone: text('phone').notNull(),
+  email: text('email'),
+  isPrimary: integer('is_primary', { mode: 'boolean' }).notNull().default(false),
 });

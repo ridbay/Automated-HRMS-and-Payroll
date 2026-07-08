@@ -64,6 +64,15 @@ import EmployeeDetail from "./EmployeeDetail";
 const Workforce: React.FC = () => {
   const { data: employees = [] } = useEmployees();
   const createEmployeeMutation = useCreateEmployee();
+
+  const [formData, setFormData] = useState<any>({
+    role: "Software Engineer",
+    department: "Engineering",
+    employmentType: "Full-time",
+    status: "active",
+    salary: 120000,
+  });
+
   const [viewMode, setViewMode] = useState<"grid" | "list" | "org">("grid");
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [wizardStep, setWizardStep] = useState(1);
@@ -134,6 +143,8 @@ const Workforce: React.FC = () => {
                   </label>
                   <input
                     type="text"
+                    value={formData.name || ""}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     placeholder="John"
                     className="w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-bold"
                   />
@@ -154,6 +165,8 @@ const Workforce: React.FC = () => {
                   </label>
                   <input
                     type="text"
+                    value={formData.lastName || ""}
+                    onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
                     placeholder="Doe"
                     className="w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-bold"
                   />
@@ -174,6 +187,8 @@ const Workforce: React.FC = () => {
                   </label>
                   <input
                     type="email"
+                    value={formData.email || ""}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     placeholder="john.doe@gmail.com"
                     className="w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-bold"
                   />
@@ -371,6 +386,8 @@ const Workforce: React.FC = () => {
                     </label>
                     <input
                       type="number"
+                      value={formData.salary || ""}
+                      onChange={(e) => setFormData({ ...formData, salary: Number(e.target.value) })}
                       placeholder="0.00"
                       className="w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-black text-indigo-600"
                     />
@@ -431,6 +448,8 @@ const Workforce: React.FC = () => {
                 </label>
                 <input
                   type="text"
+                  value={formData.tin || ""}
+                  onChange={(e) => setFormData({ ...formData, tin: e.target.value })}
                   placeholder="TIN-XXXXXX"
                   className="w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-bold"
                 />
@@ -520,6 +539,8 @@ const Workforce: React.FC = () => {
                   </label>
                   <input
                     type="text"
+                    value={formData.accountNumber || ""}
+                    onChange={(e) => setFormData({ ...formData, accountNumber: e.target.value })}
                     placeholder="10 digits"
                     className="w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-bold tracking-[0.2em]"
                   />
@@ -1477,15 +1498,8 @@ const Workforce: React.FC = () => {
                         createEmployeeMutation.mutate(
                           {
                             id: `EMP-${Math.floor(1000 + Math.random() * 9000)}`,
-                            name: "John",
-                            lastName: "Doe",
-                            email: `john.doe.${Math.floor(Math.random() * 1000)}@example.com`,
-                            role: "Software Engineer",
-                            department: "Engineering",
-                            employmentType: "Full-time",
-                            status: "active",
-                            salary: 120000,
-                            hireDate: new Date().toISOString().split("T")[0],
+                            ...formData,
+                            hireDate: formData.hireDate || new Date().toISOString().split("T")[0],
                           },
                           {
                             onSuccess: () => {

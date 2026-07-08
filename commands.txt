@@ -1,0 +1,5 @@
+To view Database on my local Machine with Visual Web UI:
+npm run db:studio
+
+To view Database on my local Machine via command line:
+npx wrangler d1 execute zenhr-d1 --local --command "SELECT * FROM employees;"

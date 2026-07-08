@@ -18,11 +18,28 @@ export class EmployeeService {
       .all();
   }
 
-  async createForCompany(companyId: string, employeeData: any) {
+  async createForCompany(companyId: string, payload: any) {
+    const { emergencyContacts, ...employeeData } = payload;
+    
+    // Insert the employee
     const result = await this.db
       .insert(schema.employees)
       .values({ ...employeeData, companyId })
       .returning();
-    return result[0];
+      
+    const newEmployee = result[0];
+
+    // Insert emergency contacts if any exist
+    if (emergencyContacts && emergencyContacts.length > 0) {
+      const contactsToInsert = emergencyContacts.map((c: any) => ({
+        ...c,
+        id: `EC-${Math.floor(1000 + Math.random() * 9000)}`,
+        companyId,
+        employeeId: newEmployee.id,
+      }));
+      await this.db.insert(schema.emergencyContacts).values(contactsToInsert);
+    }
+    
+    return newEmployee;
   }
 }

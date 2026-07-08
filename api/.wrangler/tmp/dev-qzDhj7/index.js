@@ -8112,6 +8112,7 @@ var schema_exports = {};
 __export(schema_exports, {
   attendanceRecords: () => attendanceRecords,
   companies: () => companies,
+  emergencyContacts: () => emergencyContacts,
   employees: () => employees,
   jobRequisitions: () => jobRequisitions,
   leaveRequests: () => leaveRequests,
@@ -8154,7 +8155,26 @@ var employees = sqliteTable("employees", {
   managerId: text("manager_id"),
   managerName: text("manager_name"),
   workEmail: text("work_email"),
-  performanceRating: real("performance_rating")
+  performanceRating: real("performance_rating"),
+  // Tax & Statutory
+  tin: text("tin"),
+  pfa: text("pfa"),
+  pensionId: text("pension_id"),
+  // Banking & Payout
+  bankName: text("bank_name"),
+  accountNumber: text("account_number"),
+  accountName: text("account_name"),
+  payoutMethod: text("payout_method")
+});
+var emergencyContacts = sqliteTable("emergency_contacts", {
+  id: text("id").primaryKey(),
+  companyId: text("company_id").notNull().references(() => companies.id),
+  employeeId: text("employee_id").notNull().references(() => employees.id),
+  name: text("name").notNull(),
+  relationship: text("relationship").notNull(),
+  phone: text("phone").notNull(),
+  email: text("email"),
+  isPrimary: integer("is_primary", { mode: "boolean" }).notNull().default(false)
 });
 
 // src/models/attendance.model.ts
@@ -8227,9 +8247,20 @@ var EmployeeService = class {
   async getAllByCompany(companyId) {
     return this.db.select().from(employees).where(eq(employees.companyId, companyId)).all();
   }
-  async createForCompany(companyId, employeeData) {
+  async createForCompany(companyId, payload) {
+    const { emergencyContacts: emergencyContacts2, ...employeeData } = payload;
     const result = await this.db.insert(employees).values({ ...employeeData, companyId }).returning();
-    return result[0];
+    const newEmployee = result[0];
+    if (emergencyContacts2 && emergencyContacts2.length > 0) {
+      const contactsToInsert = emergencyContacts2.map((c) => ({
+        ...c,
+        id: `EC-${Math.floor(1e3 + Math.random() * 9e3)}`,
+        companyId,
+        employeeId: newEmployee.id
+      }));
+      await this.db.insert(emergencyContacts).values(contactsToInsert);
+    }
+    return newEmployee;
   }
 };
 
