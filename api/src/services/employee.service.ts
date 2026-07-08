@@ -79,6 +79,7 @@ export class EmployeeService {
       accountNumber: data.accountNumber,
       accountName: data.accountName,
       maritalStatus: data.maritalStatus,
+      avatar: data.avatar,
     };
 
     // Remove undefined values

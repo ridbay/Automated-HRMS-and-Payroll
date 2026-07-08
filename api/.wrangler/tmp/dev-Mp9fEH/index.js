@@ -8438,7 +8438,8 @@ var EmployeeService = class {
       bankName: data.bankName,
       accountNumber: data.accountNumber,
       accountName: data.accountName,
-      maritalStatus: data.maritalStatus
+      maritalStatus: data.maritalStatus,
+      avatar: data.avatar
     };
     const updateData = Object.fromEntries(
       Object.entries(allowedUpdates).filter(([_, v]) => v !== void 0)
