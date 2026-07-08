@@ -60,7 +60,7 @@ import {
   MOCK_LEAVE_BALANCES,
   MOCK_EMPLOYEES,
 } from "../../data/mocks";
-import { useMyAttendance, useClockIn, useClockOut } from "../../api/client";
+import { useMyAttendance, useClockIn, useClockOut, useOvertimeRequests, useSubmitOvertime } from "../../api/client";
 
 const Attendance: React.FC = () => {
   const [activeTab, setActiveTab] = useState<
@@ -90,26 +90,86 @@ const Attendance: React.FC = () => {
   const [offlineQueue, setOfflineQueue] = useState<any[]>([]);
   const [showConfetti, setShowConfetti] = useState(false);
 
-  // Overtime mock
-  const [overtimeRequests, setOvertimeRequests] = useState([
-    {
-      id: "ot1",
-      date: "2024-05-24",
-      hours: "2.5",
-      status: "approved",
-      reason: "Q2 Design Sprint Finalization",
-    },
-    {
-      id: "ot2",
-      date: "2024-05-28",
-      hours: "4.0",
-      status: "pending",
-      reason: "Mobile App Release Support",
-    },
-  ]);
+  // Overtime State & Hooks
+  const { data: overtimeRequestsData } = useOvertimeRequests();
+  const submitOvertimeMutation = useSubmitOvertime();
+  const overtimeRequests = overtimeRequestsData || [];
+
+  const [otDate, setOtDate] = useState("");
+  const [otFrom, setOtFrom] = useState("");
+  const [otTo, setOtTo] = useState("");
+  const [otReason, setOtReason] = useState("");
+  const [otDeliverable, setOtDeliverable] = useState("");
+
+  const handleOvertimeSubmit = () => {
+    if (!otDate || !otFrom || !otTo || !otReason) return;
+    
+    // Calculate simple difference in hours
+    const start = new Date(`${otDate}T${otFrom}`);
+    const end = new Date(`${otDate}T${otTo}`);
+    let diffHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+    if (diffHours < 0) diffHours += 24; // Handle overnight
+
+    submitOvertimeMutation.mutate({
+      date: otDate,
+      startTime: otFrom,
+      endTime: otTo,
+      hours: Number(diffHours.toFixed(1)),
+      reason: otReason,
+      deliverable: otDeliverable
+    }, {
+      onSuccess: () => {
+        setOtDate("");
+        setOtFrom("");
+        setOtTo("");
+        setOtReason("");
+        setOtDeliverable("");
+      }
+    });
+  };
 
   const me = MOCK_EMPLOYEES[0];
   const noteRef = useRef<HTMLTextAreaElement>(null);
+
+  // Stats calculation
+  const history = attendanceData?.history || [];
+  const statsMonth = new Date().getMonth();
+  const statsYear = new Date().getFullYear();
+
+  const monthlyHistory = history.filter((record: any) => {
+    const d = new Date(record.date);
+    return d.getMonth() === statsMonth && d.getFullYear() === statsYear;
+  });
+
+  const totalMonthlyHours = monthlyHistory.reduce((sum: number, r: any) => sum + (r.workHours || 0), 0);
+  const totalMonthlyOvertime = monthlyHistory.reduce((sum: number, r: any) => sum + (r.overtime || 0), 0);
+
+  let lateEntries = 0;
+  let totalArrivalMinutes = 0;
+  let arrivalCount = 0;
+
+  monthlyHistory.forEach((r: any) => {
+    if (r.clockIn) {
+      const clockInTime = new Date(r.clockIn);
+      const hours = clockInTime.getHours();
+      const minutes = clockInTime.getMinutes();
+      
+      totalArrivalMinutes += (hours * 60 + minutes);
+      arrivalCount++;
+
+      // Consider late if clock in is after 09:15 AM
+      if (hours > 9 || (hours === 9 && minutes > 15)) {
+        lateEntries++;
+      }
+    }
+  });
+
+  const avgArrivalMinutes = arrivalCount > 0 ? Math.round(totalArrivalMinutes / arrivalCount) : 0;
+  const avgArrivalHours = Math.floor(avgArrivalMinutes / 60);
+  const avgArrivalMins = avgArrivalMinutes % 60;
+  const avgArrivalAmPm = avgArrivalHours >= 12 ? 'PM' : 'AM';
+  const displayAvgArrivalHours = avgArrivalHours > 12 ? avgArrivalHours - 12 : (avgArrivalHours === 0 ? 12 : avgArrivalHours);
+  const formattedAvgArrival = arrivalCount > 0 ? `${displayAvgArrivalHours.toString().padStart(2, '0')}:${avgArrivalMins.toString().padStart(2, '0')} ${avgArrivalAmPm}` : 'N/A';
 
   useEffect(() => {
     const ticker = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -158,19 +218,60 @@ const Attendance: React.FC = () => {
   useEffect(() => {
     if (showClockModal && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
-        (position) => {
-          // Mock address lookup
-          setLocation({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-            address: "Lagos HQ (Verified)",
-          });
+        async (position) => {
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+          try {
+            const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`, {
+              headers: {
+                'Accept-Language': 'en-US,en;q=0.9'
+              }
+            });
+            const data = await response.json();
+            setLocation({
+              lat,
+              lng,
+              address: data.display_name || "Location verified",
+            });
+          } catch (e) {
+            setLocation({
+              lat,
+              lng,
+              address: "Location verified",
+            });
+          }
         },
-        (error) => {
-          console.error("Error getting location", error);
-          setLocation(null);
+        async (error) => {
+          // If browser GPS fails, fallback to IP-based Geolocation to guarantee a location
+          try {
+            const ipResponse = await fetch('https://ipapi.co/json/');
+            const ipData = await ipResponse.json();
+            
+            if (ipData && ipData.latitude && ipData.longitude) {
+              setLocation({
+                lat: ipData.latitude,
+                lng: ipData.longitude,
+                address: `${ipData.city}, ${ipData.region} (IP Approx)`,
+              });
+            } else {
+              throw new Error("IP data invalid");
+            }
+          } catch (ipError) {
+            setLocation({
+              lat: 0,
+              lng: 0,
+              address: "Location Unknown (Check Network)",
+            });
+          }
         },
+        { timeout: 15000, enableHighAccuracy: false, maximumAge: Infinity }
       );
+    } else if (showClockModal) {
+      setLocation({
+        lat: 0,
+        lng: 0,
+        address: "Geolocation not supported by browser",
+      });
     }
   }, [showClockModal]);
 
@@ -613,18 +714,18 @@ const Attendance: React.FC = () => {
               {[
                 {
                   label: "Avg Arrival",
-                  val: "09:05 AM",
+                  val: formattedAvgArrival,
                   color: "text-amber-400",
                 },
                 {
                   label: "Total Hours",
-                  val: "160.5h",
+                  val: `${totalMonthlyHours.toFixed(1)}h`,
                   color: "text-emerald-400",
                 },
-                { label: "Overtime", val: "5.2h", color: "text-indigo-400" },
+                { label: "Overtime", val: `${totalMonthlyOvertime.toFixed(1)}h`, color: "text-indigo-400" },
                 {
                   label: "Late Entries",
-                  val: "2 Times",
+                  val: `${lateEntries} Times`,
                   color: "text-rose-400",
                 },
               ].map((s) => (
@@ -676,6 +777,8 @@ const Attendance: React.FC = () => {
               </label>
               <input
                 type="date"
+                value={otDate}
+                onChange={(e) => setOtDate(e.target.value)}
                 className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-700"
               />
             </div>
@@ -686,6 +789,8 @@ const Attendance: React.FC = () => {
                 </label>
                 <input
                   type="time"
+                  value={otFrom}
+                  onChange={(e) => setOtFrom(e.target.value)}
                   className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-700"
                 />
               </div>
@@ -695,6 +800,8 @@ const Attendance: React.FC = () => {
                 </label>
                 <input
                   type="time"
+                  value={otTo}
+                  onChange={(e) => setOtTo(e.target.value)}
                   className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-700"
                 />
               </div>
@@ -705,6 +812,8 @@ const Attendance: React.FC = () => {
               </label>
               <textarea
                 rows={3}
+                value={otReason}
+                onChange={(e) => setOtReason(e.target.value)}
                 placeholder="e.g. Critical bug fix for V2 release..."
                 className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none focus:ring-4 focus:ring-indigo-500/10 font-medium resize-none"
               />
@@ -715,12 +824,17 @@ const Attendance: React.FC = () => {
               </label>
               <input
                 type="text"
+                value={otDeliverable}
+                onChange={(e) => setOtDeliverable(e.target.value)}
                 placeholder="e.g. Merged PR #829"
                 className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-700"
               />
             </div>
-            <button className="w-full py-5 bg-indigo-600 text-white rounded-[2rem] font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-100">
-              Submit for Approval
+            <button 
+              onClick={handleOvertimeSubmit}
+              disabled={submitOvertimeMutation.isPending}
+              className="w-full py-5 bg-indigo-600 text-white rounded-[2rem] font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-100 disabled:opacity-50">
+              {submitOvertimeMutation.isPending ? "Submitting..." : "Submit for Approval"}
             </button>
           </div>
         </section>
@@ -783,7 +897,7 @@ const Attendance: React.FC = () => {
   return (
     <div className="space-y-10">
       {/* Module Navigation */}
-      <div className="flex flex-col lg:flex-row gap-8 justify-between items-start lg:items-center">
+      <div className="flex flex-col gap-8">
         <div className="flex items-center gap-6">
           <div className="relative">
             <img

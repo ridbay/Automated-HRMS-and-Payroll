@@ -26,3 +26,24 @@ export const attendanceRecords = sqliteTable("attendance_records", {
     .default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").$onUpdate(() => new Date().toISOString()),
 });
+
+export const overtimeRequests = sqliteTable("overtime_requests", {
+  id: text("id").primaryKey(),
+  companyId: text("company_id")
+    .notNull()
+    .references(() => companies.id),
+  employeeId: text("employee_id")
+    .notNull()
+    .references(() => employees.id),
+  date: text("date").notNull(),
+  startTime: text("start_time").notNull(),
+  endTime: text("end_time").notNull(),
+  hours: real("hours").notNull(),
+  reason: text("reason").notNull(),
+  deliverable: text("deliverable"),
+  status: text("status").notNull().default("pending"),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").$onUpdate(() => new Date().toISOString()),
+});

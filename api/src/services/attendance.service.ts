@@ -23,9 +23,10 @@ export class AttendanceService {
     const grouped: Record<string, any> = {};
     for (const r of records) {
       if (!grouped[r.date]) {
-        grouped[r.date] = { date: r.date, status: r.status, clockIn: r.clockIn, clockOut: r.clockOut, workHours: 0, note: r.notes };
+        grouped[r.date] = { date: r.date, status: r.status, clockIn: r.clockIn, clockOut: r.clockOut, workHours: 0, overtime: 0, note: r.notes };
       }
       grouped[r.date].workHours += (r.workHours || 0);
+      grouped[r.date].overtime += (r.overtime || 0);
       // clockOut is the latest clock out of the day
       if (r.clockOut && (!grouped[r.date].clockOut || new Date(r.clockOut) > new Date(grouped[r.date].clockOut))) {
         grouped[r.date].clockOut = r.clockOut;
@@ -58,6 +59,33 @@ export class AttendanceService {
       limit: 1
     });
     return records[0] || null;
+  }
+
+  async getOvertimeRequests(companyId: string, employeeId: string) {
+    return this.db.query.overtimeRequests.findMany({
+      where: and(
+        eq(schema.overtimeRequests.companyId, companyId),
+        eq(schema.overtimeRequests.employeeId, employeeId)
+      ),
+      orderBy: (overtimeRequests: any, { desc }: any) => [desc(overtimeRequests.date), desc(overtimeRequests.createdAt)]
+    });
+  }
+
+  async createOvertimeRequest(data: any) {
+    const id = crypto.randomUUID();
+    await this.db.insert(schema.overtimeRequests).values({
+      id,
+      companyId: data.companyId,
+      employeeId: data.employeeId,
+      date: data.date,
+      startTime: data.startTime,
+      endTime: data.endTime,
+      hours: data.hours,
+      reason: data.reason,
+      deliverable: data.deliverable,
+      status: "pending"
+    });
+    return { success: true, id };
   }
 
   async clockIn(companyId: string, employeeId: string, data: any) {

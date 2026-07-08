@@ -68,3 +68,43 @@ export const clockOut = async (c: Context<AppEnv>) => {
   
   return c.json(request);
 };
+
+export const getOvertimeRequests = async (c: Context<AppEnv>) => {
+  const companyId = c.get('companyId');
+  let employeeId = c.req.header('x-employee-id');
+  
+  const attendanceService = new AttendanceService(c.env.DB);
+  const employeeService = new EmployeeService(c.env.DB);
+
+  if (!employeeId) {
+    const defaultId = await employeeService.getFirstEmployeeId(companyId);
+    if (!defaultId) return c.json({ error: 'No employee found' }, 404);
+    employeeId = defaultId;
+  }
+
+  const overtimeRequests = await attendanceService.getOvertimeRequests(companyId, employeeId);
+  return c.json(overtimeRequests);
+};
+
+export const submitOvertimeRequest = async (c: Context<AppEnv>) => {
+  const companyId = c.get('companyId');
+  let employeeId = c.req.header('x-employee-id');
+  
+  const attendanceService = new AttendanceService(c.env.DB);
+  const employeeService = new EmployeeService(c.env.DB);
+
+  if (!employeeId) {
+    const defaultId = await employeeService.getFirstEmployeeId(companyId);
+    if (!defaultId) return c.json({ error: 'No employee found' }, 404);
+    employeeId = defaultId;
+  }
+
+  const data = await c.req.json();
+  const result = await attendanceService.createOvertimeRequest({
+    ...data,
+    companyId,
+    employeeId
+  });
+
+  return c.json(result);
+};

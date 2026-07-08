@@ -33,6 +33,9 @@ export const employees = sqliteTable('employees', {
   tin: text('tin'),
   pfa: text('pfa'),
   pensionId: text('pension_id'),
+  nin: text('nin'),
+  nhf: text('nhf'),
+  taxState: text('tax_state'),
   
   // Banking & Payout
   bankName: text('bank_name'),

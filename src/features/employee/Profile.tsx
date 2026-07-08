@@ -107,6 +107,16 @@ const Profile: React.FC = () => {
     secondaryAccountName: "",
     secondaryAccountNumber: "",
   });
+
+  const [showStatutoryModal, setShowStatutoryModal] = useState(false);
+  const [statutoryDetails, setStatutoryDetails] = useState({
+    tin: "",
+    pfa: "",
+    pensionId: "",
+    nin: "",
+    nhf: "",
+    taxState: "",
+  });
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -150,6 +160,24 @@ const Profile: React.FC = () => {
     });
   };
 
+  const handleOpenStatutory = () => {
+    setStatutoryDetails({
+      tin: me?.tin || "",
+      pfa: me?.pfa || "",
+      pensionId: me?.pensionId || "",
+      nin: me?.nin || "",
+      nhf: me?.nhf || "",
+      taxState: me?.taxState || "",
+    });
+    setShowStatutoryModal(true);
+  };
+
+  const handleSaveStatutory = () => {
+    updateProfileMutation.mutate(statutoryDetails, {
+      onSuccess: () => setShowStatutoryModal(false)
+    });
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -166,13 +194,27 @@ const Profile: React.FC = () => {
     );
   }
 
+  // Calculate Profile Completion
+  const completionItems = [
+    { key: "avatar", label: "Upload Profile Picture", isComplete: !!me?.avatar, action: () => fileInputRef.current?.click() },
+    { key: "phone", label: "Add Personal Phone", isComplete: !!me?.phone, action: () => setActiveTab("personal") },
+    { key: "location", label: "Add Home Address", isComplete: !!me?.location, action: () => setActiveTab("personal") },
+    { key: "emergency", label: "Add Emergency Contact", isComplete: me?.emergencyContacts?.length > 0, action: () => { setActiveTab("dependents"); setShowEmergencyModal(true); } },
+    { key: "bank", label: "Add Primary Bank", isComplete: !!me?.accountNumber, action: () => setActiveTab("bank") },
+    { key: "statutory", label: "Complete Statutory Info", isComplete: !!(me?.nin && me?.tin && me?.pensionId), action: () => { setActiveTab("tax"); setShowStatutoryModal(true); } },
+  ];
+
+  const completedCount = completionItems.filter(item => item.isComplete).length;
+  const completionPercentage = Math.round((completedCount / completionItems.length) * 100);
+  const missingItems = completionItems.filter(item => !item.isComplete).slice(0, 3);
+
   const tabs = [
     { id: "personal", label: "Personal Info", icon: User },
     { id: "employment", label: "Employment", icon: Briefcase },
     { id: "documents", label: "Documents", icon: FileText },
     { id: "bank", label: "Bank Details", icon: Landmark },
     { id: "tax", label: "Tax & Statutory", icon: Shield },
-    { id: "dependents", label: "Dependents", icon: Users },
+    { id: "dependents", label: "Family & Contacts", icon: Users },
   ];
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -230,9 +272,6 @@ const Profile: React.FC = () => {
                   </span>
                 </div>
               </div>
-              <button className="px-6 py-3 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl hover:bg-slate-800 transition-all">
-                Review Public Profile
-              </button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 w-full max-w-2xl">
@@ -332,11 +371,6 @@ const Profile: React.FC = () => {
                       value="Married"
                       editable
                     />
-                    <ProfileField
-                      label="National ID (SSN)"
-                      value="***-**-9812"
-                      restricted
-                    />
                   </div>
                 </section>
 
@@ -424,50 +458,6 @@ const Profile: React.FC = () => {
                   )}
                 </section>
 
-                {/* Emergency Contacts */}
-                <section className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm">
-                  <div className="flex justify-between items-center mb-6">
-                    <SectionTitle
-                      icon={AlertCircle}
-                      title="Emergency Contacts"
-                      subtitle="Who to call in case of emergency"
-                    />
-                    <button 
-                      onClick={() => setShowEmergencyModal(true)}
-                      className="px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-[10px] font-black uppercase hover:bg-indigo-100 transition-colors flex items-center gap-2"
-                    >
-                      <Plus size={14} /> Add Contact
-                    </button>
-                  </div>
-                  <div className="space-y-4">
-                    {(!me.emergencyContacts || me.emergencyContacts.length === 0) && (
-                      <p className="text-xs text-slate-400 font-bold p-4 bg-slate-50 rounded-2xl text-center">No emergency contacts set.</p>
-                    )}
-                    {me.emergencyContacts?.map((contact: any) => (
-                      <div key={contact.id} className="p-6 bg-slate-50 rounded-3xl border border-slate-100 flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                          <div className="w-12 h-12 bg-rose-100 text-rose-500 rounded-2xl flex items-center justify-center">
-                            <Heart size={20} fill="currentColor" />
-                          </div>
-                          <div>
-                            <p className="text-sm font-black text-slate-800">
-                              {contact.name}
-                            </p>
-                            <p className="text-xs font-bold text-slate-400 uppercase">
-                              {contact.relationship} • {contact.phone}
-                            </p>
-                          </div>
-                        </div>
-                        <button 
-                          onClick={() => deleteEmergencyContact.mutate(contact.id)}
-                          className="text-slate-300 hover:text-rose-500 transition-colors"
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </section>
               </motion.div>
             )}
 
@@ -653,123 +643,246 @@ const Profile: React.FC = () => {
                   />
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
                     {/* Primary Account */}
-                    <div className="p-8 bg-slate-900 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden">
-                      <div className="absolute top-0 right-0 p-8 text-white/5">
-                        <Landmark size={120} />
-                      </div>
-                      <div className="relative z-10">
-                        <div className="flex justify-between items-start mb-8">
-                          <div className="px-3 py-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-lg text-[9px] font-black uppercase tracking-widest">
-                            Primary Salary Account
+                    <div className="relative group perspective">
+                      <div className="absolute inset-0 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-[2.5rem] blur-xl opacity-20 group-hover:opacity-40 transition-opacity duration-500" />
+                      <div className="p-8 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden h-full transform transition-all duration-500 hover:scale-[1.02] hover:-translate-y-1">
+                        {/* Glass Overlay */}
+                        <div className="absolute inset-0 bg-white/5 backdrop-blur-3xl" />
+                        
+                        {/* Decorative Circles */}
+                        <div className="absolute -top-24 -right-24 w-48 h-48 bg-emerald-500/20 rounded-full blur-3xl" />
+                        <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-blue-500/20 rounded-full blur-3xl" />
+
+                        <div className="relative z-10 flex flex-col h-full">
+                          <div className="flex justify-between items-start mb-auto">
+                            <div className="flex flex-col gap-2">
+                              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-xl text-[9px] font-black uppercase tracking-widest backdrop-blur-md">
+                                <CheckCircle2 size={12} /> Primary Salary
+                              </div>
+                              <div className="w-12 h-8 bg-gradient-to-br from-yellow-200 to-yellow-500 rounded-md opacity-80 mt-2" />
+                            </div>
+                            <div className="text-right">
+                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
+                                Bank Name
+                              </p>
+                              <p className="text-xl font-black tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-300">
+                                {me.bankName || "Not configured"}
+                              </p>
+                            </div>
                           </div>
-                          <div className="text-right">
-                            <p className="text-[10px] font-bold text-slate-400 uppercase">
-                              Bank Name
+                          
+                          <div className="mt-12 mb-8">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">
+                              Account Number
                             </p>
-                            <p className="text-lg font-black tracking-tight">
-                              {me.bankName || "Not configured"}
-                            </p>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3 md:gap-6 text-2xl md:text-3xl font-mono tracking-[0.2em] text-slate-100">
+                                <span>{me.accountNumber ? me.accountNumber.substring(0, 4) : "****"}</span>
+                                <span className="text-slate-500">****</span>
+                                <span>{me.accountNumber ? me.accountNumber.slice(-4) : "****"}</span>
+                              </div>
+                              <button className="p-3 bg-white/5 hover:bg-white/10 rounded-xl text-slate-400 hover:text-white transition-all backdrop-blur-md border border-white/5">
+                                <EyeOff size={18} />
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">
-                          Account Number
-                        </p>
-                        <div className="flex items-center gap-4 text-3xl font-mono tracking-widest mb-8">
-                          <span>
-                            {me.accountNumber
-                              ? me.accountNumber.substring(0, 4)
-                              : "****"}
-                          </span>
-                          <span>****</span>
-                          <span>
-                            {me.accountNumber
-                              ? me.accountNumber.slice(-4)
-                              : "****"}
-                          </span>
-                          <button className="ml-2 p-2 text-slate-500 hover:text-white transition-colors">
-                            <EyeOff size={18} />
-                          </button>
-                        </div>
-                        <div className="flex gap-4">
-                          <button
-                            onClick={() => {
-                              setChangeRequestField("Primary Bank Details");
-                              setShowChangeRequestModal(true);
-                            }}
-                            className="px-6 py-3 bg-white/10 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/20 transition-colors"
-                          >
-                            Request Change
-                          </button>
+                          
+                          <div className="flex items-center justify-between mt-auto pt-6 border-t border-white/10">
+                            <div>
+                              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Account Holder</p>
+                              <p className="text-sm font-bold tracking-wide">{me.accountName || me.name}</p>
+                            </div>
+                            <button
+                              onClick={() => {
+                                setChangeRequestField("Primary Bank Details");
+                                setShowChangeRequestModal(true);
+                              }}
+                              className="px-5 py-2.5 bg-white/10 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/20 transition-all border border-white/10 flex items-center gap-2"
+                            >
+                              <Edit2 size={12} /> Edit
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>
 
                     {/* Secondary Account */}
-                    <div className={`p-8 rounded-[2.5rem] relative overflow-hidden transition-all ${me.secondaryAccountNumber ? 'bg-indigo-600 text-white shadow-2xl shadow-indigo-200' : 'bg-slate-50 border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-center hover:border-indigo-200 hover:bg-indigo-50/50'}`}>
-                      {me.secondaryAccountNumber ? (
-                        <>
-                          <div className="absolute top-0 right-0 p-8 text-white/5">
-                            <Landmark size={120} />
-                          </div>
-                          <div className="relative z-10">
-                            <div className="flex justify-between items-start mb-8">
-                              <div className="px-3 py-1 bg-white/20 text-indigo-50 border border-white/30 rounded-lg text-[9px] font-black uppercase tracking-widest">
-                                Secondary Account
-                              </div>
-                              <div className="text-right">
-                                <p className="text-[10px] font-bold text-indigo-200 uppercase">
-                                  Bank Name
-                                </p>
-                                <p className="text-lg font-black tracking-tight">
-                                  {me.secondaryBankName}
-                                </p>
-                              </div>
-                            </div>
-                            <p className="text-[10px] font-bold text-indigo-200 uppercase mb-2">
-                              Account Number
-                            </p>
-                            <div className="flex items-center gap-4 text-3xl font-mono tracking-widest mb-8">
-                              <span>
-                                {me.secondaryAccountNumber.substring(0, 4)}
-                              </span>
-                              <span>****</span>
-                              <span>
-                                {me.secondaryAccountNumber.slice(-4)}
-                              </span>
-                              <button className="ml-2 p-2 text-indigo-300 hover:text-white transition-colors">
-                                <EyeOff size={18} />
-                              </button>
-                            </div>
-                            <div className="flex gap-4">
-                              <button
-                                onClick={handleOpenSecondaryBank}
-                                className="px-6 py-3 bg-white/10 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/20 transition-colors"
-                              >
-                                Edit Details
-                              </button>
-                            </div>
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-sm mb-4 text-indigo-600">
-                            <Plus size={32} />
-                          </div>
-                          <h4 className="text-sm font-black text-slate-800 mb-2">Secondary Account</h4>
-                          <p className="text-xs font-bold text-slate-400 mb-6 max-w-[200px]">Add a secondary bank account to split your payroll</p>
-                          <button
-                            onClick={handleOpenSecondaryBank}
-                            className="px-6 py-3 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-100"
-                          >
-                            Add Bank Account
-                          </button>
-                        </>
+                    <div className="relative group perspective">
+                      {me.secondaryAccountNumber && (
+                        <div className="absolute inset-0 bg-gradient-to-br from-indigo-400 to-purple-500 rounded-[2.5rem] blur-xl opacity-20 group-hover:opacity-40 transition-opacity duration-500" />
                       )}
+                      
+                      <div className={`h-full p-8 rounded-[2.5rem] relative overflow-hidden transition-all duration-500 ${me.secondaryAccountNumber ? 'bg-gradient-to-br from-indigo-600 via-indigo-700 to-purple-800 text-white shadow-2xl hover:scale-[1.02] hover:-translate-y-1' : 'bg-slate-50 border-2 border-dashed border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/50 flex flex-col items-center justify-center text-center group-hover:scale-[1.02]'}`}>
+                        {me.secondaryAccountNumber ? (
+                          <>
+                            <div className="absolute inset-0 bg-white/5 backdrop-blur-3xl" />
+                            <div className="absolute -top-24 -left-24 w-48 h-48 bg-purple-500/30 rounded-full blur-3xl" />
+                            <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-blue-500/30 rounded-full blur-3xl" />
+
+                            <div className="relative z-10 flex flex-col h-full">
+                              <div className="flex justify-between items-start mb-auto">
+                                <div className="flex flex-col gap-2">
+                                  <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/20 text-indigo-50 border border-white/30 rounded-xl text-[9px] font-black uppercase tracking-widest backdrop-blur-md">
+                                    <ShieldCheck size={12} /> Secondary Account
+                                  </div>
+                                  <div className="w-12 h-8 bg-gradient-to-br from-slate-200 to-slate-400 rounded-md opacity-80 mt-2" />
+                                </div>
+                                <div className="text-right">
+                                  <p className="text-[10px] font-bold text-indigo-200 uppercase tracking-widest mb-1">
+                                    Bank Name
+                                  </p>
+                                  <p className="text-xl font-black tracking-tight text-white">
+                                    {me.secondaryBankName}
+                                  </p>
+                                </div>
+                              </div>
+                              
+                              <div className="mt-12 mb-8">
+                                <p className="text-[10px] font-bold text-indigo-200 uppercase tracking-widest mb-2">
+                                  Account Number
+                                </p>
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-3 md:gap-6 text-2xl md:text-3xl font-mono tracking-[0.2em] text-white">
+                                    <span>{me.secondaryAccountNumber.substring(0, 4)}</span>
+                                    <span className="text-indigo-300">****</span>
+                                    <span>{me.secondaryAccountNumber.slice(-4)}</span>
+                                  </div>
+                                  <button className="p-3 bg-white/10 hover:bg-white/20 rounded-xl text-indigo-200 hover:text-white transition-all backdrop-blur-md border border-white/10">
+                                    <EyeOff size={18} />
+                                  </button>
+                                </div>
+                              </div>
+                              
+                              <div className="flex items-center justify-between mt-auto pt-6 border-t border-white/10">
+                                <div>
+                                  <p className="text-[9px] font-bold text-indigo-200 uppercase tracking-widest mb-1">Account Holder</p>
+                                  <p className="text-sm font-bold tracking-wide">{me.secondaryAccountName || me.name}</p>
+                                </div>
+                                <button
+                                  onClick={handleOpenSecondaryBank}
+                                  className="px-5 py-2.5 bg-white/10 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/20 transition-all border border-white/10 flex items-center gap-2"
+                                >
+                                  <Edit2 size={12} /> Edit
+                                </button>
+                              </div>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="relative z-10 flex flex-col items-center justify-center">
+                            <div className="w-20 h-20 bg-indigo-100 rounded-full flex items-center justify-center mb-6 text-indigo-600 group-hover:scale-110 group-hover:bg-indigo-600 group-hover:text-white transition-all duration-500 shadow-xl shadow-indigo-100">
+                              <Plus size={32} className="transition-transform duration-500 group-hover:rotate-90" />
+                            </div>
+                            <h4 className="text-lg font-black text-slate-800 mb-2">Secondary Account</h4>
+                            <p className="text-xs font-bold text-slate-500 mb-8 max-w-[220px] leading-relaxed">
+                              Add a secondary bank account to split your payroll seamlessly.
+                            </p>
+                            <button
+                              onClick={handleOpenSecondaryBank}
+                              className="px-8 py-4 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 hover:shadow-lg hover:shadow-indigo-200 transition-all transform hover:-translate-y-1"
+                            >
+                              Add Bank Account
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
-                  <button className="w-full py-6 border-2 border-dashed border-slate-200 rounded-[2rem] text-slate-400 font-black uppercase text-xs tracking-widest hover:border-indigo-200 hover:text-indigo-600 transition-all flex items-center justify-center gap-2">
-                    <Plus size={18} /> Add Secondary Account
-                  </button>
+                  {!me.secondaryAccountNumber && (
+                    <button 
+                      onClick={handleOpenSecondaryBank}
+                      className="w-full py-6 border-2 border-dashed border-slate-200 rounded-[2rem] text-slate-400 font-black uppercase text-xs tracking-widest hover:border-indigo-200 hover:text-indigo-600 transition-all flex items-center justify-center gap-2"
+                    >
+                      <Plus size={18} /> Add Secondary Account
+                    </button>
+                  )}
+                </section>
+              </motion.div>
+            )}
+            
+            {activeTab === "tax" && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="space-y-8"
+              >
+                {/* Tax & Statutory */}
+                <section className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm group hover:border-indigo-200 transition-colors">
+                  <div className="flex justify-between items-center mb-6">
+                    <SectionTitle
+                      icon={ShieldCheck}
+                      title="Tax & Statutory"
+                      subtitle="Government compliance and IDs"
+                    />
+                    <button
+                      onClick={handleOpenStatutory}
+                      className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors"
+                    >
+                      <Edit2 size={18} />
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <ProfileField label="NIN (National ID)" value={me.nin} restricted />
+                    <ProfileField label="Tax ID (TIN)" value={me.tin} restricted />
+                    <ProfileField label="State of Residence" value={me.taxState} restricted />
+                    <ProfileField label="Pension Administrator" value={me.pfa} restricted />
+                    <ProfileField label="Pension RSA PIN" value={me.pensionId} restricted />
+                    <ProfileField label="NHF Number" value={me.nhf} restricted />
+                  </div>
+                </section>
+              </motion.div>
+            )}
+
+            {activeTab === "dependents" && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="space-y-8"
+              >
+                {/* Emergency Contacts & Dependents */}
+                <section className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm">
+                  <div className="flex justify-between items-center mb-6">
+                    <SectionTitle
+                      icon={AlertCircle}
+                      title="Family & Emergency Contacts"
+                      subtitle="Who to call in case of emergency"
+                    />
+                    <button 
+                      onClick={() => setShowEmergencyModal(true)}
+                      className="px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-[10px] font-black uppercase hover:bg-indigo-100 transition-colors flex items-center gap-2"
+                    >
+                      <Plus size={14} /> Add Contact
+                    </button>
+                  </div>
+                  <div className="space-y-4">
+                    {(!me.emergencyContacts || me.emergencyContacts.length === 0) && (
+                      <p className="text-xs text-slate-400 font-bold p-4 bg-slate-50 rounded-2xl text-center">No contacts set.</p>
+                    )}
+                    {me.emergencyContacts?.map((contact: any) => (
+                      <div key={contact.id} className="p-6 bg-slate-50 rounded-3xl border border-slate-100 flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 bg-rose-100 text-rose-500 rounded-2xl flex items-center justify-center">
+                            <Heart size={20} fill="currentColor" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-black text-slate-800">
+                              {contact.name}
+                            </p>
+                            <p className="text-xs font-bold text-slate-400 uppercase">
+                              {contact.relationship} • {contact.phone}
+                            </p>
+                          </div>
+                        </div>
+                        <button 
+                          onClick={() => deleteEmergencyContact.mutate(contact.id)}
+                          className="text-slate-300 hover:text-rose-500 transition-colors"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 </section>
               </motion.div>
             )}
@@ -819,22 +932,42 @@ const Profile: React.FC = () => {
             </h3>
             <div className="relative pt-2 mb-4">
               <div className="flex items-center justify-between mb-2 text-xs font-bold">
-                <span className="text-indigo-600">85% Complete</span>
-                <span className="text-slate-400">Excellent</span>
+                <span className={completionPercentage === 100 ? "text-emerald-600" : "text-indigo-600"}>{completionPercentage}% Complete</span>
+                <span className="text-slate-400">{completionPercentage === 100 ? "Perfect!" : completionPercentage > 70 ? "Excellent" : completionPercentage > 40 ? "Good" : "Needs Work"}</span>
               </div>
               <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-                <div className="h-full w-[85%] bg-indigo-600 rounded-full" />
+                <motion.div 
+                  initial={{ width: 0 }}
+                  animate={{ width: `${completionPercentage}%` }}
+                  transition={{ duration: 1, ease: "easeOut" }}
+                  className={`h-full rounded-full ${completionPercentage === 100 ? "bg-emerald-500" : "bg-indigo-600"}`} 
+                />
               </div>
             </div>
-            <div className="space-y-3">
-              <div className="flex items-center gap-3 p-3 bg-rose-50 rounded-xl border border-rose-100 cursor-pointer hover:bg-rose-100 transition-colors">
-                <div className="w-2 h-2 rounded-full bg-rose-500" />
-                <span className="text-xs font-bold text-rose-700">
-                  Add Emergency Contact
-                </span>
-                <ChevronRight size={14} className="ml-auto text-rose-400" />
+            
+            {completionPercentage === 100 ? (
+              <div className="flex items-center gap-3 p-4 bg-emerald-50 rounded-xl border border-emerald-100">
+                <CheckCircle2 size={20} className="text-emerald-500" />
+                <span className="text-xs font-bold text-emerald-700">Your profile is 100% complete!</span>
               </div>
-            </div>
+            ) : (
+              <div className="space-y-3 mt-6">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Tasks to complete</p>
+                {missingItems.map(item => (
+                  <div 
+                    key={item.key}
+                    onClick={item.action}
+                    className="flex items-center gap-3 p-3 bg-rose-50 rounded-xl border border-rose-100 cursor-pointer hover:bg-rose-100 transition-colors"
+                  >
+                    <div className="w-2 h-2 rounded-full bg-rose-500" />
+                    <span className="text-xs font-bold text-rose-700">
+                      {item.label}
+                    </span>
+                    <ChevronRight size={14} className="ml-auto text-rose-400" />
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -1138,6 +1271,110 @@ const Profile: React.FC = () => {
                 >
                   {updateProfileMutation.isPending ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
                   {updateProfileMutation.isPending ? "Saving..." : "Save Details"}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Statutory Modal */}
+      <AnimatePresence>
+        {showStatutoryModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-lg bg-white rounded-[2.5rem] shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto"
+            >
+              <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 sticky top-0 z-10">
+                <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                  <ShieldCheck className="text-indigo-600" /> Tax & Statutory
+                </h3>
+                <button
+                  onClick={() => setShowStatutoryModal(false)}
+                  className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="p-8 space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                      NIN
+                    </label>
+                    <input
+                      type="text"
+                      value={statutoryDetails.nin}
+                      onChange={(e) => setStatutoryDetails({ ...statutoryDetails, nin: e.target.value })}
+                      className="w-full px-4 py-3 bg-slate-50 rounded-xl font-bold text-slate-800 border-none outline-none focus:ring-4 focus:ring-indigo-100"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                      State of Residence
+                    </label>
+                    <input
+                      type="text"
+                      value={statutoryDetails.taxState}
+                      onChange={(e) => setStatutoryDetails({ ...statutoryDetails, taxState: e.target.value })}
+                      className="w-full px-4 py-3 bg-slate-50 rounded-xl font-bold text-slate-800 border-none outline-none focus:ring-4 focus:ring-indigo-100"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                    Tax Identification Number (TIN)
+                  </label>
+                  <input
+                    type="text"
+                    value={statutoryDetails.tin}
+                    onChange={(e) => setStatutoryDetails({ ...statutoryDetails, tin: e.target.value })}
+                    className="w-full px-6 py-4 bg-slate-50 rounded-2xl font-bold text-slate-800 border-none outline-none focus:ring-4 focus:ring-indigo-100 transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                    Pension Fund Administrator (PFA)
+                  </label>
+                  <input
+                    type="text"
+                    value={statutoryDetails.pfa}
+                    onChange={(e) => setStatutoryDetails({ ...statutoryDetails, pfa: e.target.value })}
+                    className="w-full px-6 py-4 bg-slate-50 rounded-2xl font-bold text-slate-800 border-none outline-none focus:ring-4 focus:ring-indigo-100 transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                    Pension RSA PIN
+                  </label>
+                  <input
+                    type="text"
+                    value={statutoryDetails.pensionId}
+                    onChange={(e) => setStatutoryDetails({ ...statutoryDetails, pensionId: e.target.value })}
+                    className="w-full px-6 py-4 bg-slate-50 rounded-2xl font-bold text-slate-800 border-none outline-none focus:ring-4 focus:ring-indigo-100 transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                    National Housing Fund (NHF) No.
+                  </label>
+                  <input
+                    type="text"
+                    value={statutoryDetails.nhf}
+                    onChange={(e) => setStatutoryDetails({ ...statutoryDetails, nhf: e.target.value })}
+                    className="w-full px-6 py-4 bg-slate-50 rounded-2xl font-bold text-slate-800 border-none outline-none focus:ring-4 focus:ring-indigo-100 transition-all"
+                  />
+                </div>
+                <button
+                  onClick={handleSaveStatutory}
+                  disabled={updateProfileMutation.isPending}
+                  className="w-full py-4 bg-indigo-600 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-200 hover:bg-indigo-700 transition-all flex items-center justify-center gap-2"
+                >
+                  {updateProfileMutation.isPending ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+                  {updateProfileMutation.isPending ? "Saving..." : "Save Statutory Details"}
                 </button>
               </div>
             </motion.div>

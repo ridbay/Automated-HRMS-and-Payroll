@@ -27,3 +27,20 @@ export const leaveRequests = sqliteTable("leave_requests", {
     .default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").$onUpdate(() => new Date().toISOString()),
 });
+
+export const leaveBalances = sqliteTable("leave_balances", {
+  id: text("id").primaryKey(),
+  companyId: text("company_id")
+    .notNull()
+    .references(() => companies.id),
+  employeeId: text("employee_id")
+    .notNull()
+    .references(() => employees.id),
+  type: text("type").notNull(),
+  total: integer("total").notNull(),
+  color: text("color").notNull().default("indigo"),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").$onUpdate(() => new Date().toISOString()),
+});

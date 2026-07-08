@@ -29,7 +29,6 @@ export class LeaveService {
   }
 
   async calculateLeaveBalances(companyId: string, employeeId: string) {
-    // Fetch all approved requests to subtract from base balances
     const requests = await this.db.query.leaveRequests.findMany({
       where: and(
         eq(schema.leaveRequests.companyId, companyId),
@@ -42,11 +41,32 @@ export class LeaveService {
     const usedSick = requests.filter((r: any) => r.type === 'Sick Leave').reduce((sum: number, r: any) => sum + r.days, 0);
     const usedMaternity = requests.filter((r: any) => r.type === 'Maternity Leave').reduce((sum: number, r: any) => sum + r.days, 0);
 
-    return [
-      { type: 'Annual Leave', total: 20, used: usedAnnual, color: 'indigo' },
-      { type: 'Sick Leave', total: 10, used: usedSick, color: 'rose' },
-      { type: 'Maternity Leave', total: 90, used: usedMaternity, color: 'emerald' },
-    ];
+    let balances: any[] = await this.db.query.leaveBalances.findMany({
+      where: and(
+        eq(schema.leaveBalances.companyId, companyId),
+        eq(schema.leaveBalances.employeeId, employeeId)
+      )
+    });
+
+    if (!balances || balances.length === 0) {
+      balances = [
+        { type: 'Annual Leave', total: 20, color: 'indigo' },
+        { type: 'Sick Leave', total: 10, color: 'rose' },
+        { type: 'Maternity Leave', total: 90, color: 'emerald' },
+      ];
+    }
+
+    return balances.map((b: any) => {
+      let used = 0;
+      if (b.type === 'Annual Leave') used = usedAnnual;
+      else if (b.type === 'Sick Leave') used = usedSick;
+      else if (b.type === 'Maternity Leave') used = usedMaternity;
+      
+      return {
+        ...b,
+        used
+      };
+    });
   }
 
   async createLeaveRequest(companyId: string, employeeId: string, data: any) {

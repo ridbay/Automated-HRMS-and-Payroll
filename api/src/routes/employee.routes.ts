@@ -9,7 +9,7 @@ import {
   downloadDocument
 } from '../controllers/employee/profile.controller';
 import { getMyLeaveData, applyForLeave } from '../controllers/employee/leave.controller';
-import { getAttendanceData, clockIn, clockOut } from '../controllers/employee/attendance.controller';
+import { getAttendanceData, clockIn, clockOut, getOvertimeRequests, submitOvertimeRequest } from '../controllers/employee/attendance.controller';
 import { tenantMiddleware } from '../middlewares/tenant.middleware';
 
 const employeeRoutes = new Hono();
@@ -35,5 +35,7 @@ employeeRoutes.post('/leave/apply', applyForLeave);
 employeeRoutes.get('/attendance/me', getAttendanceData);
 employeeRoutes.post('/attendance/clock-in', clockIn);
 employeeRoutes.post('/attendance/clock-out', clockOut);
+employeeRoutes.get('/attendance/overtime', getOvertimeRequests);
+employeeRoutes.post('/attendance/overtime', submitOvertimeRequest);
 
 export default employeeRoutes;

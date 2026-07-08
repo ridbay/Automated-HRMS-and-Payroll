@@ -578,3 +578,32 @@ export const useClockOut = () => {
     },
   });
 };
+
+export const useOvertimeRequests = () => {
+  return useQuery({
+    queryKey: ['myOvertime'],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/employee/attendance/overtime`);
+      if (!res.ok) throw new Error('Failed to fetch overtime requests');
+      return res.json();
+    },
+  });
+};
+
+export const useSubmitOvertime = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: any) => {
+      const res = await fetchWithTenant(`${API_URL}/employee/attendance/overtime`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('Failed to submit overtime');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['myOvertime'] });
+    },
+  });
+};

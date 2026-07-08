@@ -82,6 +82,12 @@ export class EmployeeService {
       secondaryBankName: data.secondaryBankName,
       secondaryAccountNumber: data.secondaryAccountNumber,
       secondaryAccountName: data.secondaryAccountName,
+      tin: data.tin,
+      pfa: data.pfa,
+      pensionId: data.pensionId,
+      nin: data.nin,
+      nhf: data.nhf,
+      taxState: data.taxState,
       maritalStatus: data.maritalStatus,
       avatar: data.avatar,
     };

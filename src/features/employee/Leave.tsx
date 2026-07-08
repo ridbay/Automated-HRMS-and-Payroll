@@ -93,51 +93,53 @@ const Leave: React.FC = () => {
           {/* 1. Balances Section */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {leaveData?.balances?.map((balance: any, index: number) => (
-              <motion.div
-                key={index}
-                whileHover={{ y: -4 }}
-                className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm relative overflow-hidden group"
-              >
-                <div
-                  className={`absolute top-0 right-0 p-4 opacity-10 text-${balance.color}-500 group-hover:scale-110 transition-transform`}
+              <div key={index} className="relative group h-full">
+                <div className={`absolute inset-0 bg-${balance.color}-500 rounded-[2.5rem] blur-xl opacity-20 group-hover:opacity-40 transition-opacity duration-500`} />
+                <motion.div
+                  whileHover={{ y: -4 }}
+                  className="p-8 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden h-full transform transition-all duration-500 hover:scale-[1.02]"
                 >
-                  <CalendarIcon size={64} />
-                </div>
-                <div className="relative z-10">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">
-                    {balance.type}
-                  </p>
-                  <div className="flex items-baseline gap-1 mb-2">
-                    <span className="text-4xl font-black text-slate-800 tracking-tighter">
-                      {balance.total - balance.used}
-                    </span>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase">
-                      / {balance.total} Days Left
-                    </span>
-                  </div>
-
-                  {/* Progress Bar */}
-                  <div className="w-full h-2 bg-slate-100 rounded-full mb-4 overflow-hidden">
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{
-                        width: `${((balance.total - balance.used) / balance.total) * 100}%`,
-                      }}
-                      className={`h-full bg-${balance.color}-500 rounded-full`}
-                    />
-                  </div>
-
-                  <button
-                    onClick={() => {
-                      setLeaveType(balance.type);
-                      setLocalTab("apply");
-                    }}
-                    className={`text-[10px] font-black text-${balance.color}-600 uppercase tracking-widest flex items-center gap-1 hover:gap-2 transition-all`}
+                  <div
+                    className={`absolute top-0 right-0 p-4 opacity-10 text-${balance.color}-500 group-hover:scale-110 transition-transform`}
                   >
-                    Request Leave <ChevronRight size={12} />
-                  </button>
-                </div>
-              </motion.div>
+                    <CalendarIcon size={64} />
+                  </div>
+                  <div className="relative z-10">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">
+                      {balance.type}
+                    </p>
+                    <div className="flex items-baseline gap-1 mb-2">
+                      <span className="text-4xl font-black text-white tracking-tighter">
+                        {balance.total - balance.used}
+                      </span>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase">
+                        / {balance.total} Days Left
+                      </span>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="w-full h-2 bg-slate-800/50 rounded-full mb-6 overflow-hidden border border-white/5">
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{
+                          width: `${((balance.total - balance.used) / balance.total) * 100}%`,
+                        }}
+                        className={`h-full bg-${balance.color}-500 rounded-full shadow-[0_0_10px_rgba(255,255,255,0.3)]`}
+                      />
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        setLeaveType(balance.type);
+                        setLocalTab("apply");
+                      }}
+                      className={`text-[10px] font-black text-${balance.color}-400 uppercase tracking-widest flex items-center gap-1 hover:gap-2 transition-all`}
+                    >
+                      Request Leave <ChevronRight size={12} />
+                    </button>
+                  </div>
+                </motion.div>
+              </div>
             ))}
           </div>
 

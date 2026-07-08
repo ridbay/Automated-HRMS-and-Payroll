@@ -8134,8 +8134,10 @@ __export(schema_exports, {
   employees: () => employees,
   employeesRelations: () => employeesRelations,
   jobRequisitions: () => jobRequisitions,
+  leaveBalances: () => leaveBalances,
   leaveRequests: () => leaveRequests,
   locations: () => locations,
+  overtimeRequests: () => overtimeRequests,
   payrollRuns: () => payrollRuns,
   payrollRunsRelations: () => payrollRunsRelations,
   payslips: () => payslips,
@@ -8191,6 +8193,9 @@ var employees = sqliteTable("employees", {
   tin: text("tin"),
   pfa: text("pfa"),
   pensionId: text("pension_id"),
+  nin: text("nin"),
+  nhf: text("nhf"),
+  taxState: text("tax_state"),
   // Banking & Payout
   bankName: text("bank_name"),
   accountNumber: text("account_number"),
@@ -8259,6 +8264,20 @@ var attendanceRecords = sqliteTable("attendance_records", {
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").$onUpdate(() => (/* @__PURE__ */ new Date()).toISOString())
 });
+var overtimeRequests = sqliteTable("overtime_requests", {
+  id: text("id").primaryKey(),
+  companyId: text("company_id").notNull().references(() => companies.id),
+  employeeId: text("employee_id").notNull().references(() => employees.id),
+  date: text("date").notNull(),
+  startTime: text("start_time").notNull(),
+  endTime: text("end_time").notNull(),
+  hours: real("hours").notNull(),
+  reason: text("reason").notNull(),
+  deliverable: text("deliverable"),
+  status: text("status").notNull().default("pending"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").$onUpdate(() => (/* @__PURE__ */ new Date()).toISOString())
+});
 
 // src/models/leave.model.ts
 var leaveRequests = sqliteTable("leave_requests", {
@@ -8275,6 +8294,16 @@ var leaveRequests = sqliteTable("leave_requests", {
   status: text("status").notNull(),
   attachment: text("attachment"),
   appliedOn: text("applied_on").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").$onUpdate(() => (/* @__PURE__ */ new Date()).toISOString())
+});
+var leaveBalances = sqliteTable("leave_balances", {
+  id: text("id").primaryKey(),
+  companyId: text("company_id").notNull().references(() => companies.id),
+  employeeId: text("employee_id").notNull().references(() => employees.id),
+  type: text("type").notNull(),
+  total: integer("total").notNull(),
+  color: text("color").notNull().default("indigo"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").$onUpdate(() => (/* @__PURE__ */ new Date()).toISOString())
 });
@@ -8465,6 +8494,12 @@ var EmployeeService = class {
       secondaryBankName: data.secondaryBankName,
       secondaryAccountNumber: data.secondaryAccountNumber,
       secondaryAccountName: data.secondaryAccountName,
+      tin: data.tin,
+      pfa: data.pfa,
+      pensionId: data.pensionId,
+      nin: data.nin,
+      nhf: data.nhf,
+      taxState: data.taxState,
       maritalStatus: data.maritalStatus,
       avatar: data.avatar
     };
@@ -9090,11 +9125,29 @@ var LeaveService = class {
     const usedAnnual = requests.filter((r) => r.type === "Annual Leave").reduce((sum, r) => sum + r.days, 0);
     const usedSick = requests.filter((r) => r.type === "Sick Leave").reduce((sum, r) => sum + r.days, 0);
     const usedMaternity = requests.filter((r) => r.type === "Maternity Leave").reduce((sum, r) => sum + r.days, 0);
-    return [
-      { type: "Annual Leave", total: 20, used: usedAnnual, color: "indigo" },
-      { type: "Sick Leave", total: 10, used: usedSick, color: "rose" },
-      { type: "Maternity Leave", total: 90, used: usedMaternity, color: "emerald" }
-    ];
+    let balances = await this.db.query.leaveBalances.findMany({
+      where: and(
+        eq(leaveBalances.companyId, companyId),
+        eq(leaveBalances.employeeId, employeeId)
+      )
+    });
+    if (!balances || balances.length === 0) {
+      balances = [
+        { type: "Annual Leave", total: 20, color: "indigo" },
+        { type: "Sick Leave", total: 10, color: "rose" },
+        { type: "Maternity Leave", total: 90, color: "emerald" }
+      ];
+    }
+    return balances.map((b) => {
+      let used = 0;
+      if (b.type === "Annual Leave") used = usedAnnual;
+      else if (b.type === "Sick Leave") used = usedSick;
+      else if (b.type === "Maternity Leave") used = usedMaternity;
+      return {
+        ...b,
+        used
+      };
+    });
   }
   async createLeaveRequest(companyId, employeeId, data) {
     const id = `LR-${Math.floor(1e3 + Math.random() * 9e3)}`;
@@ -9165,9 +9218,10 @@ var AttendanceService = class {
     const grouped = {};
     for (const r of records) {
       if (!grouped[r.date]) {
-        grouped[r.date] = { date: r.date, status: r.status, clockIn: r.clockIn, clockOut: r.clockOut, workHours: 0, note: r.notes };
+        grouped[r.date] = { date: r.date, status: r.status, clockIn: r.clockIn, clockOut: r.clockOut, workHours: 0, overtime: 0, note: r.notes };
       }
       grouped[r.date].workHours += r.workHours || 0;
+      grouped[r.date].overtime += r.overtime || 0;
       if (r.clockOut && (!grouped[r.date].clockOut || new Date(r.clockOut) > new Date(grouped[r.date].clockOut))) {
         grouped[r.date].clockOut = r.clockOut;
       }
@@ -9197,6 +9251,31 @@ var AttendanceService = class {
       limit: 1
     });
     return records[0] || null;
+  }
+  async getOvertimeRequests(companyId, employeeId) {
+    return this.db.query.overtimeRequests.findMany({
+      where: and(
+        eq(overtimeRequests.companyId, companyId),
+        eq(overtimeRequests.employeeId, employeeId)
+      ),
+      orderBy: /* @__PURE__ */ __name((overtimeRequests2, { desc: desc4 }) => [desc4(overtimeRequests2.date), desc4(overtimeRequests2.createdAt)], "orderBy")
+    });
+  }
+  async createOvertimeRequest(data) {
+    const id = crypto.randomUUID();
+    await this.db.insert(overtimeRequests).values({
+      id,
+      companyId: data.companyId,
+      employeeId: data.employeeId,
+      date: data.date,
+      startTime: data.startTime,
+      endTime: data.endTime,
+      hours: data.hours,
+      reason: data.reason,
+      deliverable: data.deliverable,
+      status: "pending"
+    });
+    return { success: true, id };
   }
   async clockIn(companyId, employeeId, data) {
     const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
@@ -9284,6 +9363,37 @@ var clockOut = /* @__PURE__ */ __name(async (c) => {
   const request = await attendanceService.clockOut(companyId, employeeId, data);
   return c.json(request);
 }, "clockOut");
+var getOvertimeRequests = /* @__PURE__ */ __name(async (c) => {
+  const companyId = c.get("companyId");
+  let employeeId = c.req.header("x-employee-id");
+  const attendanceService = new AttendanceService(c.env.DB);
+  const employeeService = new EmployeeService(c.env.DB);
+  if (!employeeId) {
+    const defaultId = await employeeService.getFirstEmployeeId(companyId);
+    if (!defaultId) return c.json({ error: "No employee found" }, 404);
+    employeeId = defaultId;
+  }
+  const overtimeRequests2 = await attendanceService.getOvertimeRequests(companyId, employeeId);
+  return c.json(overtimeRequests2);
+}, "getOvertimeRequests");
+var submitOvertimeRequest = /* @__PURE__ */ __name(async (c) => {
+  const companyId = c.get("companyId");
+  let employeeId = c.req.header("x-employee-id");
+  const attendanceService = new AttendanceService(c.env.DB);
+  const employeeService = new EmployeeService(c.env.DB);
+  if (!employeeId) {
+    const defaultId = await employeeService.getFirstEmployeeId(companyId);
+    if (!defaultId) return c.json({ error: "No employee found" }, 404);
+    employeeId = defaultId;
+  }
+  const data = await c.req.json();
+  const result = await attendanceService.createOvertimeRequest({
+    ...data,
+    companyId,
+    employeeId
+  });
+  return c.json(result);
+}, "submitOvertimeRequest");
 
 // src/routes/employee.routes.ts
 var employeeRoutes = new Hono2();
@@ -9300,6 +9410,8 @@ employeeRoutes.post("/leave/apply", applyForLeave);
 employeeRoutes.get("/attendance/me", getAttendanceData);
 employeeRoutes.post("/attendance/clock-in", clockIn);
 employeeRoutes.post("/attendance/clock-out", clockOut);
+employeeRoutes.get("/attendance/overtime", getOvertimeRequests);
+employeeRoutes.post("/attendance/overtime", submitOvertimeRequest);
 var employee_routes_default = employeeRoutes;
 
 // src/routes/index.ts
