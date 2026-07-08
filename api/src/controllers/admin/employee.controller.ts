@@ -1,16 +1,20 @@
 import { Context } from 'hono';
-import { drizzle } from 'drizzle-orm/d1';
-import * as schema from '../../db/schema';
+import { EmployeeService } from '../../services/employee.service';
+import { AppEnv } from '../../types';
 
-export const getEmployees = async (c: Context) => {
-  const db = drizzle(c.env.DB, { schema });
-  const result = await db.select().from(schema.employees).all();
+export const getEmployees = async (c: Context<AppEnv>) => {
+  const companyId = c.get('companyId');
+  const service = new EmployeeService(c.env.DB);
+  
+  const result = await service.getAllByCompany(companyId);
   return c.json(result);
 };
 
-export const createEmployee = async (c: Context) => {
-  const db = drizzle(c.env.DB, { schema });
+export const createEmployee = async (c: Context<AppEnv>) => {
+  const companyId = c.get('companyId');
+  const service = new EmployeeService(c.env.DB);
   const body = await c.req.json();
-  const result = await db.insert(schema.employees).values(body).returning();
-  return c.json(result[0], 201);
+  
+  const result = await service.createForCompany(companyId, body);
+  return c.json(result, 201);
 };

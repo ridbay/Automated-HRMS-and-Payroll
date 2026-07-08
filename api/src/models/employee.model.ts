@@ -1,7 +1,9 @@
 import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core';
+import { companies } from './company.model';
 
 export const employees = sqliteTable('employees', {
   id: text('id').primaryKey(),
+  companyId: text('company_id').notNull().references(() => companies.id),
   name: text('name').notNull(),
   middleName: text('middle_name'),
   lastName: text('last_name').notNull(),

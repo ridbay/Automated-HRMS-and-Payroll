@@ -8111,15 +8111,25 @@ __name(drizzle, "drizzle");
 var schema_exports = {};
 __export(schema_exports, {
   attendanceRecords: () => attendanceRecords,
+  companies: () => companies,
   employees: () => employees,
   jobRequisitions: () => jobRequisitions,
   leaveRequests: () => leaveRequests,
   walletTransactions: () => walletTransactions
 });
 
+// src/models/company.model.ts
+var companies = sqliteTable("companies", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  subdomain: text("subdomain").unique(),
+  createdAt: text("created_at").notNull()
+});
+
 // src/models/employee.model.ts
 var employees = sqliteTable("employees", {
   id: text("id").primaryKey(),
+  companyId: text("company_id").notNull().references(() => companies.id),
   name: text("name").notNull(),
   middleName: text("middle_name"),
   lastName: text("last_name").notNull(),
@@ -8150,6 +8160,7 @@ var employees = sqliteTable("employees", {
 // src/models/attendance.model.ts
 var attendanceRecords = sqliteTable("attendance_records", {
   id: text("id").primaryKey(),
+  companyId: text("company_id").notNull().references(() => companies.id),
   employeeId: text("employee_id").notNull().references(() => employees.id),
   date: text("date").notNull(),
   clockIn: text("clock_in").notNull(),
@@ -8165,6 +8176,7 @@ var attendanceRecords = sqliteTable("attendance_records", {
 // src/models/leave.model.ts
 var leaveRequests = sqliteTable("leave_requests", {
   id: text("id").primaryKey(),
+  companyId: text("company_id").notNull().references(() => companies.id),
   employeeId: text("employee_id").notNull().references(() => employees.id),
   type: text("type").notNull(),
   startDate: text("start_date").notNull(),
@@ -8179,6 +8191,7 @@ var leaveRequests = sqliteTable("leave_requests", {
 // src/models/misc.model.ts
 var walletTransactions = sqliteTable("wallet_transactions", {
   id: text("id").primaryKey(),
+  companyId: text("company_id").notNull().references(() => companies.id),
   type: text("type").notNull(),
   // 'credit' | 'debit'
   amount: integer("amount").notNull(),
@@ -8189,6 +8202,7 @@ var walletTransactions = sqliteTable("wallet_transactions", {
 });
 var jobRequisitions = sqliteTable("job_requisitions", {
   id: text("id").primaryKey(),
+  companyId: text("company_id").notNull().references(() => companies.id),
   title: text("title").notNull(),
   department: text("department").notNull(),
   location: text("location").notNull(),
@@ -8201,34 +8215,81 @@ var jobRequisitions = sqliteTable("job_requisitions", {
   daysOpen: integer("days_open").notNull()
 });
 
+// src/services/employee.service.ts
+var EmployeeService = class {
+  static {
+    __name(this, "EmployeeService");
+  }
+  db;
+  constructor(dbBinding) {
+    this.db = drizzle(dbBinding, { schema: schema_exports });
+  }
+  async getAllByCompany(companyId) {
+    return this.db.select().from(employees).where(eq(employees.companyId, companyId)).all();
+  }
+  async createForCompany(companyId, employeeData) {
+    const result = await this.db.insert(employees).values({ ...employeeData, companyId }).returning();
+    return result[0];
+  }
+};
+
 // src/controllers/admin/employee.controller.ts
 var getEmployees = /* @__PURE__ */ __name(async (c) => {
-  const db = drizzle(c.env.DB, { schema: schema_exports });
-  const result = await db.select().from(employees).all();
+  const companyId = c.get("companyId");
+  const service = new EmployeeService(c.env.DB);
+  const result = await service.getAllByCompany(companyId);
   return c.json(result);
 }, "getEmployees");
 var createEmployee = /* @__PURE__ */ __name(async (c) => {
-  const db = drizzle(c.env.DB, { schema: schema_exports });
+  const companyId = c.get("companyId");
+  const service = new EmployeeService(c.env.DB);
   const body = await c.req.json();
-  const result = await db.insert(employees).values(body).returning();
-  return c.json(result[0], 201);
+  const result = await service.createForCompany(companyId, body);
+  return c.json(result, 201);
 }, "createEmployee");
+
+// src/middlewares/tenant.middleware.ts
+var tenantMiddleware = /* @__PURE__ */ __name(async (c, next) => {
+  const companyId = c.req.header("x-company-id");
+  if (!companyId) {
+    return c.json({ error: "Missing tenant identification (x-company-id)" }, 401);
+  }
+  c.set("companyId", companyId);
+  await next();
+}, "tenantMiddleware");
 
 // src/routes/admin.routes.ts
 var adminRoutes = new Hono2();
+adminRoutes.use("*", tenantMiddleware);
 adminRoutes.get("/employees", getEmployees);
 adminRoutes.post("/employees", createEmployee);
 var admin_routes_default = adminRoutes;
 
+// src/services/leave.service.ts
+var LeaveService = class {
+  static {
+    __name(this, "LeaveService");
+  }
+  db;
+  constructor(dbBinding) {
+    this.db = drizzle(dbBinding, { schema: schema_exports });
+  }
+  async getAllByCompany(companyId) {
+    return this.db.select().from(leaveRequests).where(eq(leaveRequests.companyId, companyId)).all();
+  }
+};
+
 // src/controllers/employee/leave.controller.ts
 var getLeaveRequests = /* @__PURE__ */ __name(async (c) => {
-  const db = drizzle(c.env.DB, { schema: schema_exports });
-  const result = await db.select().from(leaveRequests).all();
+  const companyId = c.get("companyId");
+  const service = new LeaveService(c.env.DB);
+  const result = await service.getAllByCompany(companyId);
   return c.json(result);
 }, "getLeaveRequests");
 
 // src/routes/employee.routes.ts
 var employeeRoutes = new Hono2();
+employeeRoutes.use("*", tenantMiddleware);
 employeeRoutes.get("/leave-requests", getLeaveRequests);
 var employee_routes_default = employeeRoutes;
 

@@ -1,9 +1,11 @@
 import { Context } from 'hono';
-import { drizzle } from 'drizzle-orm/d1';
-import * as schema from '../../db/schema';
+import { LeaveService } from '../../services/leave.service';
+import { AppEnv } from '../../types';
 
-export const getLeaveRequests = async (c: Context) => {
-  const db = drizzle(c.env.DB, { schema });
-  const result = await db.select().from(schema.leaveRequests).all();
+export const getLeaveRequests = async (c: Context<AppEnv>) => {
+  const companyId = c.get('companyId');
+  const service = new LeaveService(c.env.DB);
+  
+  const result = await service.getAllByCompany(companyId);
   return c.json(result);
 };

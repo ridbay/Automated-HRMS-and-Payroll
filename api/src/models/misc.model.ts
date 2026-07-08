@@ -1,7 +1,9 @@
 import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
+import { companies } from './company.model';
 
 export const walletTransactions = sqliteTable('wallet_transactions', {
   id: text('id').primaryKey(),
+  companyId: text('company_id').notNull().references(() => companies.id),
   type: text('type').notNull(), // 'credit' | 'debit'
   amount: integer('amount').notNull(),
   description: text('description').notNull(),
@@ -11,6 +13,7 @@ export const walletTransactions = sqliteTable('wallet_transactions', {
 
 export const jobRequisitions = sqliteTable('job_requisitions', {
   id: text('id').primaryKey(),
+  companyId: text('company_id').notNull().references(() => companies.id),
   title: text('title').notNull(),
   department: text('department').notNull(),
   location: text('location').notNull(),
