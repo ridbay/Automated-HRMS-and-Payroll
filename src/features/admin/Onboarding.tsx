@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Users,
@@ -48,7 +48,43 @@ const Onboarding: React.FC = () => {
     }
   };
 
-  const workflows = MOCK_WORKFLOWS.filter((w) => w.type === activeTab);
+  const workflows: Workflow[] = useMemo(() => {
+    if (!employees) return [];
+    
+    return employees
+      .filter((emp) => 
+        (activeTab === "Onboarding" && (emp.status === "onboarding" || emp.status === "active")) ||
+        (activeTab === "Offboarding" && (emp.status === "terminated" || emp.status === "notice"))
+      )
+      .map((emp) => ({
+        id: `wf-${emp.id}`,
+        type: activeTab,
+        employeeId: emp.id,
+        employeeName: `${emp.name} ${emp.lastName}`,
+        stage: activeTab === "Onboarding" ? "Orientation" : "Exit Interview",
+        startDate: emp.dob || new Date().toISOString(),
+        progress: activeTab === "Onboarding" ? 25 : 50,
+        status: "Active",
+        tasks: [
+          {
+            id: `task-1-${emp.id}`,
+            title: activeTab === "Onboarding" ? "Sign Offer Letter" : "Exit Interview",
+            status: "completed",
+            category: "HR",
+            assignedTo: emp.name,
+            dueDate: new Date().toISOString(),
+          },
+          {
+            id: `task-2-${emp.id}`,
+            title: activeTab === "Onboarding" ? "IT Setup" : "Revoke IT Access",
+            status: "pending",
+            category: "IT",
+            assignedTo: "IT Dept",
+            dueDate: new Date(Date.now() + 86400000).toISOString(),
+          }
+        ]
+      }));
+  }, [employees, activeTab]);
 
   const stats = [
     {
@@ -403,9 +439,9 @@ const Onboarding: React.FC = () => {
                               <div key={emp.id} 
                                 onClick={() => setOffboardingData({ ...offboardingData, employeeId: emp.id })}
                                 className={`p-6 rounded-2xl border-2 flex items-center gap-6 cursor-pointer transition-all ${offboardingData.employeeId === emp.id ? 'border-rose-500 bg-rose-50' : 'border-slate-200 hover:border-slate-300 bg-white'}`}>
-                                <img src={emp.avatar || `https://ui-avatars.com/api/?name=${emp.firstName}`} className="w-12 h-12 rounded-full" />
+                                <img src={emp.avatar || `https://ui-avatars.com/api/?name=${emp.name}`} className="w-12 h-12 rounded-full" />
                                 <div>
-                                  <h4 className="font-bold text-slate-800">{emp.firstName} {emp.lastName}</h4>
+                                  <h4 className="font-bold text-slate-800">{emp.name} {emp.lastName}</h4>
                                   <p className="text-xs font-medium text-slate-500">{emp.role || 'Employee'}</p>
                                 </div>
                               </div>
@@ -446,7 +482,7 @@ const Onboarding: React.FC = () => {
                             <label className="block text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2">Handover Responsibilities To</label>
                             <select className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-700 outline-none focus:border-rose-500">
                               <option value="">Select Employee...</option>
-                              {employees?.map((e) => <option key={e.id}>{e.firstName} {e.lastName}</option>)}
+                              {employees?.map((e) => <option key={e.id}>{e.name} {e.lastName}</option>)}
                             </select>
                           </div>
                           <div className="p-6 bg-slate-50 rounded-2xl border border-slate-200 space-y-4">
