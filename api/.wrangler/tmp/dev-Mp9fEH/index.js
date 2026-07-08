@@ -8976,21 +8976,44 @@ var AttendanceService = class {
     this.db = drizzle(dbBinding, { schema: schema_exports });
   }
   async getEmployeeAttendance(companyId, employeeId) {
-    return this.db.query.attendanceRecords.findMany({
+    const records = await this.db.query.attendanceRecords.findMany({
       where: and(
         eq(attendanceRecords.companyId, companyId),
         eq(attendanceRecords.employeeId, employeeId)
       ),
-      orderBy: /* @__PURE__ */ __name((attendanceRecords2, { desc: desc4 }) => [desc4(attendanceRecords2.date)], "orderBy")
+      orderBy: /* @__PURE__ */ __name((attendanceRecords2, { desc: desc4 }) => [desc4(attendanceRecords2.date), desc4(attendanceRecords2.clockIn)], "orderBy")
+    });
+    const grouped = {};
+    for (const r of records) {
+      if (!grouped[r.date]) {
+        grouped[r.date] = { date: r.date, status: r.status, clockIn: r.clockIn, clockOut: r.clockOut, workHours: 0, note: r.notes };
+      }
+      grouped[r.date].workHours += r.workHours || 0;
+      if (r.clockOut && (!grouped[r.date].clockOut || new Date(r.clockOut) > new Date(grouped[r.date].clockOut))) {
+        grouped[r.date].clockOut = r.clockOut;
+      }
+    }
+    return Object.values(grouped);
+  }
+  async getTodaySessions(companyId, employeeId) {
+    const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+    return this.db.query.attendanceRecords.findMany({
+      where: and(
+        eq(attendanceRecords.companyId, companyId),
+        eq(attendanceRecords.employeeId, employeeId),
+        eq(attendanceRecords.date, today)
+      ),
+      orderBy: /* @__PURE__ */ __name((attendanceRecords2, { asc: asc2 }) => [asc2(attendanceRecords2.clockIn)], "orderBy")
     });
   }
-  async getTodayAttendance(companyId, employeeId) {
+  async getActiveSession(companyId, employeeId) {
     const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
     const records = await this.db.query.attendanceRecords.findMany({
       where: and(
         eq(attendanceRecords.companyId, companyId),
         eq(attendanceRecords.employeeId, employeeId),
-        eq(attendanceRecords.date, today)
+        eq(attendanceRecords.date, today),
+        isNull(attendanceRecords.clockOut)
       ),
       limit: 1
     });
@@ -9015,11 +9038,10 @@ var AttendanceService = class {
     return result[0];
   }
   async clockOut(companyId, employeeId, data) {
-    const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
     const clockOutTime = (/* @__PURE__ */ new Date()).toISOString();
-    const currentRecord = await this.getTodayAttendance(companyId, employeeId);
-    if (!currentRecord) throw new Error("No clock in record found for today");
-    const clockInDate = new Date(currentRecord.clockIn);
+    const activeSession = await this.getActiveSession(companyId, employeeId);
+    if (!activeSession) throw new Error("No active clock in record found for today");
+    const clockInDate = new Date(activeSession.clockIn);
     const clockOutDate = new Date(clockOutTime);
     const diffMs = Math.abs(clockOutDate.getTime() - clockInDate.getTime());
     const workHours = +(diffMs / (1e3 * 60 * 60)).toFixed(2);
@@ -9028,9 +9050,7 @@ var AttendanceService = class {
       locationOut: data.location,
       workHours
     }).where(and(
-      eq(attendanceRecords.companyId, companyId),
-      eq(attendanceRecords.employeeId, employeeId),
-      eq(attendanceRecords.date, today)
+      eq(attendanceRecords.id, activeSession.id)
     )).returning();
     return result[0];
   }
@@ -9047,9 +9067,11 @@ var getAttendanceData = /* @__PURE__ */ __name(async (c) => {
     if (!defaultId) return c.json({ error: "No employee found" }, 404);
     employeeId = defaultId;
   }
-  const todayRecord = await attendanceService.getTodayAttendance(companyId, employeeId);
+  const todaySessions = await attendanceService.getTodaySessions(companyId, employeeId);
+  const activeSession = await attendanceService.getActiveSession(companyId, employeeId);
   const history = await attendanceService.getEmployeeAttendance(companyId, employeeId);
-  return c.json({ today: todayRecord, history });
+  const totalWorkHours = todaySessions.reduce((sum, s) => sum + (s.workHours || 0), 0);
+  return c.json({ activeSession, todaySessions, totalWorkHours, history });
 }, "getAttendanceData");
 var clockIn = /* @__PURE__ */ __name(async (c) => {
   const companyId = c.get("companyId");
@@ -9062,9 +9084,9 @@ var clockIn = /* @__PURE__ */ __name(async (c) => {
     employeeId = defaultId;
   }
   const data = await c.req.json();
-  const currentRecord = await attendanceService.getTodayAttendance(companyId, employeeId);
-  if (currentRecord) {
-    return c.json({ error: "Already clocked in today" }, 400);
+  const currentActive = await attendanceService.getActiveSession(companyId, employeeId);
+  if (currentActive) {
+    return c.json({ error: "You are already clocked in" }, 400);
   }
   const request = await attendanceService.clockIn(companyId, employeeId, data);
   return c.json(request);

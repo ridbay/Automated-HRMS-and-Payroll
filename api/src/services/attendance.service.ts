@@ -1,6 +1,6 @@
 import { D1Database } from '@cloudflare/workers-types';
 import { drizzle } from 'drizzle-orm/d1';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, isNull } from 'drizzle-orm';
 import * as schema from '../db/schema';
 
 export class AttendanceService {
@@ -11,22 +11,49 @@ export class AttendanceService {
   }
 
   async getEmployeeAttendance(companyId: string, employeeId: string) {
-    return this.db.query.attendanceRecords.findMany({
+    const records = await this.db.query.attendanceRecords.findMany({
       where: and(
         eq(schema.attendanceRecords.companyId, companyId),
         eq(schema.attendanceRecords.employeeId, employeeId)
       ),
-      orderBy: (attendanceRecords: any, { desc }: any) => [desc(attendanceRecords.date)]
+      orderBy: (attendanceRecords: any, { desc }: any) => [desc(attendanceRecords.date), desc(attendanceRecords.clockIn)]
+    });
+
+    // Group by date to provide unified history
+    const grouped: Record<string, any> = {};
+    for (const r of records) {
+      if (!grouped[r.date]) {
+        grouped[r.date] = { date: r.date, status: r.status, clockIn: r.clockIn, clockOut: r.clockOut, workHours: 0, note: r.notes };
+      }
+      grouped[r.date].workHours += (r.workHours || 0);
+      // clockOut is the latest clock out of the day
+      if (r.clockOut && (!grouped[r.date].clockOut || new Date(r.clockOut) > new Date(grouped[r.date].clockOut))) {
+        grouped[r.date].clockOut = r.clockOut;
+      }
+    }
+    return Object.values(grouped);
+  }
+
+  async getTodaySessions(companyId: string, employeeId: string) {
+    const today = new Date().toISOString().split('T')[0];
+    return this.db.query.attendanceRecords.findMany({
+      where: and(
+        eq(schema.attendanceRecords.companyId, companyId),
+        eq(schema.attendanceRecords.employeeId, employeeId),
+        eq(schema.attendanceRecords.date, today)
+      ),
+      orderBy: (attendanceRecords: any, { asc }: any) => [asc(attendanceRecords.clockIn)]
     });
   }
 
-  async getTodayAttendance(companyId: string, employeeId: string) {
+  async getActiveSession(companyId: string, employeeId: string) {
     const today = new Date().toISOString().split('T')[0];
     const records = await this.db.query.attendanceRecords.findMany({
       where: and(
         eq(schema.attendanceRecords.companyId, companyId),
         eq(schema.attendanceRecords.employeeId, employeeId),
-        eq(schema.attendanceRecords.date, today)
+        eq(schema.attendanceRecords.date, today),
+        isNull(schema.attendanceRecords.clockOut)
       ),
       limit: 1
     });
@@ -55,14 +82,13 @@ export class AttendanceService {
   }
 
   async clockOut(companyId: string, employeeId: string, data: any) {
-    const today = new Date().toISOString().split('T')[0];
     const clockOutTime = new Date().toISOString();
 
-    const currentRecord = await this.getTodayAttendance(companyId, employeeId);
-    if (!currentRecord) throw new Error('No clock in record found for today');
+    const activeSession = await this.getActiveSession(companyId, employeeId);
+    if (!activeSession) throw new Error('No active clock in record found for today');
 
     // Calculate basic work hours
-    const clockInDate = new Date(currentRecord.clockIn);
+    const clockInDate = new Date(activeSession.clockIn);
     const clockOutDate = new Date(clockOutTime);
     const diffMs = Math.abs(clockOutDate.getTime() - clockInDate.getTime());
     const workHours = +(diffMs / (1000 * 60 * 60)).toFixed(2);
@@ -74,9 +100,7 @@ export class AttendanceService {
         workHours,
       })
       .where(and(
-        eq(schema.attendanceRecords.companyId, companyId),
-        eq(schema.attendanceRecords.employeeId, employeeId),
-        eq(schema.attendanceRecords.date, today)
+        eq(schema.attendanceRecords.id, activeSession.id)
       ))
       .returning();
 

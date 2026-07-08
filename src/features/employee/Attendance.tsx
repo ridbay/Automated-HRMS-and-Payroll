@@ -70,8 +70,10 @@ const Attendance: React.FC = () => {
   const clockInMutation = useClockIn();
   const clockOutMutation = useClockOut();
 
-  const todayRecord = attendanceData?.today;
-  const isClockedIn = !!todayRecord && !todayRecord.clockOut;
+  const activeSession = attendanceData?.activeSession;
+  const todaySessions = attendanceData?.todaySessions || [];
+  const totalWorkHours = attendanceData?.totalWorkHours || 0;
+  const isClockedIn = !!activeSession;
 
   const [currentTime, setCurrentTime] = useState(new Date());
   const [timer, setTimer] = useState(0);
@@ -88,7 +90,8 @@ const Attendance: React.FC = () => {
   const [offlineQueue, setOfflineQueue] = useState<any[]>([]);
   const [showConfetti, setShowConfetti] = useState(false);
 
-  // Network Status
+  // Overtime mock
+  const [overtimeRequests, setOvertimeRequests] = useState([
     {
       id: "ot1",
       date: "2024-05-24",
@@ -116,16 +119,18 @@ const Attendance: React.FC = () => {
   // Timer logic
   useEffect(() => {
     let interval: any;
-    if (isClockedIn && todayRecord?.clockIn) {
-      const startMs = new Date(todayRecord.clockIn).getTime();
+    const previousSeconds = Math.floor(totalWorkHours * 3600);
+
+    if (isClockedIn && activeSession?.clockIn) {
+      const startMs = new Date(activeSession.clockIn).getTime();
       interval = setInterval(() => {
-        setTimer(Math.floor((Date.now() - startMs) / 1000));
+        setTimer(previousSeconds + Math.floor((Date.now() - startMs) / 1000));
       }, 1000);
     } else {
-      setTimer(0);
+      setTimer(previousSeconds);
     }
     return () => clearInterval(interval);
-  }, [isClockedIn, todayRecord]);
+  }, [isClockedIn, activeSession, totalWorkHours]);
 
   // Network Status
   useEffect(() => {
@@ -176,13 +181,6 @@ const Attendance: React.FC = () => {
     };
     const action = isClockedIn ? "clock-out" : "clock-in";
     const timestamp = new Date().toISOString();
-
-    const newEntry = {
-      action,
-      timestamp,
-      location,
-      note,
-      synced: isOnline,
     if (!isClockedIn) {
       clockInMutation.mutate(actionData, {
         onSuccess: () => {
@@ -382,37 +380,28 @@ const Attendance: React.FC = () => {
               Today's Timeline
             </h3>
             <div className="relative pl-6 border-l-2 border-slate-100 space-y-6">
-              {[
-                {
-                  time: "09:15 AM",
-                  event: "Clocked In",
-                  sub: "Lagos Main Office",
-                  color: "bg-emerald-500",
-                },
-                {
-                  time: "01:05 PM",
-                  event: "Lunch Break Started",
-                  sub: "Automated",
-                  color: "bg-indigo-500",
-                },
-                {
-                  time: "02:00 PM",
-                  event: "Back to Work",
-                  sub: "System Resume",
-                  color: "bg-indigo-500",
-                },
-              ].map((t, i) => (
-                <div key={i} className="relative">
-                  <div
-                    className={`absolute -left-[1.9rem] top-1 w-3 h-3 rounded-full border-2 border-white ring-4 ring-slate-50 ${t.color}`}
-                  />
-                  <p className="text-xs font-black text-slate-800 leading-none">
-                    {t.event}
-                  </p>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">
-                    {t.time} • {t.sub}
-                  </p>
-                </div>
+              {todaySessions.length === 0 && (
+                <p className="text-xs font-bold text-slate-400">No events yet today.</p>
+              )}
+              {todaySessions.map((session: any) => (
+                <React.Fragment key={session.id}>
+                  <div className="relative">
+                    <div className="absolute -left-[1.9rem] top-1 w-3 h-3 rounded-full border-2 border-white ring-4 ring-slate-50 bg-emerald-500" />
+                    <p className="text-xs font-black text-slate-800 leading-none">Clocked In</p>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">
+                      {new Date(session.clockIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {session.locationIn || 'Unknown'}
+                    </p>
+                  </div>
+                  {session.clockOut && (
+                    <div className="relative mt-6">
+                      <div className="absolute -left-[1.9rem] top-1 w-3 h-3 rounded-full border-2 border-white ring-4 ring-slate-50 bg-rose-500" />
+                      <p className="text-xs font-black text-slate-800 leading-none">Clocked Out</p>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">
+                        {new Date(session.clockOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {session.workHours}h logged
+                      </p>
+                    </div>
+                  )}
+                </React.Fragment>
               ))}
             </div>
           </section>

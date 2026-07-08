@@ -16,10 +16,13 @@ export const getAttendanceData = async (c: Context<AppEnv>) => {
     employeeId = defaultId;
   }
 
-  const todayRecord = await attendanceService.getTodayAttendance(companyId, employeeId);
+  const todaySessions = await attendanceService.getTodaySessions(companyId, employeeId);
+  const activeSession = await attendanceService.getActiveSession(companyId, employeeId);
   const history = await attendanceService.getEmployeeAttendance(companyId, employeeId);
 
-  return c.json({ today: todayRecord, history });
+  const totalWorkHours = todaySessions.reduce((sum: number, s: any) => sum + (s.workHours || 0), 0);
+
+  return c.json({ activeSession, todaySessions, totalWorkHours, history });
 };
 
 export const clockIn = async (c: Context<AppEnv>) => {
@@ -37,10 +40,10 @@ export const clockIn = async (c: Context<AppEnv>) => {
 
   const data = await c.req.json();
   
-  // Check if already clocked in today
-  const currentRecord = await attendanceService.getTodayAttendance(companyId, employeeId);
-  if (currentRecord) {
-    return c.json({ error: 'Already clocked in today' }, 400);
+  // Check if already clocked in right now
+  const currentActive = await attendanceService.getActiveSession(companyId, employeeId);
+  if (currentActive) {
+    return c.json({ error: 'You are already clocked in' }, 400);
   }
 
   const request = await attendanceService.clockIn(companyId, employeeId, data);

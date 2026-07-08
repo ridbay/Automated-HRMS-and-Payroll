@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   User,
@@ -87,6 +87,7 @@ const Profile: React.FC = () => {
   const [editMode, setEditMode] = useState(false);
   const [showChangeRequestModal, setShowChangeRequestModal] = useState(false);
   const [changeRequestField, setChangeRequestField] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: me, isLoading } = useMyProfile();
   const updateProfileMutation = useUpdateMyProfile();
@@ -116,6 +117,17 @@ const Profile: React.FC = () => {
     { id: "dependents", label: "Dependents", icon: Users },
   ];
 
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        updateProfileMutation.mutate({ avatar: reader.result as string });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   return (
     <div className="space-y-10 pb-20">
       {/* Profile Header */}
@@ -124,11 +136,21 @@ const Profile: React.FC = () => {
         <div className="relative z-10 flex flex-col md:flex-row items-center md:items-start gap-8">
           <div className="relative group">
             <img
-              src={me.avatar}
+              src={me.avatar || 'https://via.placeholder.com/150'}
               className="w-32 h-32 rounded-[2.5rem] object-cover ring-4 ring-white shadow-2xl"
               alt="Profile"
             />
-            <button className="absolute bottom-0 right-0 p-3 bg-indigo-600 text-white rounded-2xl shadow-lg opacity-0 group-hover:opacity-100 transition-all transform hover:scale-110">
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              className="hidden" 
+              accept="image/*" 
+              onChange={handleAvatarChange} 
+            />
+            <button 
+              onClick={() => fileInputRef.current?.click()}
+              className="absolute bottom-0 right-0 p-3 bg-indigo-600 text-white rounded-2xl shadow-lg opacity-0 group-hover:opacity-100 transition-all transform hover:scale-110"
+            >
               <Camera size={18} />
             </button>
           </div>
@@ -238,13 +260,13 @@ const Profile: React.FC = () => {
                     />
                     <ProfileField
                       label="Date of Birth"
-                      value="Oct 12, 1990"
+                      value={me.dob}
                       restricted
                     />
-                    <ProfileField label="Gender" value="Female" restricted />
+                    <ProfileField label="Gender" value={me.gender} restricted />
                     <ProfileField
                       label="Nationality"
-                      value="American"
+                      value={me.nationality}
                       restricted
                     />
                     <ProfileField
