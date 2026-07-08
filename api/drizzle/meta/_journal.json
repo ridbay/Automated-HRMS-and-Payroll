@@ -29,6 +29,13 @@
       "when": 1783501685369,
       "tag": "0003_red_catseye",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1783507552279,
+      "tag": "0004_amazing_vermin",
+      "breakpoints": true
     }
   ]
 }

@@ -20,6 +20,7 @@ import {
   X,
 } from "lucide-react";
 import { MOCK_WORKFLOWS, MOCK_EMPLOYEES, Workflow } from "../../data/mocks";
+import { useNavigation } from "../../context/NavigationContext";
 
 const Onboarding: React.FC = () => {
   const [selectedWorkflow, setSelectedWorkflow] = useState<Workflow | null>(
@@ -28,6 +29,21 @@ const Onboarding: React.FC = () => {
   const [activeTab, setActiveTab] = useState<"Onboarding" | "Offboarding">(
     "Onboarding",
   );
+  
+  const { setActiveTab: setMainTab } = useNavigation();
+  const [isOffboardingWizardOpen, setIsOffboardingWizardOpen] = useState(false);
+  const [offboardingStep, setOffboardingStep] = useState(1);
+  const [offboardingData, setOffboardingData] = useState<any>({});
+
+  const handleStartNew = () => {
+    if (activeTab === "Onboarding") {
+      sessionStorage.setItem("triggerOnboardingWizard", "true");
+      setMainTab("workforce");
+    } else {
+      setIsOffboardingWizardOpen(true);
+      setOffboardingStep(1);
+    }
+  };
 
   const workflows = MOCK_WORKFLOWS.filter((w) => w.type === activeTab);
 
@@ -113,7 +129,10 @@ const Onboarding: React.FC = () => {
             </div>
           </div>
         ))}
-        <button className="bg-indigo-600 p-6 rounded-[2.5rem] shadow-xl shadow-indigo-200 flex flex-col justify-center items-center text-white hover:scale-[1.02] transition-transform group">
+        <button 
+          onClick={handleStartNew}
+          className="bg-indigo-600 p-6 rounded-[2.5rem] shadow-xl shadow-indigo-200 flex flex-col justify-center items-center text-white hover:scale-[1.02] transition-transform group"
+        >
           <Plus
             size={32}
             className="mb-2 group-hover:rotate-90 transition-transform"

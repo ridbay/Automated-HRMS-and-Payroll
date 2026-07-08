@@ -134,7 +134,7 @@ const Sidebar: React.FC = () => {
     },
     { name: "Org Setup", icon: <Building2 size={20} />, path: "settings" },
     { name: "Compliance", icon: <ShieldCheck size={20} />, path: "compliance" },
-    { name: "System Settings", icon: <Settings size={20} />, path: "settings" },
+    // { name: "System Settings", icon: <Settings size={20} />, path: "settings" },
     { name: "Support", icon: <HelpCircle size={20} />, path: "help" },
   ];
 

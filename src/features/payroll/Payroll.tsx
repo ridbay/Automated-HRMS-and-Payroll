@@ -59,15 +59,14 @@ import {
   DollarSign,
   Zap,
   BarChart3,
+  Loader2,
 } from "lucide-react";
 import {
-  MOCK_TRANSACTIONS,
-  MOCK_PAYROLL_ENTRIES,
-  MOCK_EMPLOYEES,
   MOCK_LOANS,
   MOCK_COMPLIANCE,
   MOCK_TAX_BRACKETS,
 } from "../../data/mocks";
+import { usePayrollPreview, useLockPayroll } from "../../api/client";
 
 const payrollHistory = [
   { month: "Dec 25", amount: 22400 },
@@ -83,11 +82,24 @@ const Payroll: React.FC = () => {
   const [selectedEntry, setSelectedEntry] = useState<any>(null);
   const [isLocked, setIsLocked] = useState(false);
 
+  const { data: previewData, isLoading: isPreviewLoading } = usePayrollPreview(1, 2026);
+  const lockMutation = useLockPayroll();
+
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat("en-NG", {
       style: "currency",
       currency: "NGN",
-    }).format(val);
+    }).format(val || 0);
+
+  const handleLockAndSubmit = () => {
+    if (!previewData) return;
+    setIsLocked(true);
+    lockMutation.mutate(previewData, {
+      onSuccess: () => {
+        // Handle success, e.g. show toast
+      }
+    });
+  };
 
   const renderDashboard = () => (
     <div className="space-y-8 pb-20">
@@ -177,7 +189,11 @@ const Payroll: React.FC = () => {
                 {m.label}
               </p>
               <h4 className="text-2xl font-black text-slate-800 tracking-tighter tabular-nums">
-                {m.val}
+                {m.label === "Total Employees" && previewData?.employeeCount ? previewData.employeeCount : ''}
+                {m.label === "Gross Payroll" && previewData?.totalGross ? formatCurrency(previewData.totalGross) : ''}
+                {m.label === "Total Deductions" && previewData?.totalTaxes ? formatCurrency(previewData.totalTaxes + (previewData.totalGross * 0.4 * 0.08)) : ''}
+                {m.label === "Net Payroll" && previewData?.totalNet ? formatCurrency(previewData.totalNet) : ''}
+                {!previewData && m.val}
               </h4>
               <p className="text-[10px] font-bold text-slate-400 mt-2">
                 {m.sub}
@@ -415,15 +431,10 @@ const Payroll: React.FC = () => {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
-                        {MOCK_PAYROLL_ENTRIES.map((entry, idx) => (
+                        {previewData?.payslips.map((entry: any, idx: number) => (
                           <tr
                             key={idx}
-                            className={`hover:bg-slate-50/50 ${
-                              entry.attendance?.absent &&
-                              entry.attendance.absent > 0
-                                ? "bg-amber-50/30"
-                                : ""
-                            }`}
+                            className={`hover:bg-slate-50/50`}
                           >
                             <td className="px-10 py-5">
                               <div className="flex items-center gap-4">
@@ -448,7 +459,7 @@ const Payroll: React.FC = () => {
                               {entry.attendance?.absent || 0} days
                             </td>
                             <td className="px-8 py-5 text-sm font-bold text-emerald-600">
-                              {entry.attendance?.overtimeHours}h
+                              0h
                             </td>
                             <td className="px-8 py-5">
                               <button className="text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:underline">
@@ -475,7 +486,7 @@ const Payroll: React.FC = () => {
                   </div>
 
                   <div className="grid grid-cols-1 gap-4">
-                    {MOCK_PAYROLL_ENTRIES.map((entry, idx) => (
+                    {previewData?.payslips.map((entry: any, idx: number) => (
                       <div
                         key={idx}
                         className="bg-white rounded-[2rem] border border-slate-200 overflow-hidden group"
@@ -505,15 +516,13 @@ const Payroll: React.FC = () => {
                         </div>
                         <div className="p-8 grid grid-cols-2 md:grid-cols-4 gap-8">
                           {[
-                            { l: "Basic Salary", v: entry.earnings.basic },
+                            { l: "Basic Salary", v: entry.basicSalary },
                             {
                               l: "Allowances",
-                              v:
-                                entry.earnings.housing +
-                                entry.earnings.transport,
+                              v: entry.allowances,
                             },
-                            { l: "Overtime", v: entry.earnings.overtime },
-                            { l: "Bonuses", v: entry.earnings.bonus },
+                            { l: "Overtime", v: 0 },
+                            { l: "Bonuses", v: 0 },
                           ].map((item, i) => (
                             <div key={i} className="space-y-2">
                               <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
@@ -558,7 +567,7 @@ const Payroll: React.FC = () => {
                               Total PAYE Tax
                             </p>
                             <p className="text-4xl font-black tabular-nums">
-                              {formatCurrency(1245000)}
+                              {formatCurrency(previewData?.totalTaxes || 1245000)}
                             </p>
                           </div>
                           <div>
@@ -566,7 +575,7 @@ const Payroll: React.FC = () => {
                               Total Pension (8%)
                             </p>
                             <p className="text-3xl font-black tabular-nums">
-                              {formatCurrency(840200)}
+                              {formatCurrency(previewData ? (previewData.totalGross * 0.4 * 0.08) : 840200)}
                             </p>
                           </div>
                         </div>
@@ -695,7 +704,7 @@ const Payroll: React.FC = () => {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
-                        {MOCK_PAYROLL_ENTRIES.map((entry, idx) => (
+                        {previewData?.payslips.map((entry: any, idx: number) => (
                           <tr key={idx} className="hover:bg-slate-50/50">
                             <td className="px-10 py-5">
                               <p className="text-sm font-bold text-slate-800">
@@ -708,7 +717,7 @@ const Payroll: React.FC = () => {
                             <td className="px-8 py-5 text-sm font-bold text-rose-500">
                               -
                               {formatCurrency(
-                                entry.deductions.tax + entry.deductions.pension,
+                                entry.taxDeductions + entry.pensionDeductions,
                               )}
                             </td>
                             <td className="px-8 py-5 text-sm font-black text-emerald-600">
@@ -716,7 +725,7 @@ const Payroll: React.FC = () => {
                             </td>
                             <td className="px-8 py-5">
                               <span className="flex items-center gap-1 text-[10px] font-black text-emerald-500 uppercase">
-                                <ArrowUpRight size={12} /> 2.1%
+                                <ArrowUpRight size={12} /> OK
                               </span>
                             </td>
                           </tr>
@@ -738,14 +747,15 @@ const Payroll: React.FC = () => {
                         Lock and Submit?
                       </p>
                       <button
-                        onClick={() => setIsLocked(!isLocked)}
+                        onClick={handleLockAndSubmit}
+                        disabled={lockMutation.isPending || isLocked}
                         className={`p-3 rounded-xl transition-all ${
                           isLocked
                             ? "bg-rose-500 text-white shadow-xl shadow-rose-200"
-                            : "bg-white text-slate-400 border border-slate-200"
+                            : "bg-white text-slate-400 border border-slate-200 hover:border-indigo-500 hover:text-indigo-500"
                         }`}
                       >
-                        {isLocked ? <Lock size={20} /> : <Unlock size={20} />}
+                        {lockMutation.isPending ? <Loader2 className="animate-spin" size={20} /> : isLocked ? <Lock size={20} /> : <Unlock size={20} />}
                       </button>
                     </div>
                   </div>
@@ -757,7 +767,7 @@ const Payroll: React.FC = () => {
                             Total Employees
                           </span>
                           <span className="text-xl font-black text-slate-800">
-                            142
+                            {previewData?.employeeCount || 142}
                           </span>
                         </div>
                         <div className="flex justify-between items-center border-b border-slate-200 pb-6">
@@ -765,7 +775,7 @@ const Payroll: React.FC = () => {
                             Company Gross
                           </span>
                           <span className="text-xl font-black text-slate-800">
-                            {formatCurrency(12840000)}
+                            {formatCurrency(previewData?.totalGross || 12840000)}
                           </span>
                         </div>
                         <div className="flex justify-between items-center border-b border-slate-200 pb-6">
@@ -773,7 +783,7 @@ const Payroll: React.FC = () => {
                             Total Tax Remittance
                           </span>
                           <span className="text-xl font-black text-rose-500">
-                            {formatCurrency(2120000)}
+                            {formatCurrency(previewData?.totalTaxes || 2120000)}
                           </span>
                         </div>
                         <div className="flex justify-between items-center pt-4">
@@ -781,7 +791,7 @@ const Payroll: React.FC = () => {
                             Final Net Payout
                           </span>
                           <span className="text-3xl font-black text-indigo-600">
-                            {formatCurrency(10420000)}
+                            {formatCurrency(previewData?.totalNet || 10420000)}
                           </span>
                         </div>
                       </div>
@@ -1118,9 +1128,16 @@ const Payroll: React.FC = () => {
           exit={{ opacity: 0, y: -10 }}
           transition={{ duration: 0.3 }}
         >
-          {activeTab === "dashboard" && renderDashboard()}
-          {activeTab === "wizard" && renderWizard()}
-          {activeTab === "compliance" && (
+          {isPreviewLoading ? (
+            <div className="flex items-center justify-center min-h-[400px]">
+              <Loader2 className="animate-spin text-indigo-600" size={48} />
+            </div>
+          ) : (
+            <>
+              {activeTab === "dashboard" && renderDashboard()}
+              {activeTab === "wizard" && renderWizard()}
+              {activeTab === "compliance" && (
+
             <div className="space-y-10 pb-20">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
                 <section className="bg-white p-10 rounded-[3.5rem] border border-slate-200 shadow-sm">
@@ -1436,6 +1453,8 @@ const Payroll: React.FC = () => {
               </div>
             </div>
           )}
+          </>
+        )}
         </motion.div>
       </AnimatePresence>
     </div>

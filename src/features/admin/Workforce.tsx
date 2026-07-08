@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 // Added Check icon to the imports from lucide-react to fix errors on lines 406, 478, and 485
 // Added FileCheck icon to the imports to fix error on line 833
@@ -77,6 +77,15 @@ const Workforce: React.FC = () => {
   const [viewMode, setViewMode] = useState<"grid" | "list" | "org">("grid");
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [wizardStep, setWizardStep] = useState(1);
+
+  useEffect(() => {
+    if (sessionStorage.getItem("triggerOnboardingWizard") === "true") {
+      setIsWizardOpen(true);
+      setWizardStep(1);
+      sessionStorage.removeItem("triggerOnboardingWizard");
+    }
+  }, []);
+
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedEmployees, setSelectedEmployees] = useState<string[]>([]);
   const [isFilterSidebarOpen, setIsFilterSidebarOpen] = useState(false);

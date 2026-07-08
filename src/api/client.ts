@@ -46,6 +46,28 @@ export const fetchLeaveRequests = async (): Promise<LeaveRequest[]> => {
   return res.json();
 };
 
+export const previewPayroll = async (month?: number, year?: number) => {
+  const query = new URLSearchParams();
+  if (month) query.append('month', month.toString());
+  if (year) query.append('year', year.toString());
+  
+  const res = await fetchWithTenant(`${API_URL}/admin/payroll/preview?${query.toString()}`);
+  if (!res.ok) throw new Error('Failed to preview payroll');
+  const json = await res.json();
+  return json.data;
+};
+
+export const lockPayroll = async (payrollData: any) => {
+  const res = await fetchWithTenant(`${API_URL}/admin/payroll/lock`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payrollData),
+  });
+  if (!res.ok) throw new Error('Failed to lock payroll');
+  const json = await res.json();
+  return json.data;
+};
+
 // React Query Hooks
 export const useEmployees = () => {
   return useQuery({
@@ -75,5 +97,18 @@ export const useLeaveRequests = () => {
   return useQuery({
     queryKey: ['leaveRequests'],
     queryFn: fetchLeaveRequests,
+  });
+};
+
+export const usePayrollPreview = (month?: number, year?: number) => {
+  return useQuery({
+    queryKey: ['payrollPreview', month, year],
+    queryFn: () => previewPayroll(month, year),
+  });
+};
+
+export const useLockPayroll = () => {
+  return useMutation({
+    mutationFn: lockPayroll,
   });
 };
