@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Employee, JobRequisition, LeaveRequest } from '../types';
 import { MOCK_EMPLOYEES, MOCK_REQUISITIONS, MOCK_LEAVE_REQUESTS } from '../data/mocks';
 
@@ -24,6 +24,16 @@ export const fetchEmployees = async (): Promise<Employee[]> => {
   return data.length > 0 ? data : MOCK_EMPLOYEES;
 };
 
+export const createEmployee = async (newEmployee: Partial<Employee>): Promise<Employee> => {
+  const res = await fetchWithTenant(`${API_URL}/admin/employees`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(newEmployee),
+  });
+  if (!res.ok) throw new Error('Failed to create employee');
+  return res.json();
+};
+
 export const fetchJobRequisitions = async (): Promise<JobRequisition[]> => {
   const res = await fetchWithTenant(`${API_URL}/admin/job-requisitions`);
   if (!res.ok) throw new Error('Failed to fetch job requisitions');
@@ -41,6 +51,16 @@ export const useEmployees = () => {
   return useQuery({
     queryKey: ['employees'],
     queryFn: fetchEmployees,
+  });
+};
+
+export const useCreateEmployee = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: createEmployee,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+    },
   });
 };
 

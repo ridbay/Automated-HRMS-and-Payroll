@@ -57,12 +57,13 @@ import {
   FileCheck,
 } from "lucide-react";
 import { Employee } from "../../types/index";
-import { useEmployees } from "../../api/client";
+import { useEmployees, useCreateEmployee } from "../../api/client";
 import Celebration from "../../components/Celebration";
 import EmployeeDetail from "./EmployeeDetail";
 
 const Workforce: React.FC = () => {
   const { data: employees = [] } = useEmployees();
+  const createEmployeeMutation = useCreateEmployee();
   const [viewMode, setViewMode] = useState<"grid" | "list" | "org">("grid");
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [wizardStep, setWizardStep] = useState(1);
@@ -843,7 +844,7 @@ const Workforce: React.FC = () => {
   };
 
   if (selectedEmployeeId) {
-    const emp = MOCK_EMPLOYEES.find((e) => e.id === selectedEmployeeId);
+    const emp = employees.find((e) => e.id === selectedEmployeeId);
     return (
       <EmployeeDetail
         employee={emp!}
@@ -868,7 +869,7 @@ const Workforce: React.FC = () => {
             </h1>
           </div>
           <p className="text-slate-500 font-medium italic">
-            Strategic management of {MOCK_EMPLOYEES.length} active personnel
+            Strategic management of {employees.length} active personnel
           </p>
         </div>
         <div className="flex gap-3">
@@ -1473,9 +1474,27 @@ const Workforce: React.FC = () => {
                     onClick={() => {
                       if (wizardStep < 8) setWizardStep((prev) => prev + 1);
                       else {
-                        setIsWizardOpen(false);
-                        setWizardStep(1);
-                        triggerCelebration();
+                        createEmployeeMutation.mutate(
+                          {
+                            id: `EMP-${Math.floor(1000 + Math.random() * 9000)}`,
+                            name: "John",
+                            lastName: "Doe",
+                            email: `john.doe.${Math.floor(Math.random() * 1000)}@example.com`,
+                            role: "Software Engineer",
+                            department: "Engineering",
+                            employmentType: "Full-time",
+                            status: "active",
+                            salary: 120000,
+                            hireDate: new Date().toISOString().split("T")[0],
+                          },
+                          {
+                            onSuccess: () => {
+                              setIsWizardOpen(false);
+                              setWizardStep(1);
+                              triggerCelebration();
+                            },
+                          },
+                        );
                       }
                     }}
                     className="px-12 py-4 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-100 hover:scale-105 active:scale-95 transition-all flex items-center gap-3"
