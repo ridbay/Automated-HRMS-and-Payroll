@@ -8195,6 +8195,9 @@ var employees = sqliteTable("employees", {
   bankName: text("bank_name"),
   accountNumber: text("account_number"),
   accountName: text("account_name"),
+  secondaryBankName: text("secondary_bank_name"),
+  secondaryAccountNumber: text("secondary_account_number"),
+  secondaryAccountName: text("secondary_account_name"),
   payoutMethod: text("payout_method"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").$onUpdate(() => (/* @__PURE__ */ new Date()).toISOString())

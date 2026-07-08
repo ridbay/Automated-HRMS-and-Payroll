@@ -101,6 +101,13 @@ const Profile: React.FC = () => {
   const [uploadName, setUploadName] = useState("");
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   
+  const [showSecondaryBankModal, setShowSecondaryBankModal] = useState(false);
+  const [secondaryBankDetails, setSecondaryBankDetails] = useState({
+    secondaryBankName: "",
+    secondaryAccountName: "",
+    secondaryAccountNumber: "",
+  });
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const uploadDocMutation = useUploadDocumentMutation();
@@ -127,6 +134,21 @@ const Profile: React.FC = () => {
   const updateProfileMutation = useUpdateMyProfile();
   const addEmergencyContact = useAddEmergencyContact();
   const deleteEmergencyContact = useDeleteEmergencyContact();
+
+  const handleOpenSecondaryBank = () => {
+    setSecondaryBankDetails({
+      secondaryBankName: me?.secondaryBankName || "",
+      secondaryAccountName: me?.secondaryAccountName || "",
+      secondaryAccountNumber: me?.secondaryAccountNumber || "",
+    });
+    setShowSecondaryBankModal(true);
+  };
+
+  const handleSaveSecondaryBank = () => {
+    updateProfileMutation.mutate(secondaryBankDetails, {
+      onSuccess: () => setShowSecondaryBankModal(false)
+    });
+  };
 
   if (isLoading) {
     return (
@@ -629,54 +651,120 @@ const Profile: React.FC = () => {
                     title="Bank Accounts"
                     subtitle="Payroll destinations"
                   />
-                  <div className="p-8 bg-slate-900 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden mb-8">
-                    <div className="absolute top-0 right-0 p-8 text-white/5">
-                      <Landmark size={120} />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                    {/* Primary Account */}
+                    <div className="p-8 bg-slate-900 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden">
+                      <div className="absolute top-0 right-0 p-8 text-white/5">
+                        <Landmark size={120} />
+                      </div>
+                      <div className="relative z-10">
+                        <div className="flex justify-between items-start mb-8">
+                          <div className="px-3 py-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-lg text-[9px] font-black uppercase tracking-widest">
+                            Primary Salary Account
+                          </div>
+                          <div className="text-right">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase">
+                              Bank Name
+                            </p>
+                            <p className="text-lg font-black tracking-tight">
+                              {me.bankName || "Not configured"}
+                            </p>
+                          </div>
+                        </div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">
+                          Account Number
+                        </p>
+                        <div className="flex items-center gap-4 text-3xl font-mono tracking-widest mb-8">
+                          <span>
+                            {me.accountNumber
+                              ? me.accountNumber.substring(0, 4)
+                              : "****"}
+                          </span>
+                          <span>****</span>
+                          <span>
+                            {me.accountNumber
+                              ? me.accountNumber.slice(-4)
+                              : "****"}
+                          </span>
+                          <button className="ml-2 p-2 text-slate-500 hover:text-white transition-colors">
+                            <EyeOff size={18} />
+                          </button>
+                        </div>
+                        <div className="flex gap-4">
+                          <button
+                            onClick={() => {
+                              setChangeRequestField("Primary Bank Details");
+                              setShowChangeRequestModal(true);
+                            }}
+                            className="px-6 py-3 bg-white/10 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/20 transition-colors"
+                          >
+                            Request Change
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                    <div className="relative z-10">
-                      <div className="flex justify-between items-start mb-8">
-                        <div className="px-3 py-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-lg text-[9px] font-black uppercase tracking-widest">
-                          Primary Salary Account
-                        </div>
-                        <div className="text-right">
-                          <p className="text-[10px] font-bold text-slate-400 uppercase">
-                            Bank Name
-                          </p>
-                          <p className="text-lg font-black tracking-tight">
-                            {me.bankName || "Not configured"}
-                          </p>
-                        </div>
-                      </div>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">
-                        Account Number
-                      </p>
-                      <div className="flex items-center gap-4 text-3xl font-mono tracking-widest mb-8">
-                        <span>
-                          {me.accountNumber
-                            ? me.accountNumber.substring(0, 4)
-                            : "****"}
-                        </span>
-                        <span>****</span>
-                        <span>
-                          {me.accountNumber
-                            ? me.accountNumber.slice(-4)
-                            : "****"}
-                        </span>
-                        <button className="ml-2 p-2 text-slate-500 hover:text-white transition-colors">
-                          <EyeOff size={18} />
-                        </button>
-                      </div>
-                      <div className="flex gap-4">
-                        <button
-                          onClick={() => {
-                            setChangeRequestField("Bank Details");
-                            setShowChangeRequestModal(true);
-                          }}
-                          className="px-6 py-3 bg-white/10 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/20 transition-colors"
-                        >
-                          Request Change
-                        </button>
-                      </div>
+
+                    {/* Secondary Account */}
+                    <div className={`p-8 rounded-[2.5rem] relative overflow-hidden transition-all ${me.secondaryAccountNumber ? 'bg-indigo-600 text-white shadow-2xl shadow-indigo-200' : 'bg-slate-50 border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-center hover:border-indigo-200 hover:bg-indigo-50/50'}`}>
+                      {me.secondaryAccountNumber ? (
+                        <>
+                          <div className="absolute top-0 right-0 p-8 text-white/5">
+                            <Landmark size={120} />
+                          </div>
+                          <div className="relative z-10">
+                            <div className="flex justify-between items-start mb-8">
+                              <div className="px-3 py-1 bg-white/20 text-indigo-50 border border-white/30 rounded-lg text-[9px] font-black uppercase tracking-widest">
+                                Secondary Account
+                              </div>
+                              <div className="text-right">
+                                <p className="text-[10px] font-bold text-indigo-200 uppercase">
+                                  Bank Name
+                                </p>
+                                <p className="text-lg font-black tracking-tight">
+                                  {me.secondaryBankName}
+                                </p>
+                              </div>
+                            </div>
+                            <p className="text-[10px] font-bold text-indigo-200 uppercase mb-2">
+                              Account Number
+                            </p>
+                            <div className="flex items-center gap-4 text-3xl font-mono tracking-widest mb-8">
+                              <span>
+                                {me.secondaryAccountNumber.substring(0, 4)}
+                              </span>
+                              <span>****</span>
+                              <span>
+                                {me.secondaryAccountNumber.slice(-4)}
+                              </span>
+                              <button className="ml-2 p-2 text-indigo-300 hover:text-white transition-colors">
+                                <EyeOff size={18} />
+                              </button>
+                            </div>
+                            <div className="flex gap-4">
+                              <button
+                                onClick={handleOpenSecondaryBank}
+                                className="px-6 py-3 bg-white/10 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/20 transition-colors"
+                              >
+                                Edit Details
+                              </button>
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-sm mb-4 text-indigo-600">
+                            <Plus size={32} />
+                          </div>
+                          <h4 className="text-sm font-black text-slate-800 mb-2">Secondary Account</h4>
+                          <p className="text-xs font-bold text-slate-400 mb-6 max-w-[200px]">Add a secondary bank account to split your payroll</p>
+                          <button
+                            onClick={handleOpenSecondaryBank}
+                            className="px-6 py-3 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-100"
+                          >
+                            Add Bank Account
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                   <button className="w-full py-6 border-2 border-dashed border-slate-200 rounded-[2rem] text-slate-400 font-black uppercase text-xs tracking-widest hover:border-indigo-200 hover:text-indigo-600 transition-all flex items-center justify-center gap-2">
@@ -978,6 +1066,78 @@ const Profile: React.FC = () => {
                 >
                   {uploadDocMutation.isPending ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
                   {uploadDocMutation.isPending ? "Uploading..." : "Submit Document"}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+      {/* Secondary Bank Modal */}
+      <AnimatePresence>
+        {showSecondaryBankModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-lg bg-white rounded-[2.5rem] shadow-2xl overflow-hidden"
+            >
+              <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                  <Landmark className="text-indigo-600" /> Secondary Bank Details
+                </h3>
+                <button
+                  onClick={() => setShowSecondaryBankModal(false)}
+                  className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="p-8 space-y-6">
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                    Bank Name
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Guaranty Trust Bank"
+                    value={secondaryBankDetails.secondaryBankName}
+                    onChange={(e) => setSecondaryBankDetails({ ...secondaryBankDetails, secondaryBankName: e.target.value })}
+                    className="w-full px-6 py-4 bg-slate-50 rounded-2xl font-bold text-slate-800 border-none outline-none focus:ring-4 focus:ring-indigo-100 transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                    Account Name
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. John Doe"
+                    value={secondaryBankDetails.secondaryAccountName}
+                    onChange={(e) => setSecondaryBankDetails({ ...secondaryBankDetails, secondaryAccountName: e.target.value })}
+                    className="w-full px-6 py-4 bg-slate-50 rounded-2xl font-bold text-slate-800 border-none outline-none focus:ring-4 focus:ring-indigo-100 transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                    Account Number
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="10-digit account number"
+                    maxLength={10}
+                    value={secondaryBankDetails.secondaryAccountNumber}
+                    onChange={(e) => setSecondaryBankDetails({ ...secondaryBankDetails, secondaryAccountNumber: e.target.value })}
+                    className="w-full px-6 py-4 bg-slate-50 rounded-2xl font-bold text-slate-800 border-none outline-none focus:ring-4 focus:ring-indigo-100 transition-all"
+                  />
+                </div>
+                <button
+                  onClick={handleSaveSecondaryBank}
+                  disabled={updateProfileMutation.isPending || !secondaryBankDetails.secondaryBankName || !secondaryBankDetails.secondaryAccountNumber}
+                  className="w-full py-4 bg-indigo-600 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-200 hover:bg-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {updateProfileMutation.isPending ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+                  {updateProfileMutation.isPending ? "Saving..." : "Save Details"}
                 </button>
               </div>
             </motion.div>
