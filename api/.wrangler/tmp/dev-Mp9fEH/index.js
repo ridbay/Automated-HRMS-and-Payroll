@@ -8897,7 +8897,7 @@ var LeaveService = class {
         eq(leaveRequests.companyId, companyId),
         eq(leaveRequests.employeeId, employeeId)
       ),
-      orderBy: /* @__PURE__ */ __name((leaveRequests2, { desc: desc3 }) => [desc3(leaveRequests2.appliedOn)], "orderBy")
+      orderBy: /* @__PURE__ */ __name((leaveRequests2, { desc: desc4 }) => [desc4(leaveRequests2.appliedOn)], "orderBy")
     });
   }
   async calculateLeaveBalances(companyId, employeeId) {
@@ -8966,6 +8966,124 @@ var applyForLeave = /* @__PURE__ */ __name(async (c) => {
   return c.json(request);
 }, "applyForLeave");
 
+// src/services/attendance.service.ts
+var AttendanceService = class {
+  static {
+    __name(this, "AttendanceService");
+  }
+  db;
+  constructor(dbBinding) {
+    this.db = drizzle(dbBinding, { schema: schema_exports });
+  }
+  async getEmployeeAttendance(companyId, employeeId) {
+    return this.db.query.attendanceRecords.findMany({
+      where: and(
+        eq(attendanceRecords.companyId, companyId),
+        eq(attendanceRecords.employeeId, employeeId)
+      ),
+      orderBy: /* @__PURE__ */ __name((attendanceRecords2, { desc: desc4 }) => [desc4(attendanceRecords2.date)], "orderBy")
+    });
+  }
+  async getTodayAttendance(companyId, employeeId) {
+    const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+    const records = await this.db.query.attendanceRecords.findMany({
+      where: and(
+        eq(attendanceRecords.companyId, companyId),
+        eq(attendanceRecords.employeeId, employeeId),
+        eq(attendanceRecords.date, today)
+      ),
+      limit: 1
+    });
+    return records[0] || null;
+  }
+  async clockIn(companyId, employeeId, data) {
+    const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+    const clockInTime = (/* @__PURE__ */ new Date()).toISOString();
+    const id = `ATT-${Math.floor(1e3 + Math.random() * 9e3)}`;
+    const result = await this.db.insert(attendanceRecords).values({
+      id,
+      companyId,
+      employeeId,
+      date: today,
+      clockIn: clockInTime,
+      status: "present",
+      locationIn: data.location,
+      notes: data.notes,
+      workHours: 0,
+      overtime: 0
+    }).returning();
+    return result[0];
+  }
+  async clockOut(companyId, employeeId, data) {
+    const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+    const clockOutTime = (/* @__PURE__ */ new Date()).toISOString();
+    const currentRecord = await this.getTodayAttendance(companyId, employeeId);
+    if (!currentRecord) throw new Error("No clock in record found for today");
+    const clockInDate = new Date(currentRecord.clockIn);
+    const clockOutDate = new Date(clockOutTime);
+    const diffMs = Math.abs(clockOutDate.getTime() - clockInDate.getTime());
+    const workHours = +(diffMs / (1e3 * 60 * 60)).toFixed(2);
+    const result = await this.db.update(attendanceRecords).set({
+      clockOut: clockOutTime,
+      locationOut: data.location,
+      workHours
+    }).where(and(
+      eq(attendanceRecords.companyId, companyId),
+      eq(attendanceRecords.employeeId, employeeId),
+      eq(attendanceRecords.date, today)
+    )).returning();
+    return result[0];
+  }
+};
+
+// src/controllers/employee/attendance.controller.ts
+var getAttendanceData = /* @__PURE__ */ __name(async (c) => {
+  const companyId = c.get("companyId");
+  let employeeId = c.req.header("x-employee-id");
+  const attendanceService = new AttendanceService(c.env.DB);
+  const employeeService = new EmployeeService(c.env.DB);
+  if (!employeeId) {
+    const defaultId = await employeeService.getFirstEmployeeId(companyId);
+    if (!defaultId) return c.json({ error: "No employee found" }, 404);
+    employeeId = defaultId;
+  }
+  const todayRecord = await attendanceService.getTodayAttendance(companyId, employeeId);
+  const history = await attendanceService.getEmployeeAttendance(companyId, employeeId);
+  return c.json({ today: todayRecord, history });
+}, "getAttendanceData");
+var clockIn = /* @__PURE__ */ __name(async (c) => {
+  const companyId = c.get("companyId");
+  let employeeId = c.req.header("x-employee-id");
+  const attendanceService = new AttendanceService(c.env.DB);
+  const employeeService = new EmployeeService(c.env.DB);
+  if (!employeeId) {
+    const defaultId = await employeeService.getFirstEmployeeId(companyId);
+    if (!defaultId) return c.json({ error: "No employee found" }, 404);
+    employeeId = defaultId;
+  }
+  const data = await c.req.json();
+  const currentRecord = await attendanceService.getTodayAttendance(companyId, employeeId);
+  if (currentRecord) {
+    return c.json({ error: "Already clocked in today" }, 400);
+  }
+  const request = await attendanceService.clockIn(companyId, employeeId, data);
+  return c.json(request);
+}, "clockIn");
+var clockOut = /* @__PURE__ */ __name(async (c) => {
+  const companyId = c.get("companyId");
+  let employeeId = c.req.header("x-employee-id");
+  const attendanceService = new AttendanceService(c.env.DB);
+  const employeeService = new EmployeeService(c.env.DB);
+  if (!employeeId) {
+    const defaultId = await employeeService.getFirstEmployeeId(companyId);
+    if (!defaultId) return c.json({ error: "No employee found" }, 404);
+    employeeId = defaultId;
+  }
+  const data = await c.req.json();
+  const request = await attendanceService.clockOut(companyId, employeeId, data);
+  return c.json(request);
+}, "clockOut");
+
 // src/routes/employee.routes.ts
 var employeeRoutes = new Hono2();
 employeeRoutes.use("*", tenantMiddleware);
@@ -8973,6 +9091,9 @@ employeeRoutes.get("/me", getMyProfile);
 employeeRoutes.put("/me", updateMyProfile);
 employeeRoutes.get("/leave/me", getMyLeaveData);
 employeeRoutes.post("/leave/apply", applyForLeave);
+employeeRoutes.get("/attendance/me", getAttendanceData);
+employeeRoutes.post("/attendance/clock-in", clockIn);
+employeeRoutes.post("/attendance/clock-out", clockOut);
 var employee_routes_default = employeeRoutes;
 
 // src/routes/index.ts

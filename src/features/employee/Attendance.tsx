@@ -57,16 +57,22 @@ import {
   Area,
 } from "recharts";
 import {
-  MOCK_ATTENDANCE,
   MOCK_LEAVE_BALANCES,
   MOCK_EMPLOYEES,
 } from "../../data/mocks";
+import { useMyAttendance, useClockIn, useClockOut } from "../../api/client";
 
 const Attendance: React.FC = () => {
   const [activeTab, setActiveTab] = useState<
     "clock" | "calendar" | "overtime" | "reports"
   >("clock");
-  const [isClockedIn, setIsClockedIn] = useState(false);
+  const { data: attendanceData, isLoading } = useMyAttendance();
+  const clockInMutation = useClockIn();
+  const clockOutMutation = useClockOut();
+
+  const todayRecord = attendanceData?.today;
+  const isClockedIn = !!todayRecord && !todayRecord.clockOut;
+
   const [currentTime, setCurrentTime] = useState(new Date());
   const [timer, setTimer] = useState(0);
   const [showClockModal, setShowClockModal] = useState(false);
@@ -82,13 +88,7 @@ const Attendance: React.FC = () => {
   const [offlineQueue, setOfflineQueue] = useState<any[]>([]);
   const [showConfetti, setShowConfetti] = useState(false);
 
-  // Local storage persistence mock
-  const [attendanceHistory, setAttendanceHistory] = useState<any>(() => {
-    const saved = localStorage.getItem("attendance_history");
-    return saved ? JSON.parse(saved) : MOCK_ATTENDANCE || {};
-  });
-
-  const [overtimeRequests, setOvertimeRequests] = useState([
+  // Network Status
     {
       id: "ot1",
       date: "2024-05-24",
@@ -116,11 +116,16 @@ const Attendance: React.FC = () => {
   // Timer logic
   useEffect(() => {
     let interval: any;
-    if (isClockedIn) {
-      interval = setInterval(() => setTimer((prev) => prev + 1), 1000);
+    if (isClockedIn && todayRecord?.clockIn) {
+      const startMs = new Date(todayRecord.clockIn).getTime();
+      interval = setInterval(() => {
+        setTimer(Math.floor((Date.now() - startMs) / 1000));
+      }, 1000);
+    } else {
+      setTimer(0);
     }
     return () => clearInterval(interval);
-  }, [isClockedIn]);
+  }, [isClockedIn, todayRecord]);
 
   // Network Status
   useEffect(() => {
@@ -164,15 +169,11 @@ const Attendance: React.FC = () => {
     }
   }, [showClockModal]);
 
-  // Persist history
-  useEffect(() => {
-    localStorage.setItem(
-      "attendance_history",
-      JSON.stringify(attendanceHistory),
-    );
-  }, [attendanceHistory]);
-
   const handleClockAction = (note: string) => {
+    const actionData = {
+      location: location?.address || "Unknown Location",
+      notes: note
+    };
     const action = isClockedIn ? "clock-out" : "clock-in";
     const timestamp = new Date().toISOString();
 
@@ -182,42 +183,20 @@ const Attendance: React.FC = () => {
       location,
       note,
       synced: isOnline,
-    };
-
-    if (!isOnline) {
-      setOfflineQueue((prev) => [...prev, newEntry]);
-    }
-
-    // Update local state for immediate feedback
     if (!isClockedIn) {
-      setShowConfetti(true);
-      if (window.navigator && window.navigator.vibrate) {
-        navigator.vibrate([200, 100, 200]);
-      }
-      setTimeout(() => setShowConfetti(false), 3000);
-
-      // Update history for today
-      const today = timestamp.split("T")[0];
-      setAttendanceHistory((prev: any) => ({
-        ...prev,
-        [today]: {
-          ...(prev[today] || {}),
-          clockIn: timestamp,
-          status: "present",
-        },
-      }));
+      clockInMutation.mutate(actionData, {
+        onSuccess: () => {
+          setShowConfetti(true);
+          if (window.navigator && window.navigator.vibrate) navigator.vibrate([200, 100, 200]);
+          setTimeout(() => setShowConfetti(false), 3000);
+          setShowClockModal(false);
+        }
+      });
     } else {
-      // Clock out logic
-      const today = timestamp.split("T")[0];
-      setAttendanceHistory((prev: any) => ({
-        ...prev,
-        [today]: { ...(prev[today] || {}), clockOut: timestamp },
-      }));
-      setTimer(0);
+      clockOutMutation.mutate(actionData, {
+        onSuccess: () => setShowClockModal(false)
+      });
     }
-
-    setIsClockedIn(!isClockedIn);
-    setShowClockModal(false);
   };
 
   const formatTimer = (seconds: number) => {
@@ -442,22 +421,27 @@ const Attendance: React.FC = () => {
     </div>
   );
 
-  // Helper to get status for a date
-  const getStatusForDate = (day: number) => {
-    // Mocking May 2024 for this demo
-    const dateStr = `2024-05-${day.toString().padStart(2, "0")}`;
-    const entry = attendanceHistory[dateStr];
-    if (entry) return entry.status;
+  const currentYear = new Date().getFullYear();
+  const currentMonth = new Date().getMonth() + 1;
+  const currentMonthStr = currentMonth.toString().padStart(2, '0');
+  const monthName = new Date().toLocaleString('default', { month: 'long' });
+  const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
 
-    // Fallback logic for demo
-    if (day > 25) return "weekend";
-    const dayOfWeek = new Date(2024, 4, day).getDay();
-    if (dayOfWeek === 0 || dayOfWeek === 6) return "weekend";
-    return day < 20 ? (day % 2 === 0 ? "present" : "late") : "present";
+  // Helper to get status for a date
+  const getDayData = (dateStr: string) => {
+    return attendanceData?.history?.find((r: any) => r.date === dateStr) || null;
   };
 
-  const getDayData = (dateStr: string) => {
-    return attendanceHistory[dateStr] || null;
+  const getStatusForDate = (day: number) => {
+    const dateStr = `${currentYear}-${currentMonthStr}-${day.toString().padStart(2, "0")}`;
+    const entry = getDayData(dateStr);
+    if (entry) return entry.status;
+
+    // Fallback logic
+    const dateObj = new Date(currentYear, currentMonth - 1, day);
+    const dayOfWeek = dateObj.getDay();
+    if (dayOfWeek === 0 || dayOfWeek === 6) return "weekend";
+    return dateObj > new Date() ? "weekend" : "absent";
   };
 
   const selectedDayData = getDayData(selectedDate);
@@ -473,7 +457,7 @@ const Attendance: React.FC = () => {
                 Attendance Calendar
               </h2>
               <p className="text-sm text-slate-400 font-bold uppercase tracking-widest">
-                May 2024
+                {monthName} {currentYear}
               </p>
             </div>
             <div className="flex gap-2">
@@ -495,9 +479,9 @@ const Attendance: React.FC = () => {
                 {day}
               </div>
             ))}
-            {Array.from({ length: 31 }).map((_, i) => {
+            {Array.from({ length: daysInMonth }).map((_, i) => {
               const day = i + 1;
-              const dateStr = `2024-05-${day.toString().padStart(2, "0")}`;
+              const dateStr = `${currentYear}-${currentMonthStr}-${day.toString().padStart(2, "0")}`;
               const status = getStatusForDate(day);
               const isSelected = selectedDate === dateStr;
 

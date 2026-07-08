@@ -449,3 +449,50 @@ export const useApplyLeave = () => {
     },
   });
 };
+
+export const useMyAttendance = () => {
+  return useQuery({
+    queryKey: ['myAttendance'],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/employee/attendance/me`);
+      if (!res.ok) throw new Error('Failed to fetch attendance data');
+      return res.json();
+    },
+  });
+};
+
+export const useClockIn = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: any) => {
+      const res = await fetchWithTenant(`${API_URL}/employee/attendance/clock-in`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('Failed to clock in');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['myAttendance'] });
+    },
+  });
+};
+
+export const useClockOut = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: any) => {
+      const res = await fetchWithTenant(`${API_URL}/employee/attendance/clock-out`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('Failed to clock out');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['myAttendance'] });
+    },
+  });
+};
