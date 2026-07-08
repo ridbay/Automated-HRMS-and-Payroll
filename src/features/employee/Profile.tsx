@@ -28,7 +28,9 @@ import {
   Eye,
   EyeOff,
   Heart,
-import { ShieldCheck } from "lucide-react";
+  ShieldCheck,
+  Loader2,
+} from "lucide-react";
 import { useMyProfile, useUpdateMyProfile } from "../../api/client";
 
 const ProfileField = ({
@@ -266,49 +268,79 @@ const Profile: React.FC = () => {
                       title="Contact Details"
                       subtitle="Private contact information"
                     />
-                    <button 
+                    <button
                       onClick={() => setEditMode(!editMode)}
-                      className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors">
+                      className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors"
+                    >
                       {editMode ? <X size={18} /> : <Edit2 size={18} />}
                     </button>
                   </div>
                   {editMode ? (
-                     <form onSubmit={(e) => {
+                    <form
+                      onSubmit={(e) => {
                         e.preventDefault();
                         const fd = new FormData(e.currentTarget);
                         updateProfileMutation.mutate({
-                           email: fd.get('email') as string,
-                           phone: fd.get('phone') as string,
-                           location: fd.get('location') as string,
+                          email: fd.get("email") as string,
+                          phone: fd.get("phone") as string,
+                          location: fd.get("location") as string,
                         });
                         setEditMode(false);
-                     }} className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                           <div className="space-y-2">
-                              <label className="text-[10px] font-black text-slate-400 uppercase">Personal Email</label>
-                              <input name="email" defaultValue={me.email || ''} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm outline-none" />
-                           </div>
-                           <div className="space-y-2">
-                              <label className="text-[10px] font-black text-slate-400 uppercase">Personal Phone</label>
-                              <input name="phone" defaultValue={me.phone || ''} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm outline-none" />
-                           </div>
+                      }}
+                      className="space-y-4"
+                    >
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-400 uppercase">
+                            Personal Email
+                          </label>
+                          <input
+                            name="email"
+                            defaultValue={me.email || ""}
+                            className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm outline-none"
+                          />
                         </div>
                         <div className="space-y-2">
-                           <label className="text-[10px] font-black text-slate-400 uppercase">Home Address</label>
-                           <input name="location" defaultValue={me.location || ''} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm outline-none" />
+                          <label className="text-[10px] font-black text-slate-400 uppercase">
+                            Personal Phone
+                          </label>
+                          <input
+                            name="phone"
+                            defaultValue={me.phone || ""}
+                            className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm outline-none"
+                          />
                         </div>
-                        <div className="flex justify-end pt-2">
-                           <button type="submit" disabled={updateProfileMutation.isPending} className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700">
-                             Save Changes
-                           </button>
-                        </div>
-                     </form>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase">
+                          Home Address
+                        </label>
+                        <input
+                          name="location"
+                          defaultValue={me.location || ""}
+                          className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm outline-none"
+                        />
+                      </div>
+                      <div className="flex justify-end pt-2">
+                        <button
+                          type="submit"
+                          disabled={updateProfileMutation.isPending}
+                          className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700"
+                        >
+                          Save Changes
+                        </button>
+                      </div>
+                    </form>
                   ) : (
-                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                       <ProfileField label="Personal Email" value={me.email} />
-                       <ProfileField label="Personal Phone" value={me.phone} />
-                       <ProfileField label="Home Address" value={me.location} fullWidth />
-                     </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <ProfileField label="Personal Email" value={me.email} />
+                      <ProfileField label="Personal Phone" value={me.phone} />
+                      <ProfileField
+                        label="Home Address"
+                        value={me.location}
+                        fullWidth
+                      />
+                    </div>
                   )}
                 </section>
 
@@ -541,7 +573,7 @@ const Profile: React.FC = () => {
                             Bank Name
                           </p>
                           <p className="text-lg font-black tracking-tight">
-                            {me.bankName || 'Not configured'}
+                            {me.bankName || "Not configured"}
                           </p>
                         </div>
                       </div>
@@ -549,20 +581,29 @@ const Profile: React.FC = () => {
                         Account Number
                       </p>
                       <div className="flex items-center gap-4 text-3xl font-mono tracking-widest mb-8">
-                        <span>{me.accountNumber ? me.accountNumber.substring(0, 4) : '****'}</span>
+                        <span>
+                          {me.accountNumber
+                            ? me.accountNumber.substring(0, 4)
+                            : "****"}
+                        </span>
                         <span>****</span>
-                        <span>{me.accountNumber ? me.accountNumber.slice(-4) : '****'}</span>
+                        <span>
+                          {me.accountNumber
+                            ? me.accountNumber.slice(-4)
+                            : "****"}
+                        </span>
                         <button className="ml-2 p-2 text-slate-500 hover:text-white transition-colors">
                           <EyeOff size={18} />
                         </button>
                       </div>
                       <div className="flex gap-4">
-                        <button 
+                        <button
                           onClick={() => {
                             setChangeRequestField("Bank Details");
                             setShowChangeRequestModal(true);
                           }}
-                          className="px-6 py-3 bg-white/10 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/20 transition-colors">
+                          className="px-6 py-3 bg-white/10 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/20 transition-colors"
+                        >
                           Request Change
                         </button>
                       </div>

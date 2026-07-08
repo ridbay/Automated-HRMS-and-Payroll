@@ -15,12 +15,9 @@ import {
   Download,
   Info,
   Timer,
+  Loader2,
 } from "lucide-react";
-import {
-  MOCK_LEAVE_BALANCES,
-  MOCK_LEAVE_REQUESTS,
-  MOCK_EMPLOYEES,
-} from "../../data/mocks";
+import { useMyLeave, useApplyLeave, useEmployees, useMyProfile } from "../../api/client";
 import { useNavigation } from "../../context/NavigationContext";
 import Celebration from "../../components/Celebration";
 
@@ -30,6 +27,11 @@ const Leave: React.FC = () => {
     "dashboard" | "apply" | "history" | "calendar"
   >("dashboard");
   const [showCelebration, setShowCelebration] = useState(false);
+
+  const { data: leaveData, isLoading } = useMyLeave();
+  const applyLeaveMutation = useApplyLeave();
+  const { data: employees } = useEmployees();
+  const { data: me } = useMyProfile();
 
   // Request Form State
   const [requestStep, setRequestStep] = useState(1);
@@ -54,261 +56,287 @@ const Leave: React.FC = () => {
   };
 
   const handleApply = () => {
-    // Simulate API call
-    setTimeout(() => {
-      setShowCelebration(true);
-      setTimeout(() => {
-        setShowCelebration(false);
-        setLocalTab("dashboard");
-        setRequestStep(1);
-        // Reset form
-        setLeaveType("");
-        setStartDate("");
-        setEndDate("");
-        setReason("");
-      }, 3000);
-    }, 1000);
+    applyLeaveMutation.mutate(
+      {
+        type: leaveType,
+        startDate,
+        endDate: isHalfDay ? startDate : endDate,
+        days: calculateDays(),
+        reason,
+      },
+      {
+        onSuccess: () => {
+          setShowCelebration(true);
+          setTimeout(() => {
+            setShowCelebration(false);
+            setLocalTab("dashboard");
+            setRequestStep(1);
+            // Reset form
+            setLeaveType("");
+            setStartDate("");
+            setEndDate("");
+            setReason("");
+          }, 3000);
+        },
+      },
+    );
   };
 
   const renderDashboard = () => (
     <div className="space-y-8 pb-20">
-      {/* 1. Balances Section */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {MOCK_LEAVE_BALANCES.map((balance, index) => (
-          <motion.div
-            key={index}
-            whileHover={{ y: -4 }}
-            className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm relative overflow-hidden group"
-          >
-            <div
-              className={`absolute top-0 right-0 p-4 opacity-10 text-${balance.color}-500 group-hover:scale-110 transition-transform`}
-            >
-              <CalendarIcon size={64} />
-            </div>
-            <div className="relative z-10">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">
-                {balance.type}
-              </p>
-              <div className="flex items-baseline gap-1 mb-2">
-                <span className="text-4xl font-black text-slate-800 tracking-tighter">
-                  {balance.total - balance.used}
-                </span>
-                <span className="text-[10px] font-bold text-slate-400 uppercase">
-                  / {balance.total} Days Left
-                </span>
-              </div>
-
-              {/* Progress Bar */}
-              <div className="w-full h-2 bg-slate-100 rounded-full mb-4 overflow-hidden">
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{
-                    width: `${((balance.total - balance.used) / balance.total) * 100}%`,
-                  }}
-                  className={`h-full bg-${balance.color}-500 rounded-full`}
-                />
-              </div>
-
-              <button
-                onClick={() => {
-                  setLeaveType(balance.type);
-                  setLocalTab("apply");
-                }}
-                className={`text-[10px] font-black text-${balance.color}-600 uppercase tracking-widest flex items-center gap-1 hover:gap-2 transition-all`}
+      {isLoading ? (
+        <div className="flex justify-center py-20">
+          <Loader2 className="animate-spin text-indigo-500" />
+        </div>
+      ) : (
+        <>
+          {/* 1. Balances Section */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {leaveData?.balances?.map((balance: any, index: number) => (
+              <motion.div
+                key={index}
+                whileHover={{ y: -4 }}
+                className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm relative overflow-hidden group"
               >
-                Request Leave <ChevronRight size={12} />
-              </button>
-            </div>
-          </motion.div>
-        ))}
-      </div>
-
-      {/* 2. Quick Request & Recent */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-8">
-          <section className="bg-indigo-600 p-8 rounded-[2.5rem] text-white shadow-xl shadow-indigo-200 relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-16 -mt-16 blur-2xl" />
-            <div className="relative z-10">
-              <h2 className="text-2xl font-black mb-2">Need a break?</h2>
-              <p className="text-indigo-100 font-medium mb-8 max-w-md">
-                Select a quick duration to start your leave request immediately.
-              </p>
-
-              <div className="flex flex-wrap gap-4">
-                {[
-                  {
-                    label: "Half Day",
-                    icon: Clock,
-                    action: () => {
-                      setLocalTab("apply");
-                      setLeaveType("Annual Leave");
-                      setIsHalfDay(true);
-                      setRequestStep(2);
-                    },
-                  },
-                  {
-                    label: "One Day",
-                    icon: CalendarIcon,
-                    action: () => {
-                      setLocalTab("apply");
-                      setLeaveType("Annual Leave");
-                      setIsHalfDay(false);
-                      setRequestStep(2);
-                    },
-                  },
-                  {
-                    label: "Sick Leave",
-                    icon: AlertCircle,
-                    action: () => {
-                      setLocalTab("apply");
-                      setLeaveType("Sick Leave");
-                    },
-                  },
-                ].map((item, i) => (
-                  <button
-                    key={i}
-                    onClick={item.action}
-                    className="px-6 py-4 bg-white/10 hover:bg-white/20 rounded-2xl border border-white/10 backdrop-blur-sm flex items-center gap-3 transition-all group"
-                  >
-                    <item.icon
-                      size={18}
-                      className="text-indigo-200 group-hover:text-white"
-                    />
-                    <span className="font-black text-xs uppercase tracking-widest">
-                      {item.label}
-                    </span>
-                  </button>
-                ))}
-                <button
-                  onClick={() => setLocalTab("apply")}
-                  className="px-6 py-4 bg-white text-indigo-600 rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-105 transition-all shadow-lg"
-                >
-                  + Custom Request
-                </button>
-              </div>
-            </div>
-          </section>
-
-          {/* Recent Requests */}
-          <section>
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
-                <FileText size={18} className="text-indigo-600" /> Recent
-                Requests
-              </h3>
-              <button
-                onClick={() => setLocalTab("history")}
-                className="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600"
-              >
-                View All
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              {MOCK_LEAVE_REQUESTS.map((req, i) => (
                 <div
-                  key={i}
-                  className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm flex items-center justify-between group hover:border-indigo-100 transition-all"
+                  className={`absolute top-0 right-0 p-4 opacity-10 text-${balance.color}-500 group-hover:scale-110 transition-transform`}
                 >
-                  <div className="flex items-center gap-4">
-                    <div
-                      className={`w-12 h-12 rounded-2xl flex items-center justify-center ${
-                        req.status === "approved"
-                          ? "bg-emerald-50 text-emerald-600"
-                          : req.status === "pending"
-                            ? "bg-amber-50 text-amber-600"
-                            : "bg-rose-50 text-rose-600"
-                      }`}
+                  <CalendarIcon size={64} />
+                </div>
+                <div className="relative z-10">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">
+                    {balance.type}
+                  </p>
+                  <div className="flex items-baseline gap-1 mb-2">
+                    <span className="text-4xl font-black text-slate-800 tracking-tighter">
+                      {balance.total - balance.used}
+                    </span>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">
+                      / {balance.total} Days Left
+                    </span>
+                  </div>
+
+                  {/* Progress Bar */}
+                  <div className="w-full h-2 bg-slate-100 rounded-full mb-4 overflow-hidden">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{
+                        width: `${((balance.total - balance.used) / balance.total) * 100}%`,
+                      }}
+                      className={`h-full bg-${balance.color}-500 rounded-full`}
+                    />
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setLeaveType(balance.type);
+                      setLocalTab("apply");
+                    }}
+                    className={`text-[10px] font-black text-${balance.color}-600 uppercase tracking-widest flex items-center gap-1 hover:gap-2 transition-all`}
+                  >
+                    Request Leave <ChevronRight size={12} />
+                  </button>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+
+          {/* 2. Quick Request & Recent */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-2 space-y-8">
+              <section className="bg-indigo-600 p-8 rounded-[2.5rem] text-white shadow-xl shadow-indigo-200 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-16 -mt-16 blur-2xl" />
+                <div className="relative z-10">
+                  <h2 className="text-2xl font-black mb-2">Need a break?</h2>
+                  <p className="text-indigo-100 font-medium mb-8 max-w-md">
+                    Select a quick duration to start your leave request
+                    immediately.
+                  </p>
+
+                  <div className="flex flex-wrap gap-4">
+                    {[
+                      {
+                        label: "Half Day",
+                        icon: Clock,
+                        action: () => {
+                          setLocalTab("apply");
+                          setLeaveType("Annual Leave");
+                          setIsHalfDay(true);
+                          setRequestStep(2);
+                        },
+                      },
+                      {
+                        label: "One Day",
+                        icon: CalendarIcon,
+                        action: () => {
+                          setLocalTab("apply");
+                          setLeaveType("Annual Leave");
+                          setIsHalfDay(false);
+                          setRequestStep(2);
+                        },
+                      },
+                      {
+                        label: "Sick Leave",
+                        icon: AlertCircle,
+                        action: () => {
+                          setLocalTab("apply");
+                          setLeaveType("Sick Leave");
+                        },
+                      },
+                    ].map((item, i) => (
+                      <button
+                        key={i}
+                        onClick={item.action}
+                        className="px-6 py-4 bg-white/10 hover:bg-white/20 rounded-2xl border border-white/10 backdrop-blur-sm flex items-center gap-3 transition-all group"
+                      >
+                        <item.icon
+                          size={18}
+                          className="text-indigo-200 group-hover:text-white"
+                        />
+                        <span className="font-black text-xs uppercase tracking-widest">
+                          {item.label}
+                        </span>
+                      </button>
+                    ))}
+                    <button
+                      onClick={() => setLocalTab("apply")}
+                      className="px-6 py-4 bg-white text-indigo-600 rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-105 transition-all shadow-lg"
                     >
-                      {req.status === "approved" ? (
-                        <CheckCircle2 size={20} />
-                      ) : req.status === "pending" ? (
-                        <Timer size={20} />
-                      ) : (
-                        <X size={20} />
-                      )}
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-black text-slate-800 mb-0.5">
-                        {req.type}
-                      </h4>
-                      <p className="text-xs text-slate-500 font-medium">
-                        {req.startDate} - {req.endDate} • {req.days} Days
-                      </p>
+                      + Custom Request
+                    </button>
+                  </div>
+                </div>
+              </section>
+
+              {/* Recent Requests */}
+              <section>
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                    <FileText size={18} className="text-indigo-600" /> Recent
+                    Requests
+                  </h3>
+                  <button
+                    onClick={() => setLocalTab("history")}
+                    className="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600"
+                  >
+                    View All
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  {leaveData?.requests?.length === 0 ? (
+                    <p className="text-xs text-slate-400 font-bold p-4 bg-slate-50 rounded-2xl text-center">
+                      No recent requests
+                    </p>
+                  ) : (
+                    leaveData?.requests?.map((req: any, i: number) => (
+                      <div
+                        key={i}
+                        className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm flex items-center justify-between group hover:border-indigo-100 transition-all"
+                      >
+                        <div className="flex items-center gap-4">
+                          <div
+                            className={`w-12 h-12 rounded-2xl flex items-center justify-center ${
+                              req.status === "approved"
+                                ? "bg-emerald-50 text-emerald-600"
+                                : req.status === "pending"
+                                  ? "bg-amber-50 text-amber-600"
+                                  : "bg-rose-50 text-rose-600"
+                            }`}
+                          >
+                            {req.status === "approved" ? (
+                              <CheckCircle2 size={20} />
+                            ) : req.status === "pending" ? (
+                              <Timer size={20} />
+                            ) : (
+                              <X size={20} />
+                            )}
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-black text-slate-800 mb-0.5">
+                              {req.type}
+                            </h4>
+                            <p className="text-xs text-slate-500 font-medium">
+                              {req.startDate} - {req.endDate} • {req.days} Days
+                            </p>
+                          </div>
+                        </div>
+                        <span
+                          className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${
+                            req.status === "approved"
+                              ? "bg-emerald-50 text-emerald-600"
+                              : req.status === "pending"
+                                ? "bg-amber-50 text-amber-600"
+                                : "bg-rose-50 text-rose-600"
+                          }`}
+                        >
+                          {req.status}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </section>
+            </div>
+
+            {/* Right Col: Team Calendar & Policies */}
+            <div className="space-y-8">
+              <section className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm">
+                <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-6 flex items-center gap-2">
+                  <Users size={18} className="text-indigo-600" /> Team
+                  Availability
+                </h3>
+                <div className="space-y-6">
+                  <p className="text-xs text-slate-500 font-medium">
+                    3 colleagues are on leave this week.
+                  </p>
+                  <div className="flex -space-x-3 overflow-hidden py-2">
+                    {[1, 2, 3].map((_, i) => (
+                      <div
+                        key={i}
+                        className="w-10 h-10 rounded-full border-2 border-white bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-500"
+                      >
+                        {String.fromCharCode(65 + i)}
+                      </div>
+                    ))}
+                    <div className="w-10 h-10 rounded-full border-2 border-white bg-slate-100 flex items-center justify-center text-[10px] font-black text-slate-400">
+                      +2
                     </div>
                   </div>
-                  <span
-                    className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${
-                      req.status === "approved"
-                        ? "bg-emerald-50 text-emerald-600"
-                        : req.status === "pending"
-                          ? "bg-amber-50 text-amber-600"
-                          : "bg-rose-50 text-rose-600"
-                    }`}
+                  <button
+                    onClick={() => setLocalTab("calendar")}
+                    className="w-full py-3 bg-slate-50 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-100 transition-all"
                   >
-                    {req.status}
-                  </span>
+                    View Team Calendar
+                  </button>
                 </div>
-              ))}
-            </div>
-          </section>
-        </div>
+              </section>
 
-        {/* Right Col: Team Calendar & Policies */}
-        <div className="space-y-8">
-          <section className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm">
-            <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-6 flex items-center gap-2">
-              <Users size={18} className="text-indigo-600" /> Team Availability
-            </h3>
-            <div className="space-y-6">
-              <p className="text-xs text-slate-500 font-medium">
-                3 colleagues are on leave this week.
-              </p>
-              <div className="flex -space-x-3 overflow-hidden py-2">
-                {[1, 2, 3].map((_, i) => (
-                  <div
-                    key={i}
-                    className="w-10 h-10 rounded-full border-2 border-white bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-500"
-                  >
-                    {String.fromCharCode(65 + i)}
-                  </div>
-                ))}
-                <div className="w-10 h-10 rounded-full border-2 border-white bg-slate-100 flex items-center justify-center text-[10px] font-black text-slate-400">
-                  +2
-                </div>
-              </div>
-              <button
-                onClick={() => setLocalTab("calendar")}
-                className="w-full py-3 bg-slate-50 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-100 transition-all"
-              >
-                View Team Calendar
-              </button>
+              <section className="bg-slate-900 p-8 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden">
+                <Info className="absolute -bottom-6 -right-6 w-32 h-32 text-indigo-500/20 rotate-12" />
+                <h3 className="text-lg font-black mb-4">Leave Policy</h3>
+                <ul className="space-y-3 mb-6">
+                  <li className="flex items-start gap-3">
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 mt-1.5" />
+                    <span className="text-xs text-slate-300 leading-relaxed font-medium">
+                      Annual leave must be requested 2 weeks in advance.
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 mt-1.5" />
+                    <span className="text-xs text-slate-300 leading-relaxed font-medium">
+                      Sick leave requires a medical certificate if &gt; 2 days.
+                    </span>
+                  </li>
+                </ul>
+                <button className="text-[10px] font-black text-indigo-300 uppercase tracking-widest hover:text-white flex items-center gap-2">
+                  Read Full Policy <ChevronRight size={12} />
+                </button>
+              </section>
             </div>
-          </section>
-
-          <section className="bg-slate-900 p-8 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden">
-            <Info className="absolute -bottom-6 -right-6 w-32 h-32 text-indigo-500/20 rotate-12" />
-            <h3 className="text-lg font-black mb-4">Leave Policy</h3>
-            <ul className="space-y-3 mb-6">
-              <li className="flex items-start gap-3">
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 mt-1.5" />
-                <span className="text-xs text-slate-300 leading-relaxed font-medium">
-                  Annual leave must be requested 2 weeks in advance.
-                </span>
-              </li>
-              <li className="flex items-start gap-3">
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 mt-1.5" />
-                <span className="text-xs text-slate-300 leading-relaxed font-medium">
-                  Sick leave requires a medical certificate if &gt; 2 days.
-                </span>
-              </li>
-            </ul>
-            <button className="text-[10px] font-black text-indigo-300 uppercase tracking-widest hover:text-white flex items-center gap-2">
-              Read Full Policy <ChevronRight size={12} />
-            </button>
-          </section>
-        </div>
-      </div>
+          </div>
+        </>
+      )}
     </div>
   );
 
@@ -355,7 +383,7 @@ const Leave: React.FC = () => {
                   Select Leave Type
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {MOCK_LEAVE_BALANCES.map((type, i) => (
+                  {leaveData?.balances?.map((type: any, i: number) => (
                     <button
                       key={i}
                       onClick={() => {
@@ -539,7 +567,7 @@ const Leave: React.FC = () => {
                 </p>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {MOCK_EMPLOYEES.slice(1).map((emp) => (
+                  {(employees || []).filter((e: any) => e.id !== me?.id).map((emp: any) => (
                     <button
                       key={emp.id}
                       onClick={() => setHandoverEmployee(emp.id)}
@@ -551,7 +579,7 @@ const Leave: React.FC = () => {
                     >
                       <div
                         className="w-10 h-10 rounded-full bg-slate-200 bg-cover bg-center"
-                        style={{ backgroundImage: `url(${emp.avatar})` }}
+                        style={{ backgroundImage: `url(${emp.avatar || ''})` }}
                       />
                       <div className="text-left">
                         <p className="text-sm font-bold text-slate-800">
@@ -639,9 +667,12 @@ const Leave: React.FC = () => {
                   </button>
                   <button
                     onClick={handleApply}
-                    className="flex-1 py-4 bg-emerald-500 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-xl shadow-emerald-200 hover:scale-[1.02] transition-transform"
+                    disabled={applyLeaveMutation.isPending}
+                    className="flex-1 py-4 bg-emerald-500 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-xl shadow-emerald-200 hover:scale-[1.02] transition-transform disabled:opacity-50"
                   >
-                    Submit Request
+                    {applyLeaveMutation.isPending
+                      ? "Applying..."
+                      : "Submit Request"}
                   </button>
                 </div>
               </motion.div>

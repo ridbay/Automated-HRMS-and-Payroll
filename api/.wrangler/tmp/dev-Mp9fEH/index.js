@@ -8842,28 +8842,6 @@ adminRoutes.delete("/roles/:id", async (c) => {
 });
 var admin_routes_default = adminRoutes;
 
-// src/services/leave.service.ts
-var LeaveService = class {
-  static {
-    __name(this, "LeaveService");
-  }
-  db;
-  constructor(dbBinding) {
-    this.db = drizzle(dbBinding, { schema: schema_exports });
-  }
-  async getAllByCompany(companyId) {
-    return this.db.select().from(leaveRequests).where(eq(leaveRequests.companyId, companyId)).all();
-  }
-};
-
-// src/controllers/employee/leave.controller.ts
-var getLeaveRequests = /* @__PURE__ */ __name(async (c) => {
-  const companyId = c.get("companyId");
-  const service = new LeaveService(c.env.DB);
-  const result = await service.getAllByCompany(companyId);
-  return c.json(result);
-}, "getLeaveRequests");
-
 // src/controllers/employee/profile.controller.ts
 var getMyProfile = /* @__PURE__ */ __name(async (c) => {
   const companyId = c.get("companyId");
@@ -8901,12 +8879,100 @@ var updateMyProfile = /* @__PURE__ */ __name(async (c) => {
   return c.json(profile);
 }, "updateMyProfile");
 
+// src/services/leave.service.ts
+var LeaveService = class {
+  static {
+    __name(this, "LeaveService");
+  }
+  db;
+  constructor(dbBinding) {
+    this.db = drizzle(dbBinding, { schema: schema_exports });
+  }
+  async getAllByCompany(companyId) {
+    return this.db.select().from(leaveRequests).where(eq(leaveRequests.companyId, companyId)).all();
+  }
+  async getEmployeeLeaveRequests(companyId, employeeId) {
+    return this.db.query.leaveRequests.findMany({
+      where: and(
+        eq(leaveRequests.companyId, companyId),
+        eq(leaveRequests.employeeId, employeeId)
+      ),
+      orderBy: /* @__PURE__ */ __name((leaveRequests2, { desc: desc3 }) => [desc3(leaveRequests2.appliedOn)], "orderBy")
+    });
+  }
+  async calculateLeaveBalances(companyId, employeeId) {
+    const requests = await this.db.query.leaveRequests.findMany({
+      where: and(
+        eq(leaveRequests.companyId, companyId),
+        eq(leaveRequests.employeeId, employeeId),
+        eq(leaveRequests.status, "approved")
+      )
+    });
+    const usedAnnual = requests.filter((r) => r.type === "Annual Leave").reduce((sum, r) => sum + r.days, 0);
+    const usedSick = requests.filter((r) => r.type === "Sick Leave").reduce((sum, r) => sum + r.days, 0);
+    const usedMaternity = requests.filter((r) => r.type === "Maternity Leave").reduce((sum, r) => sum + r.days, 0);
+    return [
+      { type: "Annual Leave", total: 20, used: usedAnnual, color: "indigo" },
+      { type: "Sick Leave", total: 10, used: usedSick, color: "rose" },
+      { type: "Maternity Leave", total: 90, used: usedMaternity, color: "emerald" }
+    ];
+  }
+  async createLeaveRequest(companyId, employeeId, data) {
+    const id = `LR-${Math.floor(1e3 + Math.random() * 9e3)}`;
+    const appliedOn = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+    const result = await this.db.insert(leaveRequests).values({
+      id,
+      companyId,
+      employeeId,
+      type: data.type,
+      startDate: data.startDate,
+      endDate: data.endDate || data.startDate,
+      days: data.days,
+      reason: data.reason,
+      status: "pending",
+      appliedOn
+    }).returning();
+    return result[0];
+  }
+};
+
+// src/controllers/employee/leave.controller.ts
+var getMyLeaveData = /* @__PURE__ */ __name(async (c) => {
+  const companyId = c.get("companyId");
+  let employeeId = c.req.header("x-employee-id");
+  const leaveService = new LeaveService(c.env.DB);
+  const employeeService = new EmployeeService(c.env.DB);
+  if (!employeeId) {
+    const defaultId = await employeeService.getFirstEmployeeId(companyId);
+    if (!defaultId) return c.json({ error: "No employee found" }, 404);
+    employeeId = defaultId;
+  }
+  const balances = await leaveService.calculateLeaveBalances(companyId, employeeId);
+  const requests = await leaveService.getEmployeeLeaveRequests(companyId, employeeId);
+  return c.json({ balances, requests });
+}, "getMyLeaveData");
+var applyForLeave = /* @__PURE__ */ __name(async (c) => {
+  const companyId = c.get("companyId");
+  let employeeId = c.req.header("x-employee-id");
+  const leaveService = new LeaveService(c.env.DB);
+  const employeeService = new EmployeeService(c.env.DB);
+  if (!employeeId) {
+    const defaultId = await employeeService.getFirstEmployeeId(companyId);
+    if (!defaultId) return c.json({ error: "No employee found" }, 404);
+    employeeId = defaultId;
+  }
+  const data = await c.req.json();
+  const request = await leaveService.createLeaveRequest(companyId, employeeId, data);
+  return c.json(request);
+}, "applyForLeave");
+
 // src/routes/employee.routes.ts
 var employeeRoutes = new Hono2();
 employeeRoutes.use("*", tenantMiddleware);
-employeeRoutes.get("/leave-requests", getLeaveRequests);
 employeeRoutes.get("/me", getMyProfile);
 employeeRoutes.put("/me", updateMyProfile);
+employeeRoutes.get("/leave/me", getMyLeaveData);
+employeeRoutes.post("/leave/apply", applyForLeave);
 var employee_routes_default = employeeRoutes;
 
 // src/routes/index.ts

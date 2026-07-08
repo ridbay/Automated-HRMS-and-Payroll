@@ -420,3 +420,32 @@ export const useUpdateMyProfile = () => {
     },
   });
 };
+
+export const useMyLeave = () => {
+  return useQuery({
+    queryKey: ['myLeave'],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/employee/leave/me`);
+      if (!res.ok) throw new Error('Failed to fetch leave data');
+      return res.json();
+    },
+  });
+};
+
+export const useApplyLeave = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: any) => {
+      const res = await fetchWithTenant(`${API_URL}/employee/leave/apply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('Failed to apply for leave');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['myLeave'] });
+    },
+  });
+};
