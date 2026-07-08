@@ -97,22 +97,27 @@ const Profile: React.FC = () => {
   const [changeRequestField, setChangeRequestField] = useState("");
   const [showEmergencyModal, setShowEmergencyModal] = useState(false);
   const [newContact, setNewContact] = useState({ name: '', relationship: '', phone: '' });
-
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploadName, setUploadName] = useState("");
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
+
   const uploadDocMutation = useUploadDocumentMutation();
   const deleteDocMutation = useDeleteDocumentMutation();
 
-  const handleDocumentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
+  const handleDocumentSubmit = () => {
+    if (uploadFile && uploadName) {
       const formData = new FormData();
-      formData.append("file", file);
-      formData.append("name", file.name);
-      formData.append("type", file.type.includes("pdf") ? "PDF" : "Image");
+      formData.append("file", uploadFile);
+      formData.append("name", uploadName);
+      formData.append("type", uploadFile.type.includes("pdf") ? "PDF" : "Image");
       
       uploadDocMutation.mutate(formData, {
         onSuccess: () => {
-          if (fileInputRef.current) fileInputRef.current.value = "";
+          setShowUploadModal(false);
+          setUploadName("");
+          setUploadFile(null);
         }
       });
     }
@@ -548,20 +553,11 @@ const Profile: React.FC = () => {
                       subtitle="Digital filing cabinet"
                     />
                     <button 
-                      onClick={() => fileInputRef.current?.click()}
+                      onClick={() => setShowUploadModal(true)}
                       className="px-6 py-3 bg-indigo-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-xl flex items-center gap-2 hover:bg-indigo-700 transition-colors"
-                      disabled={uploadDocMutation.isPending}
                     >
-                      {uploadDocMutation.isPending ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
-                      {uploadDocMutation.isPending ? 'Uploading...' : 'Upload New'}
+                      <Upload size={16} /> Upload New
                     </button>
-                    <input 
-                      type="file" 
-                      ref={fileInputRef}
-                      className="hidden"
-                      onChange={handleDocumentUpload}
-                      accept=".pdf,.jpg,.jpeg,.png"
-                    />
                   </div>
                   
                   {me?.employeeDocuments?.length === 0 ? (
@@ -917,6 +913,72 @@ const Profile: React.FC = () => {
                     Save Contact
                   </button>
                 </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Document Upload Modal */}
+      <AnimatePresence>
+        {showUploadModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-md bg-white rounded-[2rem] shadow-2xl overflow-hidden"
+            >
+              <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                  <Upload className="text-indigo-600" /> Upload Document
+                </h3>
+                <button
+                  onClick={() => setShowUploadModal(false)}
+                  className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="p-6 space-y-6">
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                    Document Type / Name
+                  </label>
+                  <select
+                    value={uploadName}
+                    onChange={(e) => setUploadName(e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all appearance-none"
+                  >
+                    <option value="" disabled>Select Document Type</option>
+                    <option value="Passport Copy">Passport Copy</option>
+                    <option value="National ID">National ID</option>
+                    <option value="Employment Contract">Employment Contract</option>
+                    <option value="NDA Agreement">NDA Agreement</option>
+                    <option value="University Degree">University Degree</option>
+                    <option value="Certifications">Certifications</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                    File Attachment
+                  </label>
+                  <input
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-600 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-black file:uppercase file:tracking-widest file:bg-indigo-50 file:text-indigo-600 hover:file:bg-indigo-100 transition-all"
+                  />
+                </div>
+                <button
+                  onClick={handleDocumentSubmit}
+                  disabled={!uploadName || !uploadFile || uploadDocMutation.isPending}
+                  className="w-full py-4 bg-indigo-600 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-200 hover:bg-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {uploadDocMutation.isPending ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+                  {uploadDocMutation.isPending ? "Uploading..." : "Submit Document"}
+                </button>
               </div>
             </motion.div>
           </div>
