@@ -31,7 +31,15 @@ import {
   ShieldCheck,
   Loader2,
 } from "lucide-react";
-import { useMyProfile, useUpdateMyProfile, useAddEmergencyContact, useDeleteEmergencyContact } from "../../api/client";
+import { 
+  useMyProfile, 
+  useUpdateMyProfile, 
+  useAddEmergencyContact, 
+  useDeleteEmergencyContact,
+  useUploadDocumentMutation,
+  useDeleteDocumentMutation,
+  getDocumentDownloadUrl
+} from "../../api/client";
 
 const ProfileField = ({
   label,
@@ -87,9 +95,28 @@ const Profile: React.FC = () => {
   const [editMode, setEditMode] = useState(false);
   const [showChangeRequestModal, setShowChangeRequestModal] = useState(false);
   const [changeRequestField, setChangeRequestField] = useState("");
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [showEmergencyModal, setShowEmergencyModal] = useState(false);
   const [newContact, setNewContact] = useState({ name: '', relationship: '', phone: '' });
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const uploadDocMutation = useUploadDocumentMutation();
+  const deleteDocMutation = useDeleteDocumentMutation();
+
+  const handleDocumentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("name", file.name);
+      formData.append("type", file.type.includes("pdf") ? "PDF" : "Image");
+      
+      uploadDocMutation.mutate(formData, {
+        onSuccess: () => {
+          if (fileInputRef.current) fileInputRef.current.value = "";
+        }
+      });
+    }
+  };
 
   const { data: me, isLoading } = useMyProfile();
   const updateProfileMutation = useUpdateMyProfile();
@@ -520,65 +547,75 @@ const Profile: React.FC = () => {
                       title="My Documents"
                       subtitle="Digital filing cabinet"
                     />
-                    <button className="px-6 py-3 bg-indigo-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-xl flex items-center gap-2">
-                      <Upload size={16} /> Upload New
+                    <button 
+                      onClick={() => fileInputRef.current?.click()}
+                      className="px-6 py-3 bg-indigo-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-xl flex items-center gap-2 hover:bg-indigo-700 transition-colors"
+                      disabled={uploadDocMutation.isPending}
+                    >
+                      {uploadDocMutation.isPending ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+                      {uploadDocMutation.isPending ? 'Uploading...' : 'Upload New'}
                     </button>
+                    <input 
+                      type="file" 
+                      ref={fileInputRef}
+                      className="hidden"
+                      onChange={handleDocumentUpload}
+                      accept=".pdf,.jpg,.jpeg,.png"
+                    />
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {[
-                      {
-                        name: "Employment Contract",
-                        type: "PDF",
-                        date: "Jun 1, 2021",
-                        status: "Active",
-                      },
-                      {
-                        name: "NDA Agreement",
-                        type: "PDF",
-                        date: "Jun 1, 2021",
-                        status: "Active",
-                      },
-                      {
-                        name: "Passport Copy",
-                        type: "JPG",
-                        date: "Jan 15, 2023",
-                        status: "Expiring Soon",
-                        color: "amber",
-                      },
-                      {
-                        name: "University Degree",
-                        type: "PDF",
-                        date: "Jun 1, 2021",
-                        status: "Verified",
-                        color: "emerald",
-                      },
-                    ].map((doc, i) => (
-                      <div
-                        key={i}
-                        className="p-6 bg-slate-50 rounded-3xl border border-slate-100 hover:border-indigo-200 hover:bg-white transition-all group cursor-pointer relative overflow-hidden"
-                      >
-                        <div className="flex justify-between items-start mb-4">
-                          <div className="p-3 bg-white rounded-2xl shadow-sm text-indigo-600">
-                            <FileText size={24} />
+                  
+                  {me?.employeeDocuments?.length === 0 ? (
+                    <div className="text-center py-12 bg-slate-50 rounded-3xl border border-slate-100">
+                      <FileText className="mx-auto text-slate-300 mb-4" size={48} />
+                      <p className="text-slate-500 font-medium">No documents uploaded yet.</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {me?.employeeDocuments?.map((doc: any) => (
+                        <div
+                          key={doc.id}
+                          className="p-6 bg-slate-50 rounded-3xl border border-slate-100 hover:border-indigo-200 hover:bg-white transition-all group relative overflow-hidden"
+                        >
+                          <div className="flex justify-between items-start mb-4">
+                            <div className="p-3 bg-white rounded-2xl shadow-sm text-indigo-600">
+                              <FileText size={24} />
+                            </div>
+                            <span
+                              className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest bg-slate-200 text-slate-500`}
+                            >
+                              {doc.status}
+                            </span>
                           </div>
-                          <span
-                            className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest ${doc.color === "amber" ? "bg-amber-100 text-amber-600" : "bg-slate-200 text-slate-500"}`}
-                          >
-                            {doc.status}
-                          </span>
+                          <h4 className="font-bold text-slate-800 mb-1">
+                            {doc.name}
+                          </h4>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase">
+                            {doc.type} • {new Date(doc.createdAt).toLocaleDateString()}
+                          </p>
+                          <div className="absolute bottom-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                            <button 
+                              onClick={() => {
+                                if(confirm('Are you sure you want to delete this document?')) {
+                                  deleteDocMutation.mutate(doc.id);
+                                }
+                              }}
+                              className="p-2 bg-red-100 text-red-600 rounded-xl shadow-lg hover:bg-red-600 hover:text-white transition-all"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                            <a 
+                              href={getDocumentDownloadUrl(doc.id)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-2 bg-slate-900 text-white rounded-xl shadow-lg hover:scale-110 transition-all inline-block"
+                            >
+                              <Download size={16} />
+                            </a>
+                          </div>
                         </div>
-                        <h4 className="font-bold text-slate-800 mb-1">
-                          {doc.name}
-                        </h4>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase">
-                          {doc.type} • {doc.date}
-                        </p>
-                        <button className="absolute bottom-4 right-4 p-2 bg-slate-900 text-white rounded-xl opacity-0 group-hover:opacity-100 transition-all shadow-lg hover:scale-110">
-                          <Download size={16} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </section>
               </motion.div>
             )}

@@ -2,6 +2,7 @@ import { D1Database } from '@cloudflare/workers-types';
 import { drizzle } from 'drizzle-orm/d1';
 import { eq, and } from 'drizzle-orm';
 import * as schema from '../db/schema';
+import { emergencyContacts, employeeDocuments } from '../models/employee.model';
 
 export class EmployeeService {
   private db;
@@ -15,6 +16,7 @@ export class EmployeeService {
       where: eq(schema.employees.companyId, companyId),
       with: {
         emergencyContacts: true,
+        employeeDocuments: true,
       },
     });
   }
@@ -59,14 +61,13 @@ export class EmployeeService {
   }
 
   async getEmployeeProfile(companyId: string, employeeId: string) {
-    const employee = await this.db.query.employees.findFirst({
+    return this.db.query.employees.findFirst({
       where: and(eq(schema.employees.id, employeeId), eq(schema.employees.companyId, companyId)),
       with: {
         emergencyContacts: true,
+        employeeDocuments: true,
       },
     });
-
-    return employee;
   }
 
   async updateEmployeeProfile(companyId: string, employeeId: string, data: Partial<typeof schema.employees.$inferInsert>) {
@@ -108,21 +109,89 @@ export class EmployeeService {
       email: data.email,
       isPrimary: data.isPrimary || false,
     };
-
-    await this.db.insert(schema.emergencyContacts).values(newContact);
+    console.log("=== DEBUG SCHEMA ===", emergencyContacts);
+    if (!emergencyContacts) {
+       console.error("emergencyContacts is undefined!");
+    }
+    const insertBuilder = this.db.insert(emergencyContacts);
+    console.log("=== DEBUG INSERT BUILDER ===", Object.keys(insertBuilder), typeof insertBuilder.values);
+    await insertBuilder.values(newContact);
     return newContact;
   }
 
   async deleteEmergencyContact(companyId: string, employeeId: string, contactId: string) {
     await this.db
-      .delete(schema.emergencyContacts)
+      .delete(emergencyContacts)
       .where(
         and(
-          eq(schema.emergencyContacts.id, contactId),
-          eq(schema.emergencyContacts.companyId, companyId),
-          eq(schema.emergencyContacts.employeeId, employeeId)
+          eq(emergencyContacts.id, contactId),
+          eq(emergencyContacts.companyId, companyId),
+          eq(emergencyContacts.employeeId, employeeId)
         )
       );
     return { success: true };
+  }
+
+  async addDocument(companyId: string, employeeId: string, bucket: R2Bucket, data: { name: string; type: string; file: File }) {
+    const documentId = `DOC-${Math.floor(1000 + Math.random() * 9000)}`;
+    const fileKey = `companies/${companyId}/employees/${employeeId}/documents/${documentId}-${data.file.name}`;
+    
+    // Upload to R2
+    await bucket.put(fileKey, await data.file.arrayBuffer(), {
+      httpMetadata: { contentType: data.file.type }
+    });
+
+    const newDocument = {
+      id: documentId,
+      companyId,
+      employeeId,
+      name: data.name,
+      type: data.type,
+      fileKey,
+      status: 'Active',
+    };
+
+    await this.db.insert(employeeDocuments).values(newDocument);
+    return newDocument;
+  }
+
+  async deleteDocument(companyId: string, employeeId: string, bucket: R2Bucket, documentId: string) {
+    // Get document to find fileKey
+    const doc = await this.db.query.employeeDocuments.findFirst({
+      where: and(
+        eq(employeeDocuments.id, documentId),
+        eq(employeeDocuments.companyId, companyId),
+        eq(employeeDocuments.employeeId, employeeId)
+      )
+    });
+
+    if (!doc) throw new Error('Document not found');
+
+    // Delete from R2
+    await bucket.delete(doc.fileKey);
+
+    // Delete from DB
+    await this.db
+      .delete(employeeDocuments)
+      .where(eq(employeeDocuments.id, documentId));
+      
+    return { success: true };
+  }
+
+  async getDocumentFile(companyId: string, employeeId: string, bucket: R2Bucket, documentId: string) {
+    const doc = await this.db.query.employeeDocuments.findFirst({
+      where: and(
+        eq(employeeDocuments.id, documentId),
+        eq(employeeDocuments.companyId, companyId),
+        eq(employeeDocuments.employeeId, employeeId)
+      )
+    });
+
+    if (!doc) throw new Error('Document not found');
+
+    const file = await bucket.get(doc.fileKey);
+    if (!file) throw new Error('File not found in storage');
+
+    return { file, doc };
   }
 }

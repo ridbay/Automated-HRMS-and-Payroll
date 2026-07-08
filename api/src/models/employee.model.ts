@@ -58,11 +58,31 @@ export const emergencyContacts = sqliteTable('emergency_contacts', {
 
 export const employeesRelations = relations(employees, ({ many }) => ({
   emergencyContacts: many(emergencyContacts),
+  employeeDocuments: many(employeeDocuments),
 }));
 
 export const emergencyContactsRelations = relations(emergencyContacts, ({ one }) => ({
   employee: one(employees, {
     fields: [emergencyContacts.employeeId],
+    references: [employees.id],
+  }),
+}));
+
+export const employeeDocuments = sqliteTable('employee_documents', {
+  id: text('id').primaryKey(),
+  companyId: text('company_id').notNull().references(() => companies.id),
+  employeeId: text('employee_id').notNull().references(() => employees.id),
+  name: text('name').notNull(),
+  type: text('type').notNull(),
+  fileKey: text('file_key').notNull(),
+  status: text('status').notNull().default('Active'),
+  createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text('updated_at').$onUpdate(() => new Date().toISOString()),
+});
+
+export const employeeDocumentsRelations = relations(employeeDocuments, ({ one }) => ({
+  employee: one(employees, {
+    fields: [employeeDocuments.employeeId],
     references: [employees.id],
   }),
 }));

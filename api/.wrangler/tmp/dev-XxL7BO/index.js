@@ -5,7 +5,7 @@ var __export = (target, all) => {
     __defProp(target, name, { get: all[name], enumerable: true });
 };
 
-// .wrangler/tmp/bundle-zJsTco/checked-fetch.js
+// .wrangler/tmp/bundle-QjYDKt/checked-fetch.js
 var urls = /* @__PURE__ */ new Set();
 function checkURL(request, init) {
   const url = request instanceof URL ? request : new URL(
@@ -8129,6 +8129,8 @@ __export(schema_exports, {
   departments: () => departments,
   emergencyContacts: () => emergencyContacts,
   emergencyContactsRelations: () => emergencyContactsRelations,
+  employeeDocuments: () => employeeDocuments,
+  employeeDocumentsRelations: () => employeeDocumentsRelations,
   employees: () => employees,
   employeesRelations: () => employeesRelations,
   jobRequisitions: () => jobRequisitions,
@@ -8210,11 +8212,29 @@ var emergencyContacts = sqliteTable("emergency_contacts", {
   updatedAt: text("updated_at").$onUpdate(() => (/* @__PURE__ */ new Date()).toISOString())
 });
 var employeesRelations = relations(employees, ({ many }) => ({
-  emergencyContacts: many(emergencyContacts)
+  emergencyContacts: many(emergencyContacts),
+  employeeDocuments: many(employeeDocuments)
 }));
 var emergencyContactsRelations = relations(emergencyContacts, ({ one }) => ({
   employee: one(employees, {
     fields: [emergencyContacts.employeeId],
+    references: [employees.id]
+  })
+}));
+var employeeDocuments = sqliteTable("employee_documents", {
+  id: text("id").primaryKey(),
+  companyId: text("company_id").notNull().references(() => companies.id),
+  employeeId: text("employee_id").notNull().references(() => employees.id),
+  name: text("name").notNull(),
+  type: text("type").notNull(),
+  fileKey: text("file_key").notNull(),
+  status: text("status").notNull().default("Active"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").$onUpdate(() => (/* @__PURE__ */ new Date()).toISOString())
+});
+var employeeDocumentsRelations = relations(employeeDocuments, ({ one }) => ({
+  employee: one(employees, {
+    fields: [employeeDocuments.employeeId],
     references: [employees.id]
   })
 }));
@@ -8395,7 +8415,8 @@ var EmployeeService = class {
     return this.db.query.employees.findMany({
       where: eq(employees.companyId, companyId),
       with: {
-        emergencyContacts: true
+        emergencyContacts: true,
+        employeeDocuments: true
       }
     });
   }
@@ -8422,13 +8443,13 @@ var EmployeeService = class {
     return result[0]?.id || null;
   }
   async getEmployeeProfile(companyId, employeeId) {
-    const employee = await this.db.query.employees.findFirst({
+    return this.db.query.employees.findFirst({
       where: and(eq(employees.id, employeeId), eq(employees.companyId, companyId)),
       with: {
-        emergencyContacts: true
+        emergencyContacts: true,
+        employeeDocuments: true
       }
     });
-    return employee;
   }
   async updateEmployeeProfile(companyId, employeeId, data) {
     const allowedUpdates = {
@@ -8479,6 +8500,50 @@ var EmployeeService = class {
     );
     return { success: true };
   }
+  async addDocument(companyId, employeeId, bucket, data) {
+    const documentId = `DOC-${Math.floor(1e3 + Math.random() * 9e3)}`;
+    const fileKey = `companies/${companyId}/employees/${employeeId}/documents/${documentId}-${data.file.name}`;
+    await bucket.put(fileKey, await data.file.arrayBuffer(), {
+      httpMetadata: { contentType: data.file.type }
+    });
+    const newDocument = {
+      id: documentId,
+      companyId,
+      employeeId,
+      name: data.name,
+      type: data.type,
+      fileKey,
+      status: "Active"
+    };
+    await this.db.insert(employeeDocuments).values(newDocument);
+    return newDocument;
+  }
+  async deleteDocument(companyId, employeeId, bucket, documentId) {
+    const doc = await this.db.query.employeeDocuments.findFirst({
+      where: and(
+        eq(employeeDocuments.id, documentId),
+        eq(employeeDocuments.companyId, companyId),
+        eq(employeeDocuments.employeeId, employeeId)
+      )
+    });
+    if (!doc) throw new Error("Document not found");
+    await bucket.delete(doc.fileKey);
+    await this.db.delete(employeeDocuments).where(eq(employeeDocuments.id, documentId));
+    return { success: true };
+  }
+  async getDocumentFile(companyId, employeeId, bucket, documentId) {
+    const doc = await this.db.query.employeeDocuments.findFirst({
+      where: and(
+        eq(employeeDocuments.id, documentId),
+        eq(employeeDocuments.companyId, companyId),
+        eq(employeeDocuments.employeeId, employeeId)
+      )
+    });
+    if (!doc) throw new Error("Document not found");
+    const file = await bucket.get(doc.fileKey);
+    if (!file) throw new Error("File not found in storage");
+    return { file, doc };
+  }
 };
 
 // src/controllers/admin/employee.controller.ts
@@ -8498,7 +8563,7 @@ var createEmployee = /* @__PURE__ */ __name(async (c) => {
 
 // src/middlewares/tenant.middleware.ts
 var tenantMiddleware = /* @__PURE__ */ __name(async (c, next) => {
-  const companyId = c.req.header("x-company-id");
+  const companyId = c.req.header("x-company-id") || c.req.query("companyId");
   if (!companyId) {
     return c.json({ error: "Missing tenant identification (x-company-id)" }, 401);
   }
@@ -8935,6 +9000,57 @@ var deleteEmergencyContact = /* @__PURE__ */ __name(async (c) => {
   await service.deleteEmergencyContact(companyId, employeeId, contactId);
   return c.json({ success: true });
 }, "deleteEmergencyContact");
+var uploadDocument = /* @__PURE__ */ __name(async (c) => {
+  const companyId = c.get("companyId");
+  let employeeId = c.req.header("x-employee-id");
+  const service = new EmployeeService(c.env.DB);
+  if (!employeeId) {
+    const defaultId = await service.getFirstEmployeeId(companyId);
+    if (!defaultId) return c.json({ error: "No employee found" }, 404);
+    employeeId = defaultId;
+  }
+  const formData = await c.req.formData();
+  const file = formData.get("file");
+  const name = formData.get("name");
+  const type = formData.get("type");
+  if (!file || !name || !type) {
+    return c.json({ error: "Missing required fields" }, 400);
+  }
+  const document = await service.addDocument(companyId, employeeId, c.env.BUCKET, { name, type, file });
+  return c.json(document);
+}, "uploadDocument");
+var deleteDocument = /* @__PURE__ */ __name(async (c) => {
+  const companyId = c.get("companyId");
+  let employeeId = c.req.header("x-employee-id");
+  const documentId = c.req.param("id");
+  const service = new EmployeeService(c.env.DB);
+  if (!employeeId) {
+    const defaultId = await service.getFirstEmployeeId(companyId);
+    if (!defaultId) return c.json({ error: "No employee found" }, 404);
+    employeeId = defaultId;
+  }
+  await service.deleteDocument(companyId, employeeId, c.env.BUCKET, documentId);
+  return c.json({ success: true });
+}, "deleteDocument");
+var downloadDocument = /* @__PURE__ */ __name(async (c) => {
+  const companyId = c.get("companyId");
+  let employeeId = c.req.header("x-employee-id") || c.req.query("employeeId");
+  const documentId = c.req.param("id");
+  const service = new EmployeeService(c.env.DB);
+  if (!employeeId) {
+    const defaultId = await service.getFirstEmployeeId(companyId);
+    if (!defaultId) return c.json({ error: "No employee found" }, 404);
+    employeeId = defaultId;
+  }
+  try {
+    const { file, doc } = await service.getDocumentFile(companyId, employeeId, c.env.BUCKET, documentId);
+    c.header("Content-Type", file.httpMetadata?.contentType || "application/octet-stream");
+    c.header("Content-Disposition", `attachment; filename="${doc.name}"`);
+    return c.body(file.body);
+  } catch (err) {
+    return c.json({ error: err.message }, 404);
+  }
+}, "downloadDocument");
 
 // src/services/leave.service.ts
 var LeaveService = class {
@@ -9170,6 +9286,9 @@ employeeRoutes.get("/me", getMyProfile);
 employeeRoutes.put("/me", updateMyProfile);
 employeeRoutes.post("/me/emergency-contacts", addEmergencyContact);
 employeeRoutes.delete("/me/emergency-contacts/:id", deleteEmergencyContact);
+employeeRoutes.post("/me/documents", uploadDocument);
+employeeRoutes.delete("/me/documents/:id", deleteDocument);
+employeeRoutes.get("/me/documents/:id/download", downloadDocument);
 employeeRoutes.get("/leave/me", getMyLeaveData);
 employeeRoutes.post("/leave/apply", applyForLeave);
 employeeRoutes.get("/attendance/me", getAttendanceData);
@@ -9233,7 +9352,7 @@ var jsonError = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx)
 }, "jsonError");
 var middleware_miniflare3_json_error_default = jsonError;
 
-// .wrangler/tmp/bundle-zJsTco/middleware-insertion-facade.js
+// .wrangler/tmp/bundle-QjYDKt/middleware-insertion-facade.js
 var __INTERNAL_WRANGLER_MIDDLEWARE__ = [
   middleware_ensure_req_body_drained_default,
   middleware_miniflare3_json_error_default
@@ -9265,7 +9384,7 @@ function __facade_invoke__(request, env, ctx, dispatch, finalMiddleware) {
 }
 __name(__facade_invoke__, "__facade_invoke__");
 
-// .wrangler/tmp/bundle-zJsTco/middleware-loader.entry.ts
+// .wrangler/tmp/bundle-QjYDKt/middleware-loader.entry.ts
 var __Facade_ScheduledController__ = class ___Facade_ScheduledController__ {
   constructor(scheduledTime, cron, noRetry) {
     this.scheduledTime = scheduledTime;

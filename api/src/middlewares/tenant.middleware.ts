@@ -2,8 +2,8 @@ import { Context, Next } from 'hono';
 
 export const tenantMiddleware = async (c: Context, next: Next) => {
   // In a real app, this would extract the companyId from a verified JWT.
-  // For local development, we simulate it via a custom header.
-  const companyId = c.req.header('x-company-id');
+  // For local development, we simulate it via a custom header or query param.
+  const companyId = c.req.header('x-company-id') || c.req.query('companyId');
 
   if (!companyId) {
     return c.json({ error: 'Missing tenant identification (x-company-id)' }, 401);

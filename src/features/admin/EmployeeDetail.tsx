@@ -38,6 +38,8 @@ import {
   Users,
   Box,
 } from "lucide-react";
+// import { formatCurrency } from "../../utils/format";
+import { getDocumentDownloadUrl } from "../../api/client";
 import { Employee } from "../../types/index";
 import { MOCK_ASSETS } from "../../data/mocks";
 import {
@@ -182,7 +184,10 @@ const EmployeeDetail: React.FC<Props> = ({ employee, onBack }) => {
             <div className="flex flex-col md:flex-row items-end gap-8">
               <div className="relative group">
                 <img
-                  src={employee.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(employee.name + ' ' + (employee.lastName || ''))}&background=random`}
+                  src={
+                    employee.avatar ||
+                    `https://ui-avatars.com/api/?name=${encodeURIComponent(employee.name + " " + (employee.lastName || ""))}&background=random`
+                  }
                   className="w-44 h-44 rounded-[4rem] border-8 border-white shadow-2xl object-cover"
                 />
                 <div
@@ -296,10 +301,10 @@ const EmployeeDetail: React.FC<Props> = ({ employee, onBack }) => {
                           </div>
                           <div>
                             <p className="text-sm font-black text-slate-800">
-                              {employee.payoutMethod || 'Automated Wallet'}
+                              {employee.payoutMethod || "Automated Wallet"}
                             </p>
                             <p className="text-[10px] font-bold text-slate-400 uppercase">
-                              {employee.bankName || 'Instant Disbursal'}
+                              {employee.bankName || "Instant Disbursal"}
                             </p>
                           </div>
                         </div>
@@ -314,10 +319,12 @@ const EmployeeDetail: React.FC<Props> = ({ employee, onBack }) => {
                           </div>
                           <div>
                             <p className="text-sm font-black text-slate-800">
-                              {employee.tin ? 'LIRS Verified' : 'Pending Verification'}
+                              {employee.tin
+                                ? "LIRS Verified"
+                                : "Pending Verification"}
                             </p>
                             <p className="text-[10px] font-bold text-slate-400 uppercase">
-                              {employee.tin ? 'TIN Registered' : 'TIN Required'}
+                              {employee.tin ? "TIN Registered" : "TIN Required"}
                             </p>
                           </div>
                         </div>
@@ -488,11 +495,60 @@ const EmployeeDetail: React.FC<Props> = ({ employee, onBack }) => {
                     <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">
                       Digital Document Vault
                     </h3>
-                    <button className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-xl flex items-center gap-2">
-                      <Plus size={14} /> Upload Document
-                    </button>
                   </div>
-                  <ListSkeleton count={4} />
+                  {employee?.employeeDocuments?.length === 0 ||
+                  !employee?.employeeDocuments ? (
+                    <div className="text-center py-12 bg-slate-50 rounded-3xl border border-slate-100">
+                      <FileText
+                        className="mx-auto text-slate-300 mb-4"
+                        size={48}
+                      />
+                      <p className="text-slate-500 font-medium">
+                        No documents uploaded yet.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {employee?.employeeDocuments?.map((doc: any) => (
+                        <div
+                          key={doc.id}
+                          className="p-6 bg-slate-50 rounded-3xl border border-slate-100 hover:border-indigo-200 hover:bg-white transition-all group relative overflow-hidden"
+                        >
+                          <div className="flex justify-between items-start mb-4">
+                            <div className="p-3 bg-white rounded-2xl shadow-sm text-indigo-600">
+                              <FileText size={24} />
+                            </div>
+                            <span
+                              className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest bg-slate-200 text-slate-500`}
+                            >
+                              {doc.status}
+                            </span>
+                          </div>
+                          <h4 className="font-bold text-slate-800 mb-1">
+                            {doc.name}
+                          </h4>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase">
+                            {doc.type} •{" "}
+                            {new Date(doc.createdAt).toLocaleDateString()}
+                          </p>
+                          <div className="absolute bottom-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                            <a
+                              href={getDocumentDownloadUrl(
+                                doc.id,
+                                employee.companyId,
+                                employee.id,
+                              )}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-2 bg-slate-900 text-white rounded-xl shadow-lg hover:scale-110 transition-all inline-block"
+                            >
+                              <Download size={16} />
+                            </a>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 

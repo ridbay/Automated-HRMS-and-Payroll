@@ -455,6 +455,54 @@ export const useDeleteEmergencyContact = () => {
   });
 };
 
+export const useUploadDocumentMutation = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (formData: FormData) => {
+      // NOTE: fetchWithTenant manually merges headers. We must NOT set Content-Type here so the browser sets it to multipart/form-data with boundary
+      const response = await fetchWithTenant(`${API_URL}/employee/me/documents`, {
+        method: 'POST',
+        body: formData,
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to upload document');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['myProfile'] });
+    },
+  });
+};
+
+export const useDeleteDocumentMutation = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const response = await fetchWithTenant(`${API_URL}/employee/me/documents/${id}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) {
+        throw new Error('Failed to delete document');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['myProfile'] });
+    },
+  });
+};
+
+export const getDocumentDownloadUrl = (id: string, companyId?: string, employeeId?: string) => {
+  const queryParams = [];
+  if (companyId) queryParams.push(`companyId=${companyId}`);
+  if (employeeId) queryParams.push(`employeeId=${employeeId}`);
+  
+  const queryString = queryParams.length > 0 ? `?${queryParams.join('&')}` : '';
+  return `${API_URL}/employee/me/documents/${id}/download${queryString}`;
+};
+
 export const useMyLeave = () => {
   return useQuery({
     queryKey: ['myLeave'],

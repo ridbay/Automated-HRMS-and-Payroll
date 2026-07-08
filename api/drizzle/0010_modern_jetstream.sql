@@ -1,0 +1,1 @@
+ALTER TABLE `company_settings` ADD `created_at` text DEFAULT CURRENT_TIMESTAMP NOT NULL;
