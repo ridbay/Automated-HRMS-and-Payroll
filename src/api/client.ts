@@ -210,3 +210,182 @@ export const useLockPayroll = () => {
     mutationFn: lockPayroll,
   });
 };
+
+// --- Company Profile ---
+export const useCompany = () => {
+  return useQuery({
+    queryKey: ['company'],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/admin/company`);
+      if (!res.ok) throw new Error('Failed to fetch company profile');
+      return res.json();
+    },
+  });
+};
+
+export const useUpdateCompany = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: any) => {
+      const res = await fetchWithTenant(`${API_URL}/admin/company`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('Failed to update company profile');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['company'] });
+    },
+  });
+};
+
+// --- Org (Departments & Locations) ---
+export const useDepartments = () => {
+  return useQuery({
+    queryKey: ['departments'],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/admin/departments`);
+      if (!res.ok) throw new Error('Failed to fetch departments');
+      return res.json();
+    },
+  });
+};
+
+export const useCreateDepartment = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: any) => {
+      const res = await fetchWithTenant(`${API_URL}/admin/departments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('Failed to create department');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['departments'] });
+    },
+  });
+};
+
+export const useDeleteDepartment = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetchWithTenant(`${API_URL}/admin/departments/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete department');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['departments'] });
+    },
+  });
+};
+
+export const useLocations = () => {
+  return useQuery({
+    queryKey: ['locations'],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/admin/locations`);
+      if (!res.ok) throw new Error('Failed to fetch locations');
+      return res.json();
+    },
+  });
+};
+
+export const useCreateLocation = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: any) => {
+      const res = await fetchWithTenant(`${API_URL}/admin/locations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('Failed to create location');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['locations'] });
+    },
+  });
+};
+
+export const useDeleteLocation = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetchWithTenant(`${API_URL}/admin/locations/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete location');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['locations'] });
+    },
+  });
+};
+
+// --- Roles & Permissions ---
+export const useRoles = () => {
+  return useQuery({
+    queryKey: ['roles'],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/admin/roles`);
+      if (!res.ok) throw new Error('Failed to fetch roles');
+      return res.json();
+    },
+  });
+};
+
+export const useCreateRole = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: any) => {
+      const res = await fetchWithTenant(`${API_URL}/admin/roles`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('Failed to create role');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['roles'] });
+    },
+  });
+};
+
+export const useUpdateRole = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: any }) => {
+      const res = await fetchWithTenant(`${API_URL}/admin/roles/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('Failed to update role');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['roles'] });
+    },
+  });
+};
+
+export const useDeleteRole = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetchWithTenant(`${API_URL}/admin/roles/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete role');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['roles'] });
+    },
+  });
+};

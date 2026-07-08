@@ -12,7 +12,13 @@ import {
   LayoutGrid, Share2, Terminal, Code,
   Copy, KeyRound, Loader2, PlaySquare, Workflow
 } from 'lucide-react';
-import { useSettings, useUpdateSettings, useApiKeys, useCreateApiKey, useDeleteApiKey } from '../../api/client';
+import { 
+  useSettings, useUpdateSettings, useApiKeys, useCreateApiKey, useDeleteApiKey,
+  useCompany, useUpdateCompany,
+  useDepartments, useCreateDepartment, useDeleteDepartment,
+  useLocations, useCreateLocation, useDeleteLocation,
+  useRoles, useCreateRole, useUpdateRole, useDeleteRole
+} from '../../api/client';
 
 const Settings: React.FC = () => {
   const [activeSection, setActiveSection] = useState('profile');
@@ -44,180 +50,291 @@ const Settings: React.FC = () => {
     setTimeout(() => setIsSaving(false), 1500);
   };
 
-  const renderProfile = () => (
-    <div className="space-y-10">
-      <div className="flex justify-between items-end">
-        <div>
-           <h2 className="text-2xl font-black text-slate-800">Company Identity</h2>
-           <p className="text-sm text-slate-500 font-medium">Manage your organization's core details and branding.</p>
-        </div>
-        <button 
-          onClick={handleSave}
-          className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-100 flex items-center gap-2"
-        >
-          {isSaving ? <span className="flex items-center gap-2 animate-pulse"><Zap size={16} /> Saving...</span> : 'Save Changes'}
-        </button>
-      </div>
+  const { data: company, isLoading: isCompanyLoading } = useCompany();
+  const updateCompanyMutation = useUpdateCompany();
+  const { data: departments, isLoading: isDeptsLoading } = useDepartments();
+  const { data: locations, isLoading: isLocsLoading } = useLocations();
+  const createDept = useCreateDepartment();
+  const deleteDept = useDeleteDepartment();
+  const createLoc = useCreateLocation();
+  const deleteLoc = useDeleteLocation();
+  const { data: roles, isLoading: isRolesLoading } = useRoles();
+  const createRole = useCreateRole();
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-        <div className="lg:col-span-1 space-y-6">
-           <div className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm flex flex-col items-center text-center">
-              <div className="relative group cursor-pointer mb-6">
-                 <div className="w-32 h-32 bg-slate-50 rounded-[2.5rem] flex items-center justify-center border-2 border-dashed border-slate-200 group-hover:border-indigo-400 transition-all overflow-hidden">
-                    <Building2 size={48} className="text-slate-300 group-hover:text-indigo-400 transition-colors" />
-                 </div>
-                 <div className="absolute inset-0 bg-indigo-600/0 group-hover:bg-indigo-600/10 transition-all rounded-[2.5rem] flex items-center justify-center">
-                    <Upload size={20} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                 </div>
-              </div>
-              <h3 className="font-black text-slate-800">Company Logo</h3>
-              <p className="text-[10px] text-slate-400 uppercase font-black mt-1 tracking-widest">SVG, PNG, JPG (Max 2MB)</p>
-           </div>
-        </div>
+  const handleSaveProfile = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    updateCompanyMutation.mutate({
+      name: formData.get('name') as string,
+      registrationNumber: formData.get('registrationNumber') as string,
+      industry: formData.get('industry') as string,
+      fiscalYearStart: formData.get('fiscalYearStart') as string,
+      address: formData.get('address') as string,
+    });
+  };
 
-        <div className="lg:col-span-2 space-y-8">
-           <div className="bg-white p-10 rounded-[3rem] border border-slate-200 shadow-sm space-y-6">
-              <div className="grid grid-cols-2 gap-6">
-                 <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Registered Name</label>
-                    <input type="text" defaultValue="ZenHR Global Inc." className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none focus:ring-4 focus:ring-indigo-500/10 font-bold" />
-                 </div>
-                 <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Registration Number</label>
-                    <input type="text" defaultValue="RC-129384820" className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none focus:ring-4 focus:ring-indigo-500/10 font-bold" />
-                 </div>
-              </div>
-              <div className="grid grid-cols-2 gap-6">
-                 <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Industry</label>
-                    <select className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold">
-                       <option>Fintech / Financial Services</option>
-                       <option>Technology & SaaS</option>
-                       <option>Manufacturing</option>
-                       <option>Retail</option>
-                    </select>
-                 </div>
-                 <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Fiscal Year Start</label>
-                    <select className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold">
-                       <option>January</option>
-                       <option>April</option>
-                       <option>June</option>
-                    </select>
-                 </div>
-              </div>
-              <div className="space-y-2">
-                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Headquarters Address</label>
-                 <textarea rows={3} defaultValue="123 Innovation Drive, Tech City, Lagos, Nigeria" className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none focus:ring-4 focus:ring-indigo-500/10 font-bold resize-none" />
-              </div>
-           </div>
-
-           <div className="bg-white p-10 rounded-[3rem] border border-slate-200 shadow-sm">
-              <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-8">Operational Calendar</h3>
-              <div className="space-y-6">
-                 <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
-                    <div className="flex items-center gap-3">
-                       <Calendar size={18} className="text-indigo-600" />
-                       <span className="text-xs font-bold text-slate-700 uppercase">Working Days</span>
-                    </div>
-                    <div className="flex gap-2">
-                       {['M','T','W','T','F','S','S'].map((day, i) => (
-                         <button key={i} className={`w-8 h-8 rounded-lg text-[10px] font-black transition-all ${i < 5 ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-slate-400 border border-slate-100'}`}>
-                           {day}
-                         </button>
-                       ))}
-                    </div>
-                 </div>
-                 <button className="w-full py-4 border-2 border-dashed border-slate-200 text-slate-400 rounded-2xl font-black text-xs uppercase tracking-widest hover:border-indigo-400 hover:text-indigo-600 transition-all flex items-center justify-center gap-2">
-                    <Plus size={16} /> Manage Public Holidays
-                 </button>
-              </div>
-           </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderRoles = () => (
-    <div className="space-y-10">
-       <div className="flex justify-between items-center">
+  const renderProfile = () => {
+    if (isCompanyLoading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-indigo-500" size={32} /></div>;
+    
+    return (
+      <form onSubmit={handleSaveProfile} className="space-y-10">
+        <div className="flex justify-between items-end">
           <div>
-             <h2 className="text-2xl font-black text-slate-800">RBAC Controls</h2>
-             <p className="text-sm text-slate-500 font-medium">Define access layers and administrative permissions.</p>
+            <h2 className="text-2xl font-black text-slate-800">Company Identity</h2>
+            <p className="text-sm text-slate-500 font-medium">Manage your organization's core details and branding.</p>
           </div>
-          <button className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-100 flex items-center gap-2">
-             <Plus size={18} /> Create Custom Role
+          <button 
+            type="submit"
+            disabled={updateCompanyMutation.isPending}
+            className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-100 flex items-center gap-2 disabled:opacity-50"
+          >
+            {updateCompanyMutation.isPending ? <span className="flex items-center gap-2 animate-pulse"><Zap size={16} /> Saving...</span> : 'Save Changes'}
           </button>
-       </div>
+        </div>
 
-       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {[
-            { name: 'Administrator', users: 3, desc: 'Full system access including wallet & payroll.', color: 'rose' },
-            { name: 'HR Manager', users: 8, desc: 'Workforce, recruitment, and performance management.', color: 'indigo' },
-            { name: 'Finance Officer', users: 4, desc: 'Maker/Checker access to payroll batches.', color: 'emerald' },
-            { name: 'Employee', users: 128, desc: 'Standard portal self-service access.', color: 'slate' },
-          ].map((role, i) => (
-            <motion.div 
-              key={i} 
-              whileHover={{ y: -5 }}
-              className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm relative group"
-            >
-               <div className={`absolute top-0 right-0 w-16 h-16 bg-${role.color}-50 rounded-full -mr-8 -mt-8`} />
-               <h3 className="text-lg font-black text-slate-800 mb-2">{role.name}</h3>
-               <p className="text-xs text-slate-400 font-medium leading-relaxed mb-6">{role.desc}</p>
-               <div className="flex items-center justify-between mt-auto">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{role.users} Users</span>
-                  <button className="p-2 text-slate-300 hover:text-indigo-600 transition-all opacity-0 group-hover:opacity-100">
-                     <ChevronRight size={20} />
-                  </button>
-               </div>
-            </motion.div>
-          ))}
-       </div>
-
-       <div className="bg-white rounded-[3rem] border border-slate-200 shadow-sm overflow-hidden">
-          <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-             <h3 className="font-black text-slate-800 uppercase text-xs tracking-[0.2em]">Permission Matrix (HR Manager)</h3>
-             <button className="text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:underline">Restore Defaults</button>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+          <div className="lg:col-span-1 space-y-6">
+            <div className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm flex flex-col items-center text-center">
+                <div className="relative group cursor-pointer mb-6">
+                  <div className="w-32 h-32 bg-slate-50 rounded-[2.5rem] flex items-center justify-center border-2 border-dashed border-slate-200 group-hover:border-indigo-400 transition-all overflow-hidden">
+                      <Building2 size={48} className="text-slate-300 group-hover:text-indigo-400 transition-colors" />
+                  </div>
+                  <div className="absolute inset-0 bg-indigo-600/0 group-hover:bg-indigo-600/10 transition-all rounded-[2.5rem] flex items-center justify-center">
+                      <Upload size={20} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
+                </div>
+                <h3 className="font-black text-slate-800">Company Logo</h3>
+                <p className="text-[10px] text-slate-400 uppercase font-black mt-1 tracking-widest">SVG, PNG, JPG (Max 2MB)</p>
+            </div>
           </div>
-          <div className="overflow-x-auto">
-             <table className="w-full text-left">
-                <thead className="bg-slate-50/50 text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
-                   <tr>
-                      <th className="px-10 py-5">Module</th>
-                      <th className="px-8 py-5 text-center">View</th>
-                      <th className="px-8 py-5 text-center">Create</th>
-                      <th className="px-8 py-5 text-center">Edit</th>
-                      <th className="px-8 py-5 text-center">Delete</th>
-                      <th className="px-8 py-5 text-center">Approve</th>
-                   </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                   {['Workforce', 'Payroll', 'Wallet', 'Recruitment', 'Performance', 'Settings'].map((mod, i) => (
-                     <tr key={i} className="hover:bg-slate-50/50 transition-all">
-                        <td className="px-10 py-5">
-                           <span className="text-xs font-black text-slate-700 uppercase">{mod}</span>
-                        </td>
-                        {[1, 2, 3, 4, 5].map((cell) => (
-                          <td key={cell} className="px-8 py-5 text-center">
-                             <div className="flex justify-center">
-                                <input 
-                                  type="checkbox" 
-                                  defaultChecked={cell < 4 || (mod === 'Workforce' && cell === 5)} 
-                                  disabled={mod === 'Settings' && cell > 1}
-                                  className="w-5 h-5 rounded-lg border-2 border-slate-200 text-indigo-600 focus:ring-indigo-500/20 transition-all cursor-pointer accent-indigo-600" 
-                                />
-                             </div>
-                          </td>
+
+          <div className="lg:col-span-2 space-y-8">
+            <div className="bg-white p-10 rounded-[3rem] border border-slate-200 shadow-sm space-y-6">
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Registered Name</label>
+                      <input name="name" type="text" defaultValue={company?.name || ''} className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none focus:ring-4 focus:ring-indigo-500/10 font-bold" />
+                  </div>
+                  <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Registration Number</label>
+                      <input name="registrationNumber" type="text" defaultValue={company?.registrationNumber || ''} className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none focus:ring-4 focus:ring-indigo-500/10 font-bold" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Industry</label>
+                      <select name="industry" defaultValue={company?.industry || 'Technology & SaaS'} className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold">
+                        <option value="Fintech / Financial Services">Fintech / Financial Services</option>
+                        <option value="Technology & SaaS">Technology & SaaS</option>
+                        <option value="Manufacturing">Manufacturing</option>
+                        <option value="Retail">Retail</option>
+                      </select>
+                  </div>
+                  <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Fiscal Year Start</label>
+                      <select name="fiscalYearStart" defaultValue={company?.fiscalYearStart || 'January'} className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold">
+                        <option value="January">January</option>
+                        <option value="April">April</option>
+                        <option value="June">June</option>
+                      </select>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Headquarters Address</label>
+                  <textarea name="address" rows={3} defaultValue={company?.address || ''} className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none focus:ring-4 focus:ring-indigo-500/10 font-bold resize-none" />
+                </div>
+            </div>
+
+            <div className="bg-white p-10 rounded-[3rem] border border-slate-200 shadow-sm">
+                <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-8">Operational Calendar</h3>
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
+                      <div className="flex items-center gap-3">
+                        <Calendar size={18} className="text-indigo-600" />
+                        <span className="text-xs font-bold text-slate-700 uppercase">Working Days</span>
+                      </div>
+                      <div className="flex gap-2">
+                        {['M','T','W','T','F','S','S'].map((day, i) => (
+                          <button key={i} type="button" className={`w-8 h-8 rounded-lg text-[10px] font-black transition-all ${i < 5 ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-slate-400 border border-slate-100'}`}>
+                            {day}
+                          </button>
                         ))}
-                     </tr>
-                   ))}
-                </tbody>
-             </table>
+                      </div>
+                  </div>
+                  <button type="button" className="w-full py-4 border-2 border-dashed border-slate-200 text-slate-400 rounded-2xl font-black text-xs uppercase tracking-widest hover:border-indigo-400 hover:text-indigo-600 transition-all flex items-center justify-center gap-2">
+                      <Plus size={16} /> Manage Public Holidays
+                  </button>
+                </div>
+            </div>
           </div>
-       </div>
-    </div>
-  );
+        </div>
+      </form>
+    );
+  };
+
+  const renderOrg = () => {
+    return (
+      <div className="space-y-10">
+        <div className="flex justify-between items-end">
+          <div>
+            <h2 className="text-2xl font-black text-slate-800">Departments & Locations</h2>
+            <p className="text-sm text-slate-500 font-medium">Manage your organizational structure and office locations.</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+          <div className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm space-y-6">
+            <h3 className="font-black text-slate-800 text-lg flex items-center gap-2"><Globe className="text-indigo-500" /> Departments</h3>
+            <form 
+              onSubmit={(e) => {
+                e.preventDefault();
+                const fd = new FormData(e.currentTarget);
+                if (fd.get('name')) createDept.mutate({ name: fd.get('name') as string, description: fd.get('description') as string });
+                e.currentTarget.reset();
+              }}
+              className="flex gap-4 mb-6"
+            >
+              <input name="name" placeholder="Name (e.g. Engineering)" className="w-1/2 px-4 py-3 bg-slate-50 border-none rounded-xl font-bold text-xs outline-none" required />
+              <input name="description" placeholder="Description" className="w-1/2 px-4 py-3 bg-slate-50 border-none rounded-xl font-bold text-xs outline-none" />
+              <button type="submit" disabled={createDept.isPending} className="px-4 py-3 bg-indigo-600 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700">Add</button>
+            </form>
+            <div className="space-y-3">
+              {isDeptsLoading ? <Loader2 className="animate-spin text-indigo-500 mx-auto" /> : departments?.map((d: any) => (
+                <div key={d.id} className="flex justify-between items-center p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                  <div>
+                    <h4 className="font-bold text-slate-800">{d.name}</h4>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{d.description || 'No description'}</p>
+                  </div>
+                  <button onClick={() => deleteDept.mutate(d.id)} className="text-rose-400 hover:text-rose-600"><Trash2 size={16} /></button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm space-y-6">
+            <h3 className="font-black text-slate-800 text-lg flex items-center gap-2"><MapPin className="text-indigo-500" /> Locations</h3>
+            <form 
+              onSubmit={(e) => {
+                e.preventDefault();
+                const fd = new FormData(e.currentTarget);
+                if (fd.get('name')) createLoc.mutate({ name: fd.get('name') as string, address: fd.get('address') as string, city: fd.get('city') as string, country: fd.get('country') as string });
+                e.currentTarget.reset();
+              }}
+              className="space-y-3 mb-6"
+            >
+              <div className="flex gap-4">
+                <input name="name" placeholder="Name (e.g. HQ)" className="w-1/2 px-4 py-3 bg-slate-50 border-none rounded-xl font-bold text-xs outline-none" required />
+                <input name="city" placeholder="City" className="w-1/2 px-4 py-3 bg-slate-50 border-none rounded-xl font-bold text-xs outline-none" />
+              </div>
+              <div className="flex gap-4">
+                <input name="country" placeholder="Country" className="w-1/2 px-4 py-3 bg-slate-50 border-none rounded-xl font-bold text-xs outline-none" />
+                <input name="address" placeholder="Full Address" className="w-1/2 px-4 py-3 bg-slate-50 border-none rounded-xl font-bold text-xs outline-none" required />
+              </div>
+              <button type="submit" disabled={createLoc.isPending} className="w-full py-3 bg-indigo-600 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700">Add Location</button>
+            </form>
+            <div className="space-y-3">
+              {isLocsLoading ? <Loader2 className="animate-spin text-indigo-500 mx-auto" /> : locations?.map((l: any) => (
+                <div key={l.id} className="flex justify-between items-center p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                  <div>
+                    <h4 className="font-bold text-slate-800">{l.name}</h4>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{l.city}, {l.country}</p>
+                  </div>
+                  <button onClick={() => deleteLoc.mutate(l.id)} className="text-rose-400 hover:text-rose-600"><Trash2 size={16} /></button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderRoles = () => {
+    return (
+      <div className="space-y-10">
+        <div className="flex justify-between items-center">
+            <div>
+              <h2 className="text-2xl font-black text-slate-800">RBAC Controls</h2>
+              <p className="text-sm text-slate-500 font-medium">Define access layers and administrative permissions.</p>
+            </div>
+            <button 
+              onClick={() => {
+                const name = prompt("Enter role name:");
+                if (name) createRole.mutate({ name, permissions: { all: false }, color: 'indigo', description: 'Custom role' });
+              }}
+              disabled={createRole.isPending}
+              className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-100 flex items-center gap-2"
+            >
+              <Plus size={18} /> {createRole.isPending ? 'Creating...' : 'Create Custom Role'}
+            </button>
+        </div>
+
+        {isRolesLoading ? <Loader2 className="animate-spin text-indigo-500 mx-auto" /> : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {roles?.map((role: any) => (
+              <motion.div 
+                key={role.id} 
+                whileHover={{ y: -5 }}
+                className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm relative group"
+              >
+                  <div className={`absolute top-0 right-0 w-16 h-16 bg-${role.color || 'slate'}-50 rounded-full -mr-8 -mt-8`} />
+                  <h3 className="text-lg font-black text-slate-800 mb-2">{role.name}</h3>
+                  <p className="text-xs text-slate-400 font-medium leading-relaxed mb-6">{role.description || 'No description'}</p>
+                  <div className="flex items-center justify-between mt-auto">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{role.usersCount || 0} Users</span>
+                    <button className="p-2 text-slate-300 hover:text-indigo-600 transition-all opacity-0 group-hover:opacity-100">
+                        <ChevronRight size={20} />
+                    </button>
+                  </div>
+              </motion.div>
+            ))}
+          </div>
+        )}
+
+        <div className="bg-white rounded-[3rem] border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <h3 className="font-black text-slate-800 uppercase text-xs tracking-[0.2em]">Permission Matrix (HR Manager)</h3>
+              <button className="text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:underline">Restore Defaults</button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                  <thead className="bg-slate-50/50 text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
+                    <tr>
+                        <th className="px-10 py-5">Module</th>
+                        <th className="px-8 py-5 text-center">View</th>
+                        <th className="px-8 py-5 text-center">Create</th>
+                        <th className="px-8 py-5 text-center">Edit</th>
+                        <th className="px-8 py-5 text-center">Delete</th>
+                        <th className="px-8 py-5 text-center">Approve</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {['Workforce', 'Payroll', 'Wallet', 'Recruitment', 'Performance', 'Settings'].map((mod, i) => (
+                        <tr key={i} className="hover:bg-slate-50/50 transition-all">
+                          <td className="px-10 py-5">
+                              <span className="text-xs font-black text-slate-700 uppercase">{mod}</span>
+                          </td>
+                          {[1, 2, 3, 4, 5].map((cell) => (
+                            <td key={cell} className="px-8 py-5 text-center">
+                                <div className="flex justify-center">
+                                  <input 
+                                    type="checkbox" 
+                                    defaultChecked={cell < 4 || (mod === 'Workforce' && cell === 5)} 
+                                    disabled={mod === 'Settings' && cell > 1}
+                                    className="w-5 h-5 rounded-lg border-2 border-slate-200 text-indigo-600 focus:ring-indigo-500/20 transition-all cursor-pointer accent-indigo-600" 
+                                  />
+                                </div>
+                            </td>
+                          ))}
+                        </tr>
+                    ))}
+                  </tbody>
+              </table>
+            </div>
+        </div>
+      </div>
+    );
+  };
 
   const renderIntegrations = () => (
     <div className="space-y-10">
@@ -567,7 +684,8 @@ const Settings: React.FC = () => {
                 {activeSection === 'security' && renderSecurity()}
                 {activeSection === 'workflows' && renderWorkflows()}
                 {activeSection === 'api' && renderApi()}
-                {['org', 'email', 'notifications', 'data'].includes(activeSection) && renderPlaceholder(
+                {activeSection === 'org' && renderOrg()}
+                {['email', 'notifications', 'data'].includes(activeSection) && renderPlaceholder(
                   sections.find(s => s.id === activeSection)?.name || 'In Development',
                   "We're crafting an extraordinary experience for this module. It will be available in an upcoming release."
                 )}
