@@ -9,12 +9,21 @@ import {
   Eye, EyeOff, Key, Monitor, FileText, 
   Calendar, MapPin, Sliders, Smartphone,
   Info, ArrowRight, UserPlus, MoreHorizontal,
-  LayoutGrid, Share2, Terminal, Code
+  LayoutGrid, Share2, Terminal, Code,
+  Copy, KeyRound, Loader2, PlaySquare, Workflow
 } from 'lucide-react';
+import { useSettings, useUpdateSettings, useApiKeys, useCreateApiKey, useDeleteApiKey } from '../../api/client';
 
 const Settings: React.FC = () => {
   const [activeSection, setActiveSection] = useState('profile');
   const [isSaving, setIsSaving] = useState(false);
+  const [newKeyName, setNewKeyName] = useState('');
+
+  const { data: settings, isLoading: isSettingsLoading } = useSettings();
+  const updateSettingsMutation = useUpdateSettings();
+  const { data: apiKeys, isLoading: isKeysLoading } = useApiKeys();
+  const createApiKeyMutation = useCreateApiKey();
+  const deleteApiKeyMutation = useDeleteApiKey();
 
   const sections = [
     { id: 'profile', name: 'Company Profile', icon: <Building2 size={18} />, group: 'General' },
@@ -325,6 +334,181 @@ const Settings: React.FC = () => {
     </div>
   );
 
+  const renderSecurity = () => {
+    if (isSettingsLoading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-indigo-500" size={32} /></div>;
+    return (
+      <div className="space-y-10">
+        <div className="flex justify-between items-end">
+          <div>
+            <h2 className="text-2xl font-black text-slate-800">Security & Privacy</h2>
+            <p className="text-sm text-slate-500 font-medium">Configure access controls, MFA requirements, and password policies.</p>
+          </div>
+          <button 
+            onClick={() => updateSettingsMutation.mutate({ 
+              require2fa: !settings?.require2fa,
+              passwordMinLength: settings?.passwordMinLength || 12,
+              sessionTimeoutMins: settings?.sessionTimeoutMins || 60
+            })}
+            disabled={updateSettingsMutation.isPending}
+            className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-100 flex items-center gap-2"
+          >
+            {updateSettingsMutation.isPending ? <span className="flex items-center gap-2 animate-pulse"><Loader2 className="animate-spin" size={16} /> Saving...</span> : 'Save Changes'}
+          </button>
+        </div>
+
+        <div className="bg-white rounded-[3rem] border border-slate-200 shadow-sm p-10 space-y-8">
+          <div className="flex items-center justify-between p-6 border-2 border-slate-100 rounded-2xl">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-rose-50 text-rose-500 rounded-2xl flex items-center justify-center">
+                <ShieldCheck size={24} />
+              </div>
+              <div>
+                <h4 className="font-bold text-slate-800">Require Two-Factor Authentication (2FA)</h4>
+                <p className="text-xs font-medium text-slate-500">Enforce MFA for all admin and employee accounts.</p>
+              </div>
+            </div>
+            <button 
+              onClick={() => updateSettingsMutation.mutate({ require2fa: !settings?.require2fa })}
+              className={`w-14 h-8 rounded-full transition-colors relative ${settings?.require2fa ? 'bg-indigo-500' : 'bg-slate-200'}`}
+            >
+              <div className={`w-6 h-6 bg-white rounded-full absolute top-1 transition-transform ${settings?.require2fa ? 'translate-x-7' : 'translate-x-1'}`} />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Password Minimum Length</label>
+              <input 
+                type="number" 
+                value={settings?.passwordMinLength || 12} 
+                onChange={(e) => updateSettingsMutation.mutate({ passwordMinLength: parseInt(e.target.value) })}
+                className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none focus:ring-4 focus:ring-indigo-500/10 font-bold" 
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Session Timeout (Minutes)</label>
+              <input 
+                type="number" 
+                value={settings?.sessionTimeoutMins || 60} 
+                onChange={(e) => updateSettingsMutation.mutate({ sessionTimeoutMins: parseInt(e.target.value) })}
+                className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none focus:ring-4 focus:ring-indigo-500/10 font-bold" 
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderWorkflows = () => (
+    <div className="space-y-10">
+      <div className="flex justify-between items-end">
+        <div>
+          <h2 className="text-2xl font-black text-slate-800">HR Workflows & Automations</h2>
+          <p className="text-sm text-slate-500 font-medium">Configure automated task pipelines for onboarding and offboarding.</p>
+        </div>
+      </div>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {['Onboarding Pipeline', 'Offboarding Pipeline', 'Leave Approvals', 'Payroll Locking'].map((flow) => (
+          <div key={flow} className="bg-white p-8 rounded-[2.5rem] border border-slate-200 hover:border-indigo-300 hover:shadow-lg transition-all group cursor-pointer relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50 rounded-bl-[100px] -z-10 group-hover:scale-110 transition-transform" />
+            <Workflow className="text-indigo-500 mb-6" size={32} />
+            <h3 className="text-xl font-black text-slate-800 mb-2">{flow}</h3>
+            <p className="text-xs font-medium text-slate-500 mb-6">Manage automated steps, triggers, and assignees.</p>
+            <button className="text-[10px] font-black uppercase tracking-widest text-indigo-600 flex items-center gap-2">
+              Edit Pipeline <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  const renderApi = () => (
+    <div className="space-y-10">
+      <div className="flex justify-between items-end">
+        <div>
+          <h2 className="text-2xl font-black text-slate-800">API Access & Webhooks</h2>
+          <p className="text-sm text-slate-500 font-medium">Manage developer API keys and real-time event webhooks.</p>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-[3rem] border border-slate-200 shadow-sm p-10 space-y-8">
+        <h3 className="font-black text-slate-800 text-lg">Generate New Key</h3>
+        <div className="flex gap-4">
+          <input 
+            type="text" 
+            placeholder="Key Description (e.g., Zapier Integration)" 
+            value={newKeyName}
+            onChange={(e) => setNewKeyName(e.target.value)}
+            className="flex-1 px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none focus:ring-4 focus:ring-indigo-500/10 font-bold" 
+          />
+          <button 
+            onClick={() => {
+              if (newKeyName) {
+                createApiKeyMutation.mutate({ name: newKeyName });
+                setNewKeyName('');
+              }
+            }}
+            disabled={createApiKeyMutation.isPending || !newKeyName}
+            className="px-8 py-4 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 transition-colors"
+          >
+            {createApiKeyMutation.isPending ? 'Generating...' : 'Create Key'}
+          </button>
+        </div>
+
+        <div className="mt-8">
+          <h3 className="font-black text-slate-800 text-lg mb-6">Active API Keys</h3>
+          {isKeysLoading ? (
+            <Loader2 className="animate-spin text-indigo-500" />
+          ) : (
+            <div className="space-y-4">
+              {apiKeys?.length === 0 && <p className="text-sm font-medium text-slate-500">No active API keys found.</p>}
+              {apiKeys?.map((key: any) => (
+                <div key={key.id} className="flex items-center justify-between p-6 bg-slate-50 rounded-2xl border border-slate-200">
+                  <div className="flex items-center gap-4">
+                    <KeyRound className="text-indigo-500" size={24} />
+                    <div>
+                      <h4 className="font-bold text-slate-800">{key.name}</h4>
+                      <p className="text-xs font-mono font-medium text-slate-500 mt-1">
+                        {key.key.substring(0, 8)}...{key.key.substring(key.key.length - 4)}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <button className="p-3 bg-white text-slate-400 hover:text-indigo-600 rounded-xl shadow-sm transition-colors border border-slate-200">
+                      <Copy size={16} />
+                    </button>
+                    <button 
+                      onClick={() => deleteApiKeyMutation.mutate(key.id)}
+                      className="p-3 bg-white text-rose-400 hover:bg-rose-50 hover:text-rose-600 rounded-xl shadow-sm transition-colors border border-slate-200"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderPlaceholder = (title: string, desc: string) => (
+    <div className="flex flex-col items-center justify-center text-center py-20 px-4">
+      <div className="w-32 h-32 bg-indigo-50 rounded-full flex items-center justify-center mb-8 border-4 border-white shadow-xl shadow-indigo-100/50">
+        <PlaySquare size={48} className="text-indigo-300" />
+      </div>
+      <h2 className="text-3xl font-black text-slate-800 mb-4 tracking-tight">{title}</h2>
+      <p className="text-slate-500 font-medium max-w-md">{desc}</p>
+      <button className="mt-8 px-8 py-3 bg-white text-indigo-600 border-2 border-indigo-100 rounded-2xl font-black text-xs uppercase tracking-widest hover:border-indigo-500 transition-colors">
+        Notify Me When Live
+      </button>
+    </div>
+  );
+
   return (
     <div className="flex flex-col lg:flex-row gap-10 min-h-[calc(100vh-160px)] pb-20">
        {/* Settings Sidebar */}
@@ -380,19 +564,12 @@ const Settings: React.FC = () => {
                 {activeSection === 'roles' && renderRoles()}
                 {activeSection === 'integrations' && renderIntegrations()}
                 {activeSection === 'audit' && renderAudit()}
-                {!['profile', 'roles', 'integrations', 'audit'].includes(activeSection) && (
-                  <div className="bg-white p-24 rounded-[4rem] border border-slate-200 shadow-sm flex flex-col items-center justify-center text-center">
-                    <div className="w-32 h-32 bg-indigo-50 rounded-[2.5rem] flex items-center justify-center text-indigo-300 mb-10 shadow-inner">
-                      <Terminal size={64} strokeWidth={1.5} />
-                    </div>
-                    <h3 className="text-3xl font-black text-slate-800 mb-4 tracking-tighter">System Configuration</h3>
-                    <p className="text-slate-500 max-w-sm font-medium text-lg leading-relaxed">
-                       This section is being prepared for deep customization of the ZenHR automated logic.
-                    </p>
-                    <button className="mt-12 px-10 py-5 bg-indigo-600 text-white rounded-[2rem] font-black text-sm uppercase tracking-widest shadow-2xl shadow-indigo-100 hover:scale-105 transition-all">
-                       Explore API Docs
-                    </button>
-                  </div>
+                {activeSection === 'security' && renderSecurity()}
+                {activeSection === 'workflows' && renderWorkflows()}
+                {activeSection === 'api' && renderApi()}
+                {['org', 'email', 'notifications', 'data'].includes(activeSection) && renderPlaceholder(
+                  sections.find(s => s.id === activeSection)?.name || 'In Development',
+                  "We're crafting an extraordinary experience for this module. It will be available in an upcoming release."
                 )}
              </motion.div>
           </AnimatePresence>

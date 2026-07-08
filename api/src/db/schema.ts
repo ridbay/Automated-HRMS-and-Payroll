@@ -4,3 +4,6 @@ export * from '../models/attendance.model';
 export * from '../models/leave.model';
 export * from '../models/misc.model';
 export * from '../models/payroll.model';
+export * from '../models/settings.model';
+export * from '../models/org.model';
+export * from '../models/role.model';

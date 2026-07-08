@@ -1,5 +1,5 @@
 import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core';
-import { relations } from 'drizzle-orm';
+import { relations, sql } from 'drizzle-orm';
 import { companies } from './company.model';
 
 export const employees = sqliteTable('employees', {
@@ -39,6 +39,8 @@ export const employees = sqliteTable('employees', {
   accountNumber: text('account_number'),
   accountName: text('account_name'),
   payoutMethod: text('payout_method'),
+  createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text('updated_at').$onUpdate(() => new Date().toISOString()),
 });
 
 export const emergencyContacts = sqliteTable('emergency_contacts', {
@@ -50,6 +52,8 @@ export const emergencyContacts = sqliteTable('emergency_contacts', {
   phone: text('phone').notNull(),
   email: text('email'),
   isPrimary: integer('is_primary', { mode: 'boolean' }).notNull().default(false),
+  createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text('updated_at').$onUpdate(() => new Date().toISOString()),
 });
 
 export const employeesRelations = relations(employees, ({ many }) => ({

@@ -1,4 +1,5 @@
 import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
+import { sql } from 'drizzle-orm';
 import { companies } from './company.model';
 
 export const walletTransactions = sqliteTable('wallet_transactions', {
@@ -9,6 +10,8 @@ export const walletTransactions = sqliteTable('wallet_transactions', {
   description: text('description').notNull(),
   timestamp: text('timestamp').notNull(),
   status: text('status').notNull(), // 'completed' | 'pending' | 'failed'
+  createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text('updated_at').$onUpdate(() => new Date().toISOString()),
 });
 
 export const jobRequisitions = sqliteTable('job_requisitions', {
@@ -24,4 +27,6 @@ export const jobRequisitions = sqliteTable('job_requisitions', {
   dateOpened: text('date_opened').notNull(),
   targetHireDate: text('target_hire_date').notNull(),
   daysOpen: integer('days_open').notNull(),
+  createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text('updated_at').$onUpdate(() => new Date().toISOString()),
 });

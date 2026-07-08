@@ -86,6 +86,104 @@ export const useCreateEmployee = () => {
   });
 };
 
+export const useDeleteJobRequisition = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const response = await fetchWithTenant(`${API_URL}/admin/jobs/${id}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) throw new Error('Failed to delete job requisition');
+      const json = await response.json();
+      return json;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['jobs'] });
+    },
+  });
+};
+
+// --- Settings & API Keys API ---
+
+export const useSettings = () => {
+  return useQuery({
+    queryKey: ['settings'],
+    queryFn: async () => {
+      const response = await fetchWithTenant(`${API_URL}/admin/settings`);
+      if (!response.ok) throw new Error('Failed to fetch settings');
+      const json = await response.json();
+      return json;
+    },
+  });
+};
+
+export const useUpdateSettings = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: any) => {
+      const response = await fetchWithTenant(`${API_URL}/admin/settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) throw new Error('Failed to update settings');
+      const json = await response.json();
+      return json;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['settings'] });
+    },
+  });
+};
+
+export const useApiKeys = () => {
+  return useQuery({
+    queryKey: ['api-keys'],
+    queryFn: async () => {
+      const response = await fetchWithTenant(`${API_URL}/admin/api-keys`);
+      if (!response.ok) throw new Error('Failed to fetch API keys');
+      const json = await response.json();
+      return json;
+    },
+  });
+};
+
+export const useCreateApiKey = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: { name: string }) => {
+      const response = await fetchWithTenant(`${API_URL}/admin/api-keys`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) throw new Error('Failed to create API key');
+      const json = await response.json();
+      return json;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['api-keys'] });
+    },
+  });
+};
+
+export const useDeleteApiKey = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const response = await fetchWithTenant(`${API_URL}/admin/api-keys/${id}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) throw new Error('Failed to delete API key');
+      const json = await response.json();
+      return json;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['api-keys'] });
+    },
+  });
+};
+
 export const useJobRequisitions = () => {
   return useQuery({
     queryKey: ['jobRequisitions'],

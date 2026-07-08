@@ -13,6 +13,7 @@ export const payrollRuns = sqliteTable('payroll_runs', {
   totalNet: integer('total_net').notNull().default(0),
   totalTaxes: integer('total_taxes').notNull().default(0),
   createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`).$onUpdate(() => new Date().toISOString()),
 });
 
 export const payslips = sqliteTable('payslips', {
@@ -25,6 +26,8 @@ export const payslips = sqliteTable('payslips', {
   taxDeductions: integer('tax_deductions').notNull().default(0),
   pensionDeductions: integer('pension_deductions').notNull().default(0),
   netPay: integer('net_pay').notNull().default(0),
+  createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text('updated_at').$onUpdate(() => new Date().toISOString()),
 });
 
 export const payrollRunsRelations = relations(payrollRuns, ({ many }) => ({

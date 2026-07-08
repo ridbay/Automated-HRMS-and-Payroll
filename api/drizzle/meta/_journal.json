@@ -36,6 +36,41 @@
       "when": 1783507552279,
       "tag": "0004_amazing_vermin",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1783510984304,
+      "tag": "0005_careful_songbird",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1783512117238,
+      "tag": "0006_friendly_genesis",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1783512261318,
+      "tag": "0007_wooden_scourge",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1783512418773,
+      "tag": "0008_sturdy_reptil",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1783512471238,
+      "tag": "0009_fresh_bromley",
+      "breakpoints": true
     }
   ]
 }
