@@ -8140,17 +8140,17 @@ var employees = sqliteTable("employees", {
   gender: text("gender"),
   nationality: text("nationality"),
   maritalStatus: text("marital_status"),
-  role: text("role").notNull(),
-  department: text("department").notNull(),
+  role: text("role"),
+  department: text("department"),
   location: text("location"),
-  employmentType: text("employment_type").notNull(),
+  employmentType: text("employment_type"),
   // 'Full-time' | 'Contract' | etc.
-  status: text("status").notNull(),
+  status: text("status").notNull().default("onboarding"),
   // 'active' | 'onboarding' | etc.
-  salary: integer("salary").notNull(),
+  salary: integer("salary"),
   avatar: text("avatar"),
   baseSalary: integer("base_salary"),
-  hireDate: text("hire_date").notNull(),
+  hireDate: text("hire_date"),
   probationEnd: text("probation_end"),
   managerId: text("manager_id"),
   managerName: text("manager_name"),
@@ -8249,6 +8249,9 @@ var EmployeeService = class {
   }
   async createForCompany(companyId, payload) {
     const { emergencyContacts: emergencyContacts2, ...employeeData } = payload;
+    if (!employeeData.id) {
+      employeeData.id = `EMP-${crypto.randomUUID().split("-")[0].toUpperCase()}`;
+    }
     const result = await this.db.insert(employees).values({ ...employeeData, companyId }).returning();
     const newEmployee = result[0];
     if (emergencyContacts2 && emergencyContacts2.length > 0) {

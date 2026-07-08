@@ -13,15 +13,15 @@ export const employees = sqliteTable('employees', {
   gender: text('gender'),
   nationality: text('nationality'),
   maritalStatus: text('marital_status'),
-  role: text('role').notNull(),
-  department: text('department').notNull(),
+  role: text('role'),
+  department: text('department'),
   location: text('location'),
-  employmentType: text('employment_type').notNull(), // 'Full-time' | 'Contract' | etc.
-  status: text('status').notNull(), // 'active' | 'onboarding' | etc.
-  salary: integer('salary').notNull(),
+  employmentType: text('employment_type'), // 'Full-time' | 'Contract' | etc.
+  status: text('status').notNull().default('onboarding'), // 'active' | 'onboarding' | etc.
+  salary: integer('salary'),
   avatar: text('avatar'),
   baseSalary: integer('base_salary'),
-  hireDate: text('hire_date').notNull(),
+  hireDate: text('hire_date'),
   probationEnd: text('probation_end'),
   managerId: text('manager_id'),
   managerName: text('manager_name'),

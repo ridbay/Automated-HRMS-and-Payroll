@@ -21,6 +21,11 @@ export class EmployeeService {
   async createForCompany(companyId: string, payload: any) {
     const { emergencyContacts, ...employeeData } = payload;
     
+    // Auto generate ID if not provided
+    if (!employeeData.id) {
+      employeeData.id = `EMP-${crypto.randomUUID().split('-')[0].toUpperCase()}`;
+    }
+    
     // Insert the employee
     const result = await this.db
       .insert(schema.employees)

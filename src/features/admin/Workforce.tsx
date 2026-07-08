@@ -1497,7 +1497,6 @@ const Workforce: React.FC = () => {
                       else {
                         createEmployeeMutation.mutate(
                           {
-                            id: `EMP-${Math.floor(1000 + Math.random() * 9000)}`,
                             ...formData,
                             hireDate: formData.hireDate || new Date().toISOString().split("T")[0],
                           },
