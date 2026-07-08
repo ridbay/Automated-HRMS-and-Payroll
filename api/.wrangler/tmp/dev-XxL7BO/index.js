@@ -8462,6 +8462,9 @@ var EmployeeService = class {
       bankName: data.bankName,
       accountNumber: data.accountNumber,
       accountName: data.accountName,
+      secondaryBankName: data.secondaryBankName,
+      secondaryAccountNumber: data.secondaryAccountNumber,
+      secondaryAccountName: data.secondaryAccountName,
       maritalStatus: data.maritalStatus,
       avatar: data.avatar
     };
