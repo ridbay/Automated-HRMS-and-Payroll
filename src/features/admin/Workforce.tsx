@@ -56,12 +56,13 @@ import {
   Check,
   FileCheck,
 } from "lucide-react";
-import { MOCK_EMPLOYEES } from "../../data/mocks";
 import { Employee } from "../../types/index";
+import { useEmployees } from "../../api/client";
 import Celebration from "../../components/Celebration";
 import EmployeeDetail from "./EmployeeDetail";
 
 const Workforce: React.FC = () => {
+  const { data: employees = [] } = useEmployees();
   const [viewMode, setViewMode] = useState<"grid" | "list" | "org">("grid");
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [wizardStep, setWizardStep] = useState(1);
@@ -87,7 +88,7 @@ const Workforce: React.FC = () => {
   };
 
   const filteredEmployees = useMemo(() => {
-    return MOCK_EMPLOYEES.filter((emp) => {
+    return employees.filter((emp) => {
       const matchesSearch =
         emp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         emp.id.toLowerCase().includes(searchTerm.toLowerCase());
@@ -97,7 +98,7 @@ const Workforce: React.FC = () => {
         filters.status.length === 0 || filters.status.includes(emp.status);
       return matchesSearch && matchesDept && matchesStatus;
     });
-  }, [searchTerm, filters]);
+  }, [searchTerm, filters, employees]);
 
   const toggleSelect = (id: string) => {
     setSelectedEmployees((prev) =>

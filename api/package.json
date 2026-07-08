@@ -1,0 +1,24 @@
+{
+  "name": "zenhr-api",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev src/index.ts",
+    "deploy": "wrangler deploy --minify src/index.ts",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "wrangler d1 migrations apply zenhr-d1 --local",
+    "db:studio": "drizzle-kit studio",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.45.2",
+    "hono": "^4.12.28"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260702.1",
+    "drizzle-kit": "^0.31.10",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10",
+    "wrangler": "^4.86.0"
+  }
+}
