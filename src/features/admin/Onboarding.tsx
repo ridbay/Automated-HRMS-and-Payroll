@@ -19,8 +19,10 @@ import {
   Briefcase,
   X,
 } from "lucide-react";
-import { MOCK_WORKFLOWS, MOCK_EMPLOYEES, Workflow } from "../../data/mocks";
+import { MOCK_WORKFLOWS, Workflow } from "../../data/mocks";
 import { useNavigation } from "../../context/NavigationContext";
+import { useEmployees } from "../../api/client";
+import { Loader2 } from "lucide-react";
 
 const Onboarding: React.FC = () => {
   const [selectedWorkflow, setSelectedWorkflow] = useState<Workflow | null>(
@@ -31,6 +33,7 @@ const Onboarding: React.FC = () => {
   );
   
   const { setActiveTab: setMainTab } = useNavigation();
+  const { data: employees, isLoading: isEmployeesLoading } = useEmployees();
   const [isOffboardingWizardOpen, setIsOffboardingWizardOpen] = useState(false);
   const [offboardingStep, setOffboardingStep] = useState(1);
   const [offboardingData, setOffboardingData] = useState<any>({});
@@ -146,7 +149,7 @@ const Onboarding: React.FC = () => {
       {/* Workflow List */}
       <div className="space-y-4">
         {workflows.map((workflow) => {
-          const employee = MOCK_EMPLOYEES.find(
+          const employee = employees?.find(
             (e) => e.id === workflow.employeeId,
           ) || { avatar: "", role: "Unknown", department: "Unknown" };
 
@@ -331,6 +334,179 @@ const Onboarding: React.FC = () => {
               </div>
             </motion.div>
           </>
+        )}
+      </AnimatePresence>
+
+      {/* Offboarding Wizard Modal */}
+      <AnimatePresence>
+        {isOffboardingWizardOpen && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-6">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => {
+                setIsOffboardingWizardOpen(false);
+                setOffboardingStep(1);
+              }}
+              className="absolute inset-0 bg-slate-900/80 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              className="relative bg-white w-full max-w-4xl max-h-[90vh] rounded-[3rem] shadow-2xl overflow-hidden flex flex-col"
+            >
+              <div className="bg-slate-900 p-10 text-white flex justify-between items-start shrink-0">
+                <div className="flex items-center gap-6">
+                  <div className="w-14 h-14 bg-rose-500 rounded-2xl flex items-center justify-center shadow-lg">
+                    <UserMinus size={28} />
+                  </div>
+                  <div>
+                    <h2 className="text-3xl font-black tracking-tighter">
+                      Initiate Offboarding
+                    </h2>
+                    <p className="text-slate-400 text-xs font-bold mt-1 uppercase tracking-widest">
+                      Step {offboardingStep} of 4 • Employee Departure
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-2 mt-2">
+                  {[1, 2, 3, 4].map((s) => (
+                    <div
+                      key={s}
+                      className={`h-1.5 transition-all duration-500 rounded-full ${offboardingStep >= s ? "w-10 bg-rose-500" : "w-2 bg-slate-700"}`}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-12 scrollbar-hide">
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={offboardingStep}
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                  >
+                    {offboardingStep === 1 && (
+                      <div className="space-y-8 max-w-2xl mx-auto">
+                        <h3 className="text-2xl font-black text-slate-800">Select Employee</h3>
+                        <p className="text-slate-500 font-medium">Choose an active employee to initiate the offboarding journey.</p>
+                        <div className="space-y-4">
+                          {isEmployeesLoading ? (
+                            <div className="flex items-center justify-center py-10">
+                              <Loader2 className="animate-spin text-rose-500" size={32} />
+                            </div>
+                          ) : (
+                            employees?.filter((e) => e.status === "active").map((emp) => (
+                              <div key={emp.id} 
+                                onClick={() => setOffboardingData({ ...offboardingData, employeeId: emp.id })}
+                                className={`p-6 rounded-2xl border-2 flex items-center gap-6 cursor-pointer transition-all ${offboardingData.employeeId === emp.id ? 'border-rose-500 bg-rose-50' : 'border-slate-200 hover:border-slate-300 bg-white'}`}>
+                                <img src={emp.avatar || `https://ui-avatars.com/api/?name=${emp.firstName}`} className="w-12 h-12 rounded-full" />
+                                <div>
+                                  <h4 className="font-bold text-slate-800">{emp.firstName} {emp.lastName}</h4>
+                                  <p className="text-xs font-medium text-slate-500">{emp.role || 'Employee'}</p>
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    {offboardingStep === 2 && (
+                      <div className="space-y-8 max-w-2xl mx-auto">
+                        <h3 className="text-2xl font-black text-slate-800">Exit Details</h3>
+                        <div className="space-y-6">
+                          <div>
+                            <label className="block text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2">Reason for Leaving</label>
+                            <select className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-700 outline-none focus:border-rose-500">
+                              <option>Resignation</option>
+                              <option>Termination</option>
+                              <option>Contract Ended</option>
+                              <option>Retirement</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2">Last Working Day</label>
+                            <input type="date" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-700 outline-none focus:border-rose-500" />
+                          </div>
+                          <label className="flex items-center gap-3 p-4 border border-slate-200 rounded-xl bg-white cursor-pointer hover:bg-slate-50">
+                            <input type="checkbox" className="w-5 h-5 rounded border-slate-300 text-rose-500 focus:ring-rose-500" />
+                            <span className="font-bold text-sm text-slate-700">Schedule Exit Interview</span>
+                          </label>
+                        </div>
+                      </div>
+                    )}
+                    {offboardingStep === 3 && (
+                      <div className="space-y-8 max-w-2xl mx-auto">
+                        <h3 className="text-2xl font-black text-slate-800">Handover & Assets</h3>
+                        <div className="space-y-6">
+                          <div>
+                            <label className="block text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2">Handover Responsibilities To</label>
+                            <select className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-700 outline-none focus:border-rose-500">
+                              <option value="">Select Employee...</option>
+                              {employees?.map((e) => <option key={e.id}>{e.firstName} {e.lastName}</option>)}
+                            </select>
+                          </div>
+                          <div className="p-6 bg-slate-50 rounded-2xl border border-slate-200 space-y-4">
+                            <h4 className="text-sm font-black text-slate-800">Device Return Checklist</h4>
+                            {['MacBook Pro', 'Office Keys', 'ID Card', 'Corporate Credit Card'].map((item) => (
+                              <label key={item} className="flex items-center gap-3 cursor-pointer">
+                                <input type="checkbox" className="w-5 h-5 rounded border-slate-300 text-rose-500 focus:ring-rose-500" />
+                                <span className="font-medium text-slate-700 text-sm">{item}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    {offboardingStep === 4 && (
+                      <div className="space-y-8 max-w-2xl mx-auto text-center">
+                        <div className="w-24 h-24 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-xl shadow-rose-100">
+                          <UserMinus size={48} />
+                        </div>
+                        <h3 className="text-3xl font-black text-slate-800">Confirm Offboarding</h3>
+                        <p className="text-slate-500 font-medium leading-relaxed">You are about to initiate the offboarding process. This will generate the necessary tasks and notify relevant departments.</p>
+                        <div className="bg-slate-50 p-8 rounded-3xl text-left border border-slate-200 mt-8">
+                          <p className="text-sm font-black text-slate-800 mb-4 uppercase tracking-widest">Next Steps Automated:</p>
+                          <ul className="text-sm text-slate-600 space-y-4">
+                            <li className="flex items-center gap-3"><CheckCircle2 size={16} className="text-emerald-500"/> Revoke IT access on Last Working Day</li>
+                            <li className="flex items-center gap-3"><CheckCircle2 size={16} className="text-emerald-500"/> Notify payroll for final settlement calculation</li>
+                            <li className="flex items-center gap-3"><CheckCircle2 size={16} className="text-emerald-500"/> Schedule exit interview</li>
+                            <li className="flex items-center gap-3"><CheckCircle2 size={16} className="text-emerald-500"/> Send asset recovery instructions</li>
+                          </ul>
+                        </div>
+                      </div>
+                    )}
+                  </motion.div>
+                </AnimatePresence>
+              </div>
+
+              <div className="p-8 bg-slate-50 border-t border-slate-100 flex justify-between items-center shrink-0">
+                <button
+                  onClick={() => setOffboardingStep((prev) => Math.max(1, prev - 1))}
+                  className={`px-8 py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl font-black text-xs uppercase tracking-widest transition-all ${offboardingStep === 1 ? "opacity-30 pointer-events-none" : "hover:bg-slate-50"}`}
+                >
+                  Go Back
+                </button>
+                <div className="flex gap-4">
+                  <button
+                    onClick={() => {
+                      if (offboardingStep < 4) setOffboardingStep((prev) => prev + 1);
+                      else {
+                        setIsOffboardingWizardOpen(false);
+                        setOffboardingStep(1);
+                      }
+                    }}
+                    className={`px-10 py-4 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl transition-all flex items-center gap-3 ${!offboardingData.employeeId && offboardingStep === 1 ? 'bg-slate-300 pointer-events-none' : 'bg-rose-600 shadow-rose-200 hover:scale-105'}`}
+                  >
+                    {offboardingStep === 4 ? "Confirm Offboarding" : "Continue"}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>
