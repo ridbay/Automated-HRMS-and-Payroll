@@ -71,6 +71,7 @@ const Workforce: React.FC = () => {
     employmentType: "Full-time",
     status: "active",
     salary: 120000,
+    emergencyContacts: [{ name: "", relationship: "Spouse", phone: "", email: "", isPrimary: true }],
   });
 
   const [viewMode, setViewMode] = useState<"grid" | "list" | "org">("grid");
@@ -177,8 +178,9 @@ const Workforce: React.FC = () => {
                   </label>
                   <input
                     type="text"
+                    disabled
                     placeholder="Auto-generated"
-                    className="w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-bold italic text-indigo-600"
+                    className="w-full px-6 py-4 bg-slate-100/50 rounded-2xl outline-none font-bold italic text-indigo-400 cursor-not-allowed"
                   />
                 </div>
                 <div className="space-y-2 col-span-1 md:col-span-2">
@@ -199,7 +201,9 @@ const Workforce: React.FC = () => {
                   </label>
                   <input
                     type="tel"
-                    placeholder="+234 (803) 000-0000"
+                    value={formData.phone || ""}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    placeholder="+1 (555) 000-0000"
                     className="w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-bold"
                   />
                 </div>
@@ -209,17 +213,23 @@ const Workforce: React.FC = () => {
                   </label>
                   <input
                     type="date"
-                    className="w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-bold"
+                    value={formData.dob || ""}
+                    onChange={(e) => setFormData({ ...formData, dob: e.target.value })}
+                    className="w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-bold text-slate-500"
                   />
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
                     Gender
                   </label>
-                  <select className="w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-bold appearance-none">
+                  <select 
+                    value={formData.gender || "Select..."}
+                    onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
+                    className="w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-bold"
+                  >
                     <option>Select...</option>
-                    <option>Male</option>
                     <option>Female</option>
+                    <option>Male</option>
                     <option>Non-binary</option>
                     <option>Prefer not to say</option>
                   </select>
@@ -228,7 +238,11 @@ const Workforce: React.FC = () => {
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
                     Marital Status
                   </label>
-                  <select className="w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-bold appearance-none">
+                  <select 
+                    value={formData.maritalStatus || "Select..."}
+                    onChange={(e) => setFormData({ ...formData, maritalStatus: e.target.value })}
+                    className="w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-bold"
+                  >
                     <option>Select...</option>
                     <option>Single</option>
                     <option>Married</option>
@@ -239,11 +253,17 @@ const Workforce: React.FC = () => {
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
                     Nationality
                   </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Nigerian"
+                  <select 
+                    value={formData.nationality || "Select Country..."}
+                    onChange={(e) => setFormData({ ...formData, nationality: e.target.value })}
                     className="w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-bold"
-                  />
+                  >
+                    <option>Select Country...</option>
+                    <option>United States</option>
+                    <option>United Kingdom</option>
+                    <option>Nigeria</option>
+                    <option>Canada</option>
+                  </select>
                 </div>
               </div>
             </div>
@@ -265,7 +285,11 @@ const Workforce: React.FC = () => {
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
                   Employment Type
                 </label>
-                <select className="w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-bold appearance-none">
+                <select 
+                  value={formData.employmentType || "Full-time"}
+                  onChange={(e) => setFormData({ ...formData, employmentType: e.target.value })}
+                  className="w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-bold appearance-none"
+                >
                   <option>Full-time</option>
                   <option>Contract</option>
                   <option>Intern</option>
@@ -276,7 +300,11 @@ const Workforce: React.FC = () => {
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
                   Department
                 </label>
-                <select className="w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-bold appearance-none">
+                <select 
+                  value={formData.department || "Engineering"}
+                  onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                  className="w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-bold appearance-none"
+                >
                   <option>Engineering</option>
                   <option>Design</option>
                   <option>People</option>
@@ -290,6 +318,8 @@ const Workforce: React.FC = () => {
                 </label>
                 <input
                   type="text"
+                  value={formData.role || ""}
+                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                   placeholder="e.g. Senior Backend Dev"
                   className="w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-bold"
                 />
@@ -298,7 +328,11 @@ const Workforce: React.FC = () => {
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
                   Work Location
                 </label>
-                <select className="w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-bold appearance-none">
+                <select 
+                  value={formData.location || "HQ - New York"}
+                  onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                  className="w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-bold appearance-none"
+                >
                   <option>HQ - New York</option>
                   <option>Lagos Hub</option>
                   <option>London Office</option>
@@ -311,6 +345,8 @@ const Workforce: React.FC = () => {
                 </label>
                 <input
                   type="date"
+                  value={formData.hireDate || ""}
+                  onChange={(e) => setFormData({ ...formData, hireDate: e.target.value })}
                   className="w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-bold"
                 />
               </div>
@@ -339,6 +375,8 @@ const Workforce: React.FC = () => {
                 </label>
                 <input
                   type="text"
+                  value={formData.managerName || ""}
+                  onChange={(e) => setFormData({ ...formData, managerName: e.target.value })}
                   placeholder="Search manager..."
                   className="w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-bold"
                 />
@@ -458,7 +496,11 @@ const Workforce: React.FC = () => {
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
                   Pension Fund Admin (PFA)
                 </label>
-                <select className="w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-bold">
+                <select 
+                  value={formData.pfa || "Select PFA..."}
+                  onChange={(e) => setFormData({ ...formData, pfa: e.target.value })}
+                  className="w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-bold"
+                >
                   <option>Select PFA...</option>
                   <option>Stanbic IBTC Pension</option>
                   <option>ARM Pension</option>
@@ -471,8 +513,10 @@ const Workforce: React.FC = () => {
                 </label>
                 <input
                   type="text"
-                  placeholder="PEN-XXXXXXXX"
-                  className="w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-bold"
+                  value={formData.pensionId || ""}
+                  onChange={(e) => setFormData({ ...formData, pensionId: e.target.value })}
+                  placeholder="PEN-XXXXXX"
+                  className="w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-bold tracking-[0.2em]"
                 />
               </div>
               <div className="space-y-2">
@@ -525,7 +569,11 @@ const Workforce: React.FC = () => {
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
                     Bank Name
                   </label>
-                  <select className="w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-bold">
+                  <select 
+                    value={formData.bankName || "Select Bank..."}
+                    onChange={(e) => setFormData({ ...formData, bankName: e.target.value })}
+                    className="w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-bold"
+                  >
                     <option>Select Bank...</option>
                     <option>Standard Chartered</option>
                     <option>Chase Bank</option>
@@ -551,6 +599,8 @@ const Workforce: React.FC = () => {
                   </label>
                   <input
                     type="text"
+                    value={formData.accountName || ""}
+                    onChange={(e) => setFormData({ ...formData, accountName: e.target.value })}
                     placeholder="Full name on account"
                     className="w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-bold"
                   />
@@ -572,10 +622,11 @@ const Workforce: React.FC = () => {
                     /* Fixed unintentional comparison of index i to string on line 327 */
                     <button
                       key={i}
-                      className={`w-full p-6 rounded-2xl border-2 flex items-center justify-between transition-all ${method === "Automated Wallet (Instant)" ? "border-indigo-500 bg-indigo-500/10" : "border-white/5 bg-white/5 hover:border-white/20"}`}
+                      onClick={() => setFormData({ ...formData, payoutMethod: method })}
+                      className={`w-full p-6 rounded-2xl border-2 flex items-center justify-between transition-all ${formData.payoutMethod === method ? "border-indigo-500 bg-indigo-500/10" : "border-white/5 bg-white/5 hover:border-white/20"}`}
                     >
                       <span className="text-sm font-bold">{method}</span>
-                      {method === "Automated Wallet (Instant)" && (
+                      {formData.payoutMethod === method && (
                         <CheckCircle2 size={20} className="text-indigo-400" />
                       )}
                     </button>
@@ -672,6 +723,12 @@ const Workforce: React.FC = () => {
                       </label>
                       <input
                         type="text"
+                        value={formData.emergencyContacts?.[0]?.name || ""}
+                        onChange={(e) => {
+                          const ec = [...(formData.emergencyContacts || [{}])];
+                          ec[0] = { ...ec[0], name: e.target.value };
+                          setFormData({ ...formData, emergencyContacts: ec });
+                        }}
                         placeholder="Contact Name"
                         className="w-full px-5 py-3 bg-slate-50 border-none rounded-xl outline-none font-bold"
                       />
@@ -680,7 +737,15 @@ const Workforce: React.FC = () => {
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
                         Relationship
                       </label>
-                      <select className="w-full px-5 py-3 bg-slate-50 border-none rounded-xl outline-none font-bold">
+                      <select 
+                        value={formData.emergencyContacts?.[0]?.relationship || "Spouse"}
+                        onChange={(e) => {
+                          const ec = [...(formData.emergencyContacts || [{}])];
+                          ec[0] = { ...ec[0], relationship: e.target.value };
+                          setFormData({ ...formData, emergencyContacts: ec });
+                        }}
+                        className="w-full px-5 py-3 bg-slate-50 border-none rounded-xl outline-none font-bold"
+                      >
                         <option>Spouse</option>
                         <option>Parent</option>
                         <option>Sibling</option>
@@ -693,6 +758,12 @@ const Workforce: React.FC = () => {
                       </label>
                       <input
                         type="tel"
+                        value={formData.emergencyContacts?.[0]?.phone || ""}
+                        onChange={(e) => {
+                          const ec = [...(formData.emergencyContacts || [{}])];
+                          ec[0] = { ...ec[0], phone: e.target.value };
+                          setFormData({ ...formData, emergencyContacts: ec });
+                        }}
                         className="w-full px-5 py-3 bg-slate-50 border-none rounded-xl outline-none font-bold"
                       />
                     </div>
@@ -715,6 +786,12 @@ const Workforce: React.FC = () => {
                       </label>
                       <input
                         type="email"
+                        value={formData.emergencyContacts?.[0]?.email || ""}
+                        onChange={(e) => {
+                          const ec = [...(formData.emergencyContacts || [{}])];
+                          ec[0] = { ...ec[0], email: e.target.value };
+                          setFormData({ ...formData, emergencyContacts: ec });
+                        }}
                         className="w-full px-5 py-3 bg-slate-50 border-none rounded-xl outline-none font-bold"
                       />
                     </div>
@@ -759,16 +836,24 @@ const Workforce: React.FC = () => {
                   </h4>
                   <div className="grid grid-cols-2 gap-6 relative z-10">
                     {[
-                      { l: "Full Name", v: "John Quincy Doe" },
-                      { l: "Role & Dept", v: "Product Lead • Engineering" },
-                      { l: "Start Date", v: "June 1, 2024" },
-                      { l: "Hiring Manager", v: "Sarah Boss" },
+                      { l: "Full Name", v: `${formData.name || 'Pending'} ${formData.lastName || ''}`.trim() || 'Pending' },
+                      { l: "Email", v: formData.email || 'Pending' },
+                      { l: "Phone", v: formData.phone || 'Pending' },
+                      { l: "DOB", v: formData.dob || 'Pending' },
+                      { l: "Gender", v: formData.gender || 'Pending' },
+                      { l: "Nationality", v: formData.nationality || 'Pending' },
+                      { l: "Marital Status", v: formData.maritalStatus || 'Pending' },
+                      { l: "Role & Dept", v: `${formData.role || 'Pending'} • ${formData.department || 'Pending'}` },
+                      { l: "Employment Type", v: formData.employmentType || 'Pending' },
+                      { l: "Start Date", v: formData.hireDate || 'Pending' },
+                      { l: "Location", v: formData.location || 'Pending' },
+                      { l: "Direct Manager", v: formData.managerName || 'Pending' },
                     ].map((item, i) => (
                       <div key={i}>
                         <p className="text-[9px] font-black text-slate-400 uppercase mb-1">
                           {item.l}
                         </p>
-                        <p className="text-sm font-bold text-slate-800">
+                        <p className="text-sm font-bold text-slate-800 break-all">
                           {item.v}
                         </p>
                       </div>
@@ -786,20 +871,46 @@ const Workforce: React.FC = () => {
                         Annual Gross Pay
                       </span>
                       <span className="font-black text-indigo-600 font-mono text-lg">
-                        ₦18,500,000.00
+                        {formData.salary ? `₦${Number(formData.salary).toLocaleString('en-US', { minimumFractionDigits: 2 })}` : 'Pending'}
                       </span>
                     </div>
                     <div className="flex justify-between items-center text-sm border-t border-slate-200 pt-4">
                       <span className="font-bold text-slate-500 uppercase tracking-tight text-xs">
-                        Payout Frequency
+                        Payout Method
                       </span>
-                      <span className="font-black text-slate-800">Monthly</span>
+                      <span className="font-black text-slate-800">{formData.payoutMethod || 'Pending'}</span>
                     </div>
                   </div>
                 </div>
               </section>
 
               <section className="space-y-6">
+                <div className="bg-slate-50 p-8 rounded-[2.5rem] border border-slate-100 space-y-8 relative overflow-hidden">
+                  <Receipt className="absolute -top-6 -right-6 w-32 h-32 text-indigo-100/50" />
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] relative z-10">
+                    Statutory & Banking
+                  </h4>
+                  <div className="grid grid-cols-2 gap-6 relative z-10">
+                    {[
+                      { l: "Tax ID (TIN)", v: formData.tin || 'Pending' },
+                      { l: "PFA", v: formData.pfa || 'Pending' },
+                      { l: "Pension ID", v: formData.pensionId || 'Pending' },
+                      { l: "Bank Name", v: formData.bankName || 'Pending' },
+                      { l: "Account No.", v: formData.accountNumber || 'Pending' },
+                      { l: "Account Name", v: formData.accountName || 'Pending' },
+                    ].map((item, i) => (
+                      <div key={i}>
+                        <p className="text-[9px] font-black text-slate-400 uppercase mb-1">
+                          {item.l}
+                        </p>
+                        <p className="text-sm font-bold text-slate-800 break-all">
+                          {item.v}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="p-8 bg-indigo-900 rounded-[3rem] text-white shadow-2xl relative overflow-hidden">
                   <Sparkles className="absolute -bottom-10 -right-10 w-48 h-48 text-indigo-500/10" />
                   <h4 className="text-xl font-black mb-6">
