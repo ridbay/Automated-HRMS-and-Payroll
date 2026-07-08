@@ -1,5 +1,5 @@
 import { eq, and } from 'drizzle-orm';
-import { schema } from '../db';
+import * as schema from '../db/schema';
 
 export class PayrollService {
   constructor(private db: any) {}
