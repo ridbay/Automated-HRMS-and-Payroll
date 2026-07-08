@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { getMyProfile, updateMyProfile } from '../controllers/employee/profile.controller';
+import { getMyProfile, updateMyProfile, addEmergencyContact, deleteEmergencyContact } from '../controllers/employee/profile.controller';
 import { getMyLeaveData, applyForLeave } from '../controllers/employee/leave.controller';
 import { getAttendanceData, clockIn, clockOut } from '../controllers/employee/attendance.controller';
 import { tenantMiddleware } from '../middlewares/tenant.middleware';
@@ -11,6 +11,8 @@ employeeRoutes.use('*', tenantMiddleware);
 // Self-Service Profile Routes
 employeeRoutes.get('/me', getMyProfile);
 employeeRoutes.put('/me', updateMyProfile);
+employeeRoutes.post('/me/emergency-contacts', addEmergencyContact);
+employeeRoutes.delete('/me/emergency-contacts/:id', deleteEmergencyContact);
 
 // Self-Service Leave Routes
 employeeRoutes.get('/leave/me', getMyLeaveData);

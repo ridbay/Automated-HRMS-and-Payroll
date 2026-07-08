@@ -421,6 +421,40 @@ export const useUpdateMyProfile = () => {
   });
 };
 
+export const useAddEmergencyContact = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: any) => {
+      const res = await fetchWithTenant(`${API_URL}/employee/me/emergency-contacts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('Failed to add emergency contact');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['myProfile'] });
+    },
+  });
+};
+
+export const useDeleteEmergencyContact = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetchWithTenant(`${API_URL}/employee/me/emergency-contacts/${id}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) throw new Error('Failed to delete emergency contact');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['myProfile'] });
+    },
+  });
+};
+
 export const useMyLeave = () => {
   return useQuery({
     queryKey: ['myLeave'],

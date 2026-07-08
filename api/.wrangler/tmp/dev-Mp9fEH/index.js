@@ -8449,6 +8449,30 @@ var EmployeeService = class {
     }
     return this.getEmployeeProfile(companyId, employeeId);
   }
+  async addEmergencyContact(companyId, employeeId, data) {
+    const newContact = {
+      id: `EC-${Math.floor(1e3 + Math.random() * 9e3)}`,
+      companyId,
+      employeeId,
+      name: data.name,
+      relationship: data.relationship,
+      phone: data.phone,
+      email: data.email,
+      isPrimary: data.isPrimary || false
+    };
+    await this.db.insert(emergencyContacts).values(newContact);
+    return newContact;
+  }
+  async deleteEmergencyContact(companyId, employeeId, contactId) {
+    await this.db.delete(emergencyContacts).where(
+      and(
+        eq(emergencyContacts.id, contactId),
+        eq(emergencyContacts.companyId, companyId),
+        eq(emergencyContacts.employeeId, employeeId)
+      )
+    );
+    return { success: true };
+  }
 };
 
 // src/controllers/admin/employee.controller.ts
@@ -8879,6 +8903,32 @@ var updateMyProfile = /* @__PURE__ */ __name(async (c) => {
   }
   return c.json(profile);
 }, "updateMyProfile");
+var addEmergencyContact = /* @__PURE__ */ __name(async (c) => {
+  const companyId = c.get("companyId");
+  let employeeId = c.req.header("x-employee-id");
+  const service = new EmployeeService(c.env.DB);
+  if (!employeeId) {
+    const defaultId = await service.getFirstEmployeeId(companyId);
+    if (!defaultId) return c.json({ error: "No employee found" }, 404);
+    employeeId = defaultId;
+  }
+  const data = await c.req.json();
+  const contact = await service.addEmergencyContact(companyId, employeeId, data);
+  return c.json(contact);
+}, "addEmergencyContact");
+var deleteEmergencyContact = /* @__PURE__ */ __name(async (c) => {
+  const companyId = c.get("companyId");
+  let employeeId = c.req.header("x-employee-id");
+  const contactId = c.req.param("id");
+  const service = new EmployeeService(c.env.DB);
+  if (!employeeId) {
+    const defaultId = await service.getFirstEmployeeId(companyId);
+    if (!defaultId) return c.json({ error: "No employee found" }, 404);
+    employeeId = defaultId;
+  }
+  await service.deleteEmergencyContact(companyId, employeeId, contactId);
+  return c.json({ success: true });
+}, "deleteEmergencyContact");
 
 // src/services/leave.service.ts
 var LeaveService = class {
@@ -9112,6 +9162,8 @@ var employeeRoutes = new Hono2();
 employeeRoutes.use("*", tenantMiddleware);
 employeeRoutes.get("/me", getMyProfile);
 employeeRoutes.put("/me", updateMyProfile);
+employeeRoutes.post("/me/emergency-contacts", addEmergencyContact);
+employeeRoutes.delete("/me/emergency-contacts/:id", deleteEmergencyContact);
 employeeRoutes.get("/leave/me", getMyLeaveData);
 employeeRoutes.post("/leave/apply", applyForLeave);
 employeeRoutes.get("/attendance/me", getAttendanceData);

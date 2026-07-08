@@ -96,4 +96,33 @@ export class EmployeeService {
 
     return this.getEmployeeProfile(companyId, employeeId);
   }
+
+  async addEmergencyContact(companyId: string, employeeId: string, data: any) {
+    const newContact = {
+      id: `EC-${Math.floor(1000 + Math.random() * 9000)}`,
+      companyId,
+      employeeId,
+      name: data.name,
+      relationship: data.relationship,
+      phone: data.phone,
+      email: data.email,
+      isPrimary: data.isPrimary || false,
+    };
+
+    await this.db.insert(schema.emergencyContacts).values(newContact);
+    return newContact;
+  }
+
+  async deleteEmergencyContact(companyId: string, employeeId: string, contactId: string) {
+    await this.db
+      .delete(schema.emergencyContacts)
+      .where(
+        and(
+          eq(schema.emergencyContacts.id, contactId),
+          eq(schema.emergencyContacts.companyId, companyId),
+          eq(schema.emergencyContacts.employeeId, employeeId)
+        )
+      );
+    return { success: true };
+  }
 }

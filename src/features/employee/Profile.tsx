@@ -31,7 +31,7 @@ import {
   ShieldCheck,
   Loader2,
 } from "lucide-react";
-import { useMyProfile, useUpdateMyProfile } from "../../api/client";
+import { useMyProfile, useUpdateMyProfile, useAddEmergencyContact, useDeleteEmergencyContact } from "../../api/client";
 
 const ProfileField = ({
   label,
@@ -88,9 +88,13 @@ const Profile: React.FC = () => {
   const [showChangeRequestModal, setShowChangeRequestModal] = useState(false);
   const [changeRequestField, setChangeRequestField] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showEmergencyModal, setShowEmergencyModal] = useState(false);
+  const [newContact, setNewContact] = useState({ name: '', relationship: '', phone: '' });
 
   const { data: me, isLoading } = useMyProfile();
   const updateProfileMutation = useUpdateMyProfile();
+  const addEmergencyContact = useAddEmergencyContact();
+  const deleteEmergencyContact = useDeleteEmergencyContact();
 
   if (isLoading) {
     return (
@@ -374,29 +378,40 @@ const Profile: React.FC = () => {
                       title="Emergency Contacts"
                       subtitle="Who to call in case of emergency"
                     />
-                    <button className="px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-[10px] font-black uppercase hover:bg-indigo-100 transition-colors flex items-center gap-2">
+                    <button 
+                      onClick={() => setShowEmergencyModal(true)}
+                      className="px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-[10px] font-black uppercase hover:bg-indigo-100 transition-colors flex items-center gap-2"
+                    >
                       <Plus size={14} /> Add Contact
                     </button>
                   </div>
                   <div className="space-y-4">
-                    <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-rose-100 text-rose-500 rounded-2xl flex items-center justify-center">
-                          <Heart size={20} fill="currentColor" />
+                    {(!me.emergencyContacts || me.emergencyContacts.length === 0) && (
+                      <p className="text-xs text-slate-400 font-bold p-4 bg-slate-50 rounded-2xl text-center">No emergency contacts set.</p>
+                    )}
+                    {me.emergencyContacts?.map((contact: any) => (
+                      <div key={contact.id} className="p-6 bg-slate-50 rounded-3xl border border-slate-100 flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 bg-rose-100 text-rose-500 rounded-2xl flex items-center justify-center">
+                            <Heart size={20} fill="currentColor" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-black text-slate-800">
+                              {contact.name}
+                            </p>
+                            <p className="text-xs font-bold text-slate-400 uppercase">
+                              {contact.relationship} • {contact.phone}
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-sm font-black text-slate-800">
-                            Michael Johnson
-                          </p>
-                          <p className="text-xs font-bold text-slate-400 uppercase">
-                            Spouse • +1 (555) 234-5678
-                          </p>
-                        </div>
+                        <button 
+                          onClick={() => deleteEmergencyContact.mutate(contact.id)}
+                          className="text-slate-300 hover:text-rose-500 transition-colors"
+                        >
+                          <Trash2 size={18} />
+                        </button>
                       </div>
-                      <button className="text-slate-300 hover:text-rose-500 transition-colors">
-                        <Trash2 size={18} />
-                      </button>
-                    </div>
+                    ))}
                   </div>
                 </section>
               </motion.div>
@@ -773,6 +788,96 @@ const Profile: React.FC = () => {
                     className="flex-1 py-4 bg-indigo-600 text-white font-black text-xs uppercase tracking-widest rounded-2xl shadow-xl hover:bg-indigo-700"
                   >
                     Submit Request
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Add Emergency Contact Modal */}
+      <AnimatePresence>
+        {showEmergencyModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowEmergencyModal(false)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="relative w-full max-w-md bg-white rounded-[2.5rem] shadow-2xl overflow-hidden"
+            >
+              <div className="p-8 bg-rose-500 text-white flex justify-between items-center">
+                <h3 className="text-xl font-black flex items-center gap-2"><Heart size={20} fill="currentColor" /> Add Contact</h3>
+                <button
+                  onClick={() => setShowEmergencyModal(false)}
+                  className="p-2 bg-white/10 rounded-xl hover:bg-white/20 transition-all"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="p-8 space-y-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    Name
+                  </label>
+                  <input
+                    type="text"
+                    value={newContact.name}
+                    onChange={(e) => setNewContact({...newContact, name: e.target.value})}
+                    placeholder="E.g. Jane Doe"
+                    className="w-full px-6 py-4 bg-slate-50 rounded-2xl font-bold text-slate-800 border-none outline-none focus:ring-4 focus:ring-rose-100"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    Relationship
+                  </label>
+                  <input
+                    type="text"
+                    value={newContact.relationship}
+                    onChange={(e) => setNewContact({...newContact, relationship: e.target.value})}
+                    placeholder="E.g. Spouse, Parent"
+                    className="w-full px-6 py-4 bg-slate-50 rounded-2xl font-bold text-slate-800 border-none outline-none focus:ring-4 focus:ring-rose-100"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    Phone Number
+                  </label>
+                  <input
+                    type="text"
+                    value={newContact.phone}
+                    onChange={(e) => setNewContact({...newContact, phone: e.target.value})}
+                    placeholder="E.g. +1 (555) 000-0000"
+                    className="w-full px-6 py-4 bg-slate-50 rounded-2xl font-bold text-slate-800 border-none outline-none focus:ring-4 focus:ring-rose-100"
+                  />
+                </div>
+                <div className="flex gap-4 pt-4">
+                  <button
+                    onClick={() => setShowEmergencyModal(false)}
+                    className="flex-1 py-4 bg-slate-50 text-slate-500 font-black text-xs uppercase tracking-widest rounded-2xl hover:bg-slate-100"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      addEmergencyContact.mutate(newContact, {
+                        onSuccess: () => {
+                          setShowEmergencyModal(false);
+                          setNewContact({ name: '', relationship: '', phone: '' });
+                        }
+                      });
+                    }}
+                    className="flex-1 py-4 bg-rose-500 text-white font-black text-xs uppercase tracking-widest rounded-2xl shadow-xl hover:bg-rose-600"
+                  >
+                    Save Contact
                   </button>
                 </div>
               </div>
