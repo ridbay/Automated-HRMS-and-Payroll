@@ -37,9 +37,12 @@ import {
   Umbrella,
   Users,
   Box,
+  Edit2,
+  Save,
+  XCircle,
 } from "lucide-react";
 // import { formatCurrency } from "../../utils/format";
-import { getDocumentDownloadUrl } from "../../api/client";
+import { getDocumentDownloadUrl, useEmployeeLeaveBalances, useUpdateLeaveBalances } from "../../api/client";
 import { Employee } from "../../types/index";
 import { MOCK_ASSETS } from "../../data/mocks";
 import {
@@ -106,6 +109,7 @@ const EmployeeDetail: React.FC<Props> = ({ employee, onBack }) => {
     { id: "employment", label: "Employment", icon: <Briefcase size={16} /> },
     { id: "compensation", label: "Comp", icon: <DollarSign size={16} /> },
     { id: "attendance", label: "Time", icon: <Clock size={16} /> },
+    { id: "leaves", label: "Leaves", icon: <Calendar size={16} /> },
     { id: "performance", label: "Perf", icon: <Trophy size={16} /> },
     {
       id: "documents",
@@ -1027,6 +1031,153 @@ const EmployeeDetail: React.FC<Props> = ({ employee, onBack }) => {
           )}
         </motion.div>
       </AnimatePresence>
+    </div>
+  );
+};
+
+// Component for the Leaves Tab content
+const EmployeeLeaveTab = ({ employeeId }: { employeeId: string }) => {
+  const { data: balances, isLoading } = useEmployeeLeaveBalances(employeeId);
+  const updateBalances = useUpdateLeaveBalances();
+  
+  const [localBalances, setLocalBalances] = useState<any[]>([]);
+  const [isEditing, setIsEditing] = useState(false);
+
+  useEffect(() => {
+    if (balances) {
+      setLocalBalances(JSON.parse(JSON.stringify(balances)));
+    }
+  }, [balances]);
+
+  const handleSave = () => {
+    updateBalances.mutate({ employeeId, balances: localBalances }, {
+      onSuccess: () => setIsEditing(false)
+    });
+  };
+
+  const handleUpdateBalance = (index: number, field: string, value: any) => {
+    const updated = [...localBalances];
+    if (field === 'total') {
+      updated[index].total = Number(value);
+    } else {
+      updated[index][field] = value;
+    }
+    setLocalBalances(updated);
+  };
+
+  const handleAddLeaveType = () => {
+    setLocalBalances([...localBalances, { type: 'Custom Leave', total: 0, color: 'indigo', used: 0 }]);
+  };
+
+  const handleRemoveLeaveType = (index: number) => {
+    setLocalBalances(localBalances.filter((_, i) => i !== index));
+  };
+
+  if (isLoading) {
+    return <div className="p-12 flex justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div></div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white rounded-3xl border border-slate-100 overflow-hidden shadow-sm">
+        <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-black text-slate-800">
+              Leave Balances & Policies
+            </h3>
+            <p className="text-sm text-slate-500 mt-1">
+              Configure allowed leave types and maximum durations for this employee.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            {isEditing ? (
+              <>
+                <button 
+                  onClick={() => {
+                    setLocalBalances(JSON.parse(JSON.stringify(balances)));
+                    setIsEditing(false);
+                  }}
+                  className="px-4 py-2 text-slate-600 font-bold rounded-xl text-sm hover:bg-slate-100 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={handleSave}
+                  disabled={updateBalances.isPending}
+                  className="px-4 py-2 bg-indigo-600 text-white font-bold rounded-xl text-sm hover:bg-indigo-700 transition-colors flex items-center gap-2 shadow-lg shadow-indigo-600/20"
+                >
+                  <Save size={16} /> Save Changes
+                </button>
+              </>
+            ) : (
+              <button 
+                onClick={() => setIsEditing(true)}
+                className="px-4 py-2 bg-indigo-50 text-indigo-600 font-bold rounded-xl text-sm hover:bg-indigo-100 transition-colors flex items-center gap-2"
+              >
+                <Edit2 size={16} /> Edit Allowances
+              </button>
+            )}
+          </div>
+        </div>
+        
+        <div className="p-6">
+          <div className="space-y-4">
+            {localBalances.map((balance, idx) => (
+              <div key={idx} className="flex items-center gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                <div className="flex-1 grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Leave Type</label>
+                    {isEditing ? (
+                      <input 
+                        type="text" 
+                        value={balance.type} 
+                        onChange={(e) => handleUpdateBalance(idx, 'type', e.target.value)}
+                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:border-indigo-500" 
+                      />
+                    ) : (
+                      <div className="text-sm font-bold text-slate-800 py-2">{balance.type}</div>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Total Days Allowed</label>
+                    {isEditing ? (
+                      <input 
+                        type="number" 
+                        value={balance.total} 
+                        onChange={(e) => handleUpdateBalance(idx, 'total', e.target.value)}
+                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:border-indigo-500" 
+                      />
+                    ) : (
+                      <div className="text-sm font-bold text-slate-800 py-2">{balance.total} Days</div>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Days Used</label>
+                    <div className="text-sm font-medium text-slate-500 py-2">{balance.used || 0} Days (Calculated automatically)</div>
+                  </div>
+                </div>
+                {isEditing && (
+                  <button 
+                    onClick={() => handleRemoveLeaveType(idx)}
+                    className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg mt-5 transition-colors"
+                  >
+                    <XCircle size={20} />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {isEditing && (
+            <button 
+              onClick={handleAddLeaveType}
+              className="mt-4 px-4 py-2 border border-dashed border-indigo-300 text-indigo-600 bg-indigo-50/50 hover:bg-indigo-50 rounded-xl text-sm font-bold w-full transition-colors flex items-center justify-center gap-2"
+            >
+              <Plus size={16} /> Add Custom Leave Type
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 };

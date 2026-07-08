@@ -14,3 +14,7 @@ export * from '../models/payroll.model';
 export * from '../models/settings.model';
 export * from '../models/org.model';
 export * from '../models/role.model';
+export * from '../models/benefits.model';
+export * from '../models/feedback.model';
+export * from '../models/goal.model';
+

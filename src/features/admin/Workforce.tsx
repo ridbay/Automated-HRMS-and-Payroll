@@ -93,6 +93,7 @@ const Workforce: React.FC = () => {
     null,
   );
   const [celebrating, setCelebrating] = useState(false);
+  const [createdEmployeePassword, setCreatedEmployeePassword] = useState<{name: string, pass: string} | null>(null);
 
   // Filters State
   const [filters, setFilters] = useState({
@@ -997,6 +998,50 @@ const Workforce: React.FC = () => {
   return (
     <div className="space-y-10 pb-24 relative">
       <Celebration active={celebrating} />
+      
+      {/* Password Modal */}
+      <AnimatePresence>
+        {createdEmployeePassword && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="bg-white rounded-[3rem] p-10 max-w-lg w-full shadow-2xl"
+            >
+              <div className="w-20 h-20 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mb-6 mx-auto">
+                <CheckCircle2 size={40} />
+              </div>
+              <h3 className="text-2xl font-black text-center mb-2 text-slate-800 tracking-tight">Employee Created!</h3>
+              <p className="text-sm font-medium text-slate-500 text-center mb-8">
+                {createdEmployeePassword.name} has been successfully added to the workforce.
+              </p>
+              
+              <div className="bg-slate-50 border border-slate-100 rounded-2xl p-6 mb-8 text-center space-y-4">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Temporary Password</p>
+                <p className="text-3xl font-mono font-black text-indigo-600 select-all tracking-tight">
+                  {createdEmployeePassword.pass}
+                </p>
+                <p className="text-xs font-bold text-amber-600 bg-amber-50 py-2 rounded-lg">
+                  Please securely share this with the employee. They will be forced to change it on their first login.
+                </p>
+              </div>
+
+              <button
+                onClick={() => setCreatedEmployeePassword(null)}
+                className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-slate-800 transition-colors"
+              >
+                Done
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Dynamic Header */}
       <section className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
@@ -1588,10 +1633,16 @@ const Workforce: React.FC = () => {
                             hireDate: formData.hireDate || new Date().toISOString().split("T")[0],
                           },
                           {
-                            onSuccess: () => {
+                            onSuccess: (data: any) => {
                               setIsWizardOpen(false);
                               setWizardStep(1);
                               triggerCelebration();
+                              if (data && data.temporaryPassword) {
+                                setCreatedEmployeePassword({
+                                  name: `${formData.name || ''} ${formData.lastName || ''}`.trim(),
+                                  pass: data.temporaryPassword
+                                });
+                              }
                             },
                           },
                         );

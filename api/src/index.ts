@@ -3,14 +3,10 @@ import { cors } from 'hono/cors'
 import { drizzle } from 'drizzle-orm/d1'
 import * as schema from './db/schema'
 
-import rootRouter from './routes/index'
+import { AppEnv } from './types';
+import rootRouter from './routes/index';
 
-type Bindings = {
-  DB: D1Database
-  BUCKET: R2Bucket
-}
-
-const app = new Hono<{ Bindings: Bindings }>()
+const app = new Hono<AppEnv>();
 
 app.use('*', cors())
 

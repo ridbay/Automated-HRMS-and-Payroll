@@ -20,6 +20,7 @@ import Profile from "./features/employee/Profile";
 import AssetManagement from "./features/admin/AssetManagement";
 import Onboarding from "./features/admin/Onboarding";
 import OrgChart from "./features/admin/OrgChart";
+import AdminLeaveRequests from "./features/admin/AdminLeaveRequests";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { NavigationProvider, useNavigation } from "./context/NavigationContext";
 
@@ -75,6 +76,8 @@ const AppContent: React.FC = () => {
         return <Performance />;
       case "benefits":
         return <Benefits />;
+      case "leave-approvals":
+        return <AdminLeaveRequests />;
       case "leave":
         return <Leave />;
       case "my-payroll":

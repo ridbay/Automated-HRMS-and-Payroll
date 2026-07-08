@@ -40,6 +40,7 @@ import {
   useDeleteDocumentMutation,
   getDocumentDownloadUrl
 } from "../../api/client";
+import { useAuth } from "../../context/AuthContext";
 
 const ProfileField = ({
   label,
@@ -91,6 +92,7 @@ const SectionTitle = ({ icon: Icon, title, subtitle }: any) => (
 );
 
 const Profile: React.FC = () => {
+  const { updateUser } = useAuth();
   const [activeTab, setActiveTab] = useState("personal");
   const [editMode, setEditMode] = useState(false);
   const [showChangeRequestModal, setShowChangeRequestModal] = useState(false);
@@ -222,7 +224,11 @@ const Profile: React.FC = () => {
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        updateProfileMutation.mutate({ avatar: reader.result as string });
+        const avatarDataUrl = reader.result as string;
+        updateProfileMutation.mutate(
+          { avatar: avatarDataUrl },
+          { onSuccess: () => updateUser({ avatar: avatarDataUrl }) }
+        );
       };
       reader.readAsDataURL(file);
     }
@@ -235,11 +241,17 @@ const Profile: React.FC = () => {
         <div className="absolute top-0 right-0 w-64 h-64 bg-slate-50 rounded-full -mr-16 -mt-16" />
         <div className="relative z-10 flex flex-col md:flex-row items-center md:items-start gap-8">
           <div className="relative group">
-            <img
-              src={me.avatar || 'https://via.placeholder.com/150'}
-              className="w-32 h-32 rounded-[2.5rem] object-cover ring-4 ring-white shadow-2xl"
-              alt="Profile"
-            />
+            {me.avatar ? (
+              <img
+                src={me.avatar}
+                className="w-32 h-32 rounded-[2.5rem] object-cover ring-4 ring-white shadow-2xl"
+                alt="Profile"
+              />
+            ) : (
+              <div className="w-32 h-32 rounded-[2.5rem] ring-4 ring-white shadow-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center font-black text-5xl">
+                {me.name?.[0]?.toUpperCase()}
+              </div>
+            )}
             <input 
               type="file" 
               ref={fileInputRef} 

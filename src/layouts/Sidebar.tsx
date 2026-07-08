@@ -123,6 +123,7 @@ const Sidebar: React.FC = () => {
       icon: <Clock size={20} />,
       path: "attendance",
     },
+    { name: "Leave Requests", icon: <CheckSquare size={20} />, path: "leave-approvals" },
     { name: "Onboarding", icon: <Plane size={20} />, path: "onboarding" },
     { name: "Org Chart", icon: <Network size={20} />, path: "org-chart" }, // Added
     { name: "Performance", icon: <Trophy size={20} />, path: "performance" },

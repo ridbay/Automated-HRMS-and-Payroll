@@ -10,33 +10,65 @@ import {
 import { UserRole, User as UserType } from '../../types/index';
 
 interface LoginPageProps {
-  onLogin: (user: UserType) => void;
+  onLogin: (user: UserType, token: string) => void;
 }
 
 const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [email, setEmail] = useState('admin@zenhr.com');
-  const [role, setRole] = useState<UserRole>('HR_ADMIN');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
 
-  const handleLogin = (e: React.FormEvent) => {
+  // Password change state
+  const [isPasswordChangeRequired, setIsPasswordChangeRequired] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [tempUser, setTempUser] = useState<any>(null);
+
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setErrorMsg('');
     
-    // Simulate API delay
-    setTimeout(() => {
-      onLogin({
-        id: 'u1',
-        name: role === 'SUPER_ADMIN' ? 'Sarah Boss' : 
-              role === 'MANAGER' ? 'Marcus Head' : 
-              role === 'RECRUITER' ? 'Hiring Pro' :
-              role === 'EMPLOYEE' ? 'Jane Doe' : 'James HR',
-        email: email,
-        role: role,
-        avatar: `https://i.pravatar.cc/150?u=${role}`
-      });
+    try {
+      const { loginUser, changeUserPassword } = await import('../../api/client');
+
+      if (isPasswordChangeRequired) {
+        if (newPassword !== confirmPassword) {
+          throw new Error('Passwords do not match');
+        }
+        if (newPassword.length < 6) {
+          throw new Error('Password must be at least 6 characters');
+        }
+
+        // We must have tempUser if we are here, and since we need a token for changePassword,
+        // wait, changePassword endpoint requires the employeeId. But our fetchWithTenant needs a token.
+        // I will temporarily set the token in local storage so the change password request succeeds.
+        localStorage.setItem('zenhr_token', tempUser.token);
+        
+        await changeUserPassword({ currentPassword: password, newPassword });
+        
+        // Success
+        onLogin(tempUser.employee, tempUser.token);
+      } else {
+        const result = await loginUser({ email, password });
+        
+        if (!result.employee.isPasswordChanged) {
+          setTempUser(result);
+          setIsPasswordChangeRequired(true);
+        } else {
+          onLogin(result.employee, result.token);
+        }
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || 'An error occurred');
+      if (isPasswordChangeRequired) {
+        localStorage.removeItem('zenhr_token'); // Clean up on fail
+      }
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
   };
 
   const roles: { id: UserRole; label: string; icon: React.ReactNode; desc: string }[] = [
@@ -101,69 +133,92 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
           </div>
 
           <form onSubmit={handleLogin} className="space-y-6">
-            {/* Role Selection */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-8">
-              {roles.map((r) => (
-                <button
-                  key={r.id}
-                  type="button"
-                  onClick={() => setRole(r.id)}
-                  className={`p-4 rounded-2xl border-2 text-left transition-all relative ${
-                    role === r.id 
-                      ? 'border-indigo-600 bg-indigo-50/50 ring-4 ring-indigo-500/10' 
-                      : 'border-slate-100 hover:border-slate-200 bg-slate-50/30'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${role === r.id ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-500'}`}>
-                      {r.icon}
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-black uppercase text-slate-800 tracking-tight leading-tight">{r.label}</p>
-                    </div>
+
+
+            {errorMsg && (
+              <div className="mb-6 p-4 bg-rose-50 border border-rose-100 text-rose-600 rounded-xl text-xs font-bold text-center">
+                {errorMsg}
+              </div>
+            )}
+
+            {!isPasswordChangeRequired ? (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Email Address</label>
+                  <div className="relative">
+                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
+                    <input 
+                      type="email" 
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="w-full pl-12 pr-4 py-4 bg-slate-50 border-none rounded-2xl outline-none focus:ring-4 focus:ring-indigo-500/10 font-bold text-slate-800 transition-all"
+                      placeholder="name@company.com"
+                      required
+                    />
                   </div>
-                </button>
-              ))}
-            </div>
+                </div>
 
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Email Address</label>
-                <div className="relative">
-                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
-                  <input 
-                    type="email" 
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full pl-12 pr-4 py-4 bg-slate-50 border-none rounded-2xl outline-none focus:ring-4 focus:ring-indigo-500/10 font-bold text-slate-800 transition-all"
-                    placeholder="name@company.com"
-                  />
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center ml-1">
+                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Password</label>
+                     <button type="button" className="text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:underline">Forgot?</button>
+                  </div>
+                  <div className="relative">
+                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
+                    <input 
+                      type={showPassword ? "text" : "password"} 
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="w-full pl-12 pr-12 py-4 bg-slate-50 border-none rounded-2xl outline-none focus:ring-4 focus:ring-indigo-500/10 font-bold text-slate-800 transition-all"
+                      placeholder="••••••••"
+                      required
+                    />
+                    <button 
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500 transition-colors"
+                    >
+                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
                 </div>
               </div>
-
-              <div className="space-y-2">
-                <div className="flex justify-between items-center ml-1">
-                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Password</label>
-                   <button type="button" className="text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:underline">Forgot?</button>
+            ) : (
+              <div className="space-y-4">
+                <div className="p-4 bg-amber-50 border border-amber-100 rounded-xl mb-4">
+                  <p className="text-xs font-bold text-amber-800">For security reasons, please change your temporary password before continuing.</p>
                 </div>
-                <div className="relative">
-                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
-                  <input 
-                    type={showPassword ? "text" : "password"} 
-                    defaultValue="password123"
-                    className="w-full pl-12 pr-12 py-4 bg-slate-50 border-none rounded-2xl outline-none focus:ring-4 focus:ring-indigo-500/10 font-bold text-slate-800 transition-all"
-                    placeholder="••••••••"
-                  />
-                  <button 
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500 transition-colors"
-                  >
-                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                  </button>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">New Password</label>
+                  <div className="relative">
+                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
+                    <input 
+                      type={showPassword ? "text" : "password"} 
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      className="w-full pl-12 pr-12 py-4 bg-slate-50 border-none rounded-2xl outline-none focus:ring-4 focus:ring-indigo-500/10 font-bold text-slate-800 transition-all"
+                      placeholder="New password"
+                      required
+                      minLength={6}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Confirm New Password</label>
+                  <div className="relative">
+                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
+                    <input 
+                      type={showPassword ? "text" : "password"} 
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className="w-full pl-12 pr-12 py-4 bg-slate-50 border-none rounded-2xl outline-none focus:ring-4 focus:ring-indigo-500/10 font-bold text-slate-800 transition-all"
+                      placeholder="Confirm new password"
+                      required
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             <div className="flex items-center gap-2 mb-8">
                <input type="checkbox" id="remember" className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/20" />
@@ -178,7 +233,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
               {isLoading ? (
                 <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
               ) : (
-                <>Sign in to Dashboard <ArrowRight size={20} /></>
+                <>{isPasswordChangeRequired ? 'Update Password' : 'Sign in to Dashboard'} <ArrowRight size={20} /></>
               )}
             </button>
           </form>

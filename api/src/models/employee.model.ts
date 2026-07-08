@@ -29,6 +29,11 @@ export const employees = sqliteTable('employees', {
   workEmail: text('work_email'),
   performanceRating: real('performance_rating'),
   
+  // Authentication
+  passwordHash: text('password_hash'),
+  passwordSalt: text('password_salt'),
+  isPasswordChanged: integer('is_password_changed', { mode: 'boolean' }).default(false),
+  
   // Tax & Statutory
   tin: text('tin'),
   pfa: text('pfa'),

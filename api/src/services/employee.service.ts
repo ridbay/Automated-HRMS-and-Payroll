@@ -1,8 +1,9 @@
-import { D1Database } from '@cloudflare/workers-types';
+import { D1Database, R2Bucket } from '@cloudflare/workers-types';
 import { drizzle } from 'drizzle-orm/d1';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, or, like } from 'drizzle-orm';
 import * as schema from '../db/schema';
 import { emergencyContacts, employeeDocuments } from '../models/employee.model';
+import { hashPassword, generateSalt } from './auth.service';
 
 export class EmployeeService {
   private db;
@@ -11,9 +12,19 @@ export class EmployeeService {
     this.db = drizzle(dbBinding, { schema });
   }
 
-  async getAllByCompany(companyId: string) {
+  async getAllByCompany(companyId: string, search?: string) {
+    const conditions = [eq(schema.employees.companyId, companyId)];
+    if (search && search.trim()) {
+      const pattern = `%${search.trim()}%`;
+      conditions.push(
+        or(
+          like(schema.employees.name, pattern),
+          like(schema.employees.lastName, pattern)
+        ) as any
+      );
+    }
     return this.db.query.employees.findMany({
-      where: eq(schema.employees.companyId, companyId),
+      where: and(...conditions),
       with: {
         emergencyContacts: true,
         employeeDocuments: true,
@@ -29,13 +40,25 @@ export class EmployeeService {
       employeeData.id = `EMP-${crypto.randomUUID().split('-')[0].toUpperCase()}`;
     }
     
+    // Generate temporary password
+    const temporaryPassword = `ZenHR-${crypto.randomUUID().split('-')[0]}`;
+    const salt = generateSalt();
+    const hashedPassword = await hashPassword(temporaryPassword, salt);
+    
     // Insert the employee
     const result = await this.db
       .insert(schema.employees)
-      .values({ ...employeeData, companyId })
+      .values({ 
+        ...employeeData, 
+        companyId,
+        passwordHash: hashedPassword,
+        passwordSalt: salt,
+        isPasswordChanged: false
+      })
       .returning();
       
-    const newEmployee = result[0];
+    const newEmployee = result[0] as any;
+    newEmployee.temporaryPassword = temporaryPassword;
 
     // Insert emergency contacts if any exist
     if (emergencyContacts && emergencyContacts.length > 0) {

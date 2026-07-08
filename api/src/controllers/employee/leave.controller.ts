@@ -23,6 +23,13 @@ export const getMyLeaveData = async (c: Context<AppEnv>) => {
   return c.json({ balances, requests });
 };
 
+export const getTeamLeaves = async (c: Context<AppEnv>) => {
+  const companyId = c.get('companyId');
+  const leaveService = new LeaveService(c.env.DB);
+  const teamLeaves = await leaveService.getTeamLeaves(companyId);
+  return c.json(teamLeaves);
+};
+
 export const applyForLeave = async (c: Context<AppEnv>) => {
   const companyId = c.get('companyId');
   let employeeId = c.req.header('x-employee-id');

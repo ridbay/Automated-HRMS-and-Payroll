@@ -18,6 +18,34 @@ export class LeaveService {
       .all();
   }
 
+  async getTeamLeaves(companyId: string) {
+    // Fetch approved requests, joined with employee names
+    const requests = await this.db
+      .select({
+        id: schema.leaveRequests.id,
+        employeeId: schema.leaveRequests.employeeId,
+        name: schema.employees.name,
+        lastName: schema.employees.lastName,
+        avatar: schema.employees.avatar,
+        type: schema.leaveRequests.type,
+        startDate: schema.leaveRequests.startDate,
+        endDate: schema.leaveRequests.endDate,
+        days: schema.leaveRequests.days,
+        status: schema.leaveRequests.status,
+      })
+      .from(schema.leaveRequests)
+      .innerJoin(schema.employees, eq(schema.leaveRequests.employeeId, schema.employees.id))
+      .where(
+        and(
+          eq(schema.leaveRequests.companyId, companyId),
+          eq(schema.leaveRequests.status, 'approved')
+        )
+      )
+      .all();
+
+    return requests;
+  }
+
   async getEmployeeLeaveRequests(companyId: string, employeeId: string) {
     return this.db.query.leaveRequests.findMany({
       where: and(
@@ -87,5 +115,49 @@ export class LeaveService {
     }).returning();
 
     return result[0];
+  }
+
+  async updateLeaveRequestStatus(companyId: string, requestId: string, data: { status: string; days?: number; managerComment?: string; managerId?: string }) {
+    const updateData: any = {
+      status: data.status,
+      managerId: data.managerId,
+      managerComment: data.managerComment,
+    };
+    if (data.days !== undefined) {
+      updateData.days = data.days;
+    }
+
+    const result = await this.db
+      .update(schema.leaveRequests)
+      .set(updateData)
+      .where(and(eq(schema.leaveRequests.companyId, companyId), eq(schema.leaveRequests.id, requestId)))
+      .returning();
+
+    return result[0];
+  }
+
+  async updateEmployeeLeaveBalances(companyId: string, employeeId: string, balances: any[]) {
+    // Delete existing balances
+    await this.db.delete(schema.leaveBalances).where(
+      and(
+        eq(schema.leaveBalances.companyId, companyId),
+        eq(schema.leaveBalances.employeeId, employeeId)
+      )
+    );
+
+    // Insert new balances
+    if (balances.length > 0) {
+      const inserts = balances.map((b: any) => ({
+        id: `LB-${Math.floor(1000 + Math.random() * 9000)}`,
+        companyId,
+        employeeId,
+        type: b.type,
+        total: b.total,
+        color: b.color || 'indigo',
+      }));
+      await this.db.insert(schema.leaveBalances).values(inserts);
+    }
+    
+    return balances;
   }
 }

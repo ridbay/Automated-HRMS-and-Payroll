@@ -17,7 +17,7 @@ import {
   Timer,
   Loader2,
 } from "lucide-react";
-import { useMyLeave, useApplyLeave, useEmployees, useMyProfile } from "../../api/client";
+import { useMyLeave, useApplyLeave, useEmployees, useMyProfile, useTeamLeaves } from "../../api/client";
 import { useNavigation } from "../../context/NavigationContext";
 import Celebration from "../../components/Celebration";
 
@@ -30,6 +30,7 @@ const Leave: React.FC = () => {
 
   const { data: leaveData, isLoading } = useMyLeave();
   const applyLeaveMutation = useApplyLeave();
+  const { data: teamLeavesData, isLoading: teamLeavesLoading } = useTeamLeaves();
   const { data: employees } = useEmployees();
   const { data: me } = useMyProfile();
 
@@ -50,9 +51,22 @@ const Leave: React.FC = () => {
 
     const start = new Date(startDate);
     const end = new Date(endDate);
-    const diffTime = Math.abs(end.getTime() - start.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-    return diffDays;
+    
+    if (end < start) return 0;
+
+    let count = 0;
+    let currentDate = new Date(start);
+    
+    while (currentDate <= end) {
+      const day = currentDate.getDay();
+      // 0 = Sunday, 6 = Saturday
+      if (day !== 0 && day !== 6) {
+        count++;
+      }
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+    
+    return count;
   };
 
   const handleApply = () => {
@@ -226,7 +240,7 @@ const Leave: React.FC = () => {
                 </div>
 
                 <div className="space-y-4">
-                  {leaveData?.requests?.length === 0 ? (
+                  {(!leaveData?.requests || leaveData.requests.length === 0) ? (
                     <p className="text-xs text-slate-400 font-bold p-4 bg-slate-50 rounded-2xl text-center">
                       No recent requests
                     </p>
@@ -734,16 +748,53 @@ const Leave: React.FC = () => {
             </div>
           )}
           {activeTab === "calendar" && (
-            <div className="text-center py-20 bg-white rounded-[3rem] border border-slate-100">
-              <h2 className="text-2xl font-black text-slate-300 mb-4">
-                Team Calendar View
-              </h2>
-              <button
-                onClick={() => setLocalTab("dashboard")}
-                className="text-indigo-600 font-black uppercase tracking-widest text-xs"
-              >
-                Back to Dashboard
-              </button>
+            <div className="bg-white rounded-3xl p-8 border border-slate-200">
+              <div className="flex items-center justify-between mb-8">
+                <div>
+                  <h2 className="text-2xl font-black text-slate-800">
+                    Team Calendar
+                  </h2>
+                  <p className="text-slate-500 mt-1">Colleagues currently on leave or scheduled soon</p>
+                </div>
+                <button
+                  onClick={() => setLocalTab("dashboard")}
+                  className="px-4 py-2 bg-slate-100 text-slate-600 font-bold rounded-xl hover:bg-slate-200 transition-colors"
+                >
+                  Back to Dashboard
+                </button>
+              </div>
+
+              {teamLeavesLoading ? (
+                <div className="text-center py-12 flex justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div></div>
+              ) : !teamLeavesData || teamLeavesData.length === 0 ? (
+                <div className="text-center py-16 bg-slate-50 rounded-2xl border border-slate-100">
+                  <CalendarIcon size={48} className="mx-auto text-slate-300 mb-4" />
+                  <h3 className="text-lg font-bold text-slate-700">No leaves scheduled</h3>
+                  <p className="text-slate-500 text-sm mt-1">Your team has no upcoming approved leaves.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {teamLeavesData.map((req: any) => (
+                    <div key={req.id} className="bg-slate-50 border border-slate-100 p-6 rounded-2xl flex flex-col items-center text-center">
+                      <div className="w-16 h-16 rounded-full bg-indigo-100 border-4 border-white shadow-md overflow-hidden mb-4 flex items-center justify-center font-bold text-indigo-600 text-xl">
+                        {req.avatar ? <img src={req.avatar} alt={req.name} className="w-full h-full object-cover" /> : req.name.charAt(0)}
+                      </div>
+                      <h3 className="font-bold text-slate-800 text-lg">{req.name} {req.lastName}</h3>
+                      <span className="px-3 py-1 bg-indigo-100 text-indigo-700 font-bold text-xs rounded-full mt-2 mb-4 uppercase tracking-wider">{req.type}</span>
+                      <div className="text-sm text-slate-500 w-full flex flex-col gap-2">
+                        <div className="flex justify-between border-b border-slate-200 pb-2">
+                          <span className="font-medium text-slate-400">Duration</span>
+                          <span className="font-bold text-slate-700">{req.days} days</span>
+                        </div>
+                        <div className="flex justify-between pt-1">
+                          <span className="font-medium text-slate-400">Dates</span>
+                          <span className="font-bold text-slate-700 text-xs">{req.startDate} to {req.endDate}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </motion.div>

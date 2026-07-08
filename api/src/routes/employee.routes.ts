@@ -8,16 +8,20 @@ import {
   deleteDocument,
   downloadDocument
 } from '../controllers/employee/profile.controller';
-import { getMyLeaveData, applyForLeave } from '../controllers/employee/leave.controller';
+import { getMyLeaveData, applyForLeave, getTeamLeaves } from '../controllers/employee/leave.controller';
 import { getAttendanceData, clockIn, clockOut, getOvertimeRequests, submitOvertimeRequest } from '../controllers/employee/attendance.controller';
-import { tenantMiddleware } from '../middlewares/tenant.middleware';
+import { authMiddleware } from '../middlewares/auth.middleware';
+import { getMyCompensation } from '../controllers/employee/compensation.controller';
+import { sendShoutout, getShoutouts } from '../controllers/employee/feedback.controller';
+import { getMyGoals, createGoal, updateGoalProgress } from '../controllers/employee/goal.controller';
 
 const employeeRoutes = new Hono();
 
-employeeRoutes.use('*', tenantMiddleware);
+employeeRoutes.use('*', authMiddleware);
 
 // Self-Service Profile Routes
 employeeRoutes.get('/me', getMyProfile);
+employeeRoutes.get('/me/compensation', getMyCompensation);
 employeeRoutes.put('/me', updateMyProfile);
 employeeRoutes.post('/me/emergency-contacts', addEmergencyContact);
 employeeRoutes.delete('/me/emergency-contacts/:id', deleteEmergencyContact);
@@ -30,6 +34,7 @@ employeeRoutes.get('/me/documents/:id/download', downloadDocument);
 // Self-Service Leave Routes
 employeeRoutes.get('/leave/me', getMyLeaveData);
 employeeRoutes.post('/leave/apply', applyForLeave);
+employeeRoutes.get('/leave/team', getTeamLeaves);
 
 // Self-Service Attendance Routes
 employeeRoutes.get('/attendance/me', getAttendanceData);
@@ -37,5 +42,14 @@ employeeRoutes.post('/attendance/clock-in', clockIn);
 employeeRoutes.post('/attendance/clock-out', clockOut);
 employeeRoutes.get('/attendance/overtime', getOvertimeRequests);
 employeeRoutes.post('/attendance/overtime', submitOvertimeRequest);
+
+// Feedback / Shoutouts
+employeeRoutes.post('/feedback', sendShoutout);
+employeeRoutes.get('/feedback', getShoutouts);
+
+// Goals / OKRs
+employeeRoutes.get('/goals', getMyGoals);
+employeeRoutes.post('/goals', createGoal);
+employeeRoutes.patch('/goals/:id', updateGoalProgress);
 
 export default employeeRoutes;

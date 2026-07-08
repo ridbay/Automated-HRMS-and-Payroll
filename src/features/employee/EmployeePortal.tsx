@@ -54,6 +54,7 @@ import {
 } from "../../data/mocks";
 import Celebration from "../../components/Celebration";
 import { useNavigation } from "../../context/NavigationContext";
+import { useAuth } from "../../context/AuthContext";
 
 const QuickActionBtn = ({
   icon: Icon,
@@ -80,12 +81,14 @@ const QuickActionBtn = ({
 
 const EmployeePortal: React.FC = () => {
   const { setActiveTab } = useNavigation();
+  const { user } = useAuth();
   const [activeTab, setLocalActiveTab] = useState("dashboard");
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isClockedIn, setIsClockedIn] = useState(false);
   const [celebrating, setCelebrating] = useState(false);
 
-  const me = MOCK_EMPLOYEES[0]; // Self
+  const me = user;
+  const displayName = me?.name?.split(" ")[0] ?? "there";
   const nextPayDate = new Date();
   nextPayDate.setDate(25); // Assume 25th
 
@@ -126,11 +129,17 @@ const EmployeePortal: React.FC = () => {
         <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-8">
           <div className="flex items-center gap-6">
             <div className="relative">
-              <img
-                src={me.avatar}
-                className="w-20 h-20 md:w-24 md:h-24 rounded-[2rem] object-cover ring-4 ring-white shadow-xl"
-                alt="Profile"
-              />
+              {me?.avatar ? (
+                <img
+                  src={me.avatar}
+                  className="w-20 h-20 md:w-24 md:h-24 rounded-[2rem] object-cover ring-4 ring-white shadow-xl"
+                  alt="Profile"
+                />
+              ) : (
+                <div className="w-20 h-20 md:w-24 md:h-24 rounded-[2rem] ring-4 ring-white shadow-xl bg-indigo-100 text-indigo-600 flex items-center justify-center font-black text-4xl">
+                  {me?.name?.[0]?.toUpperCase()}
+                </div>
+              )}
               <button className="absolute -bottom-2 -right-2 p-2 bg-indigo-600 text-white rounded-xl shadow-lg hover:scale-110 transition-transform">
                 <Settings size={14} />
               </button>
@@ -140,7 +149,7 @@ const EmployeePortal: React.FC = () => {
                 {formatDate(currentTime)}
               </p>
               <h1 className="text-2xl md:text-3xl font-black text-slate-800 tracking-tighter mb-1">
-                Welcome back, {me.name.split(" ")[0]}!
+                Welcome back, {displayName}!
               </h1>
               <div className="flex items-center gap-2">
                 <div

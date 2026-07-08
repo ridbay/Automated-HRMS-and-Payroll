@@ -6,16 +6,49 @@ const API_URL = 'http://127.0.0.1:8787';
 const MOCK_COMPANY_ID = 'comp-1234'; // Simulated logged-in tenant
 
 const fetchWithTenant = async (url: string, options: RequestInit = {}) => {
+  const token = localStorage.getItem('zenhr_token');
+  const headers: Record<string, string> = {
+    ...((options.headers as Record<string, string>) || {}),
+    'x-company-id': MOCK_COMPANY_ID, // Fallback for pure admin mock without auth
+  };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
   return fetch(url, {
     ...options,
-    headers: {
-      ...options.headers,
-      'x-company-id': MOCK_COMPANY_ID,
-    },
+    headers,
   });
 };
 
 // API Fetchers
+export const loginUser = async (credentials: any) => {
+  const res = await fetch(`${API_URL}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(credentials)
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || 'Login failed');
+  }
+  return res.json();
+};
+
+export const changeUserPassword = async (data: any) => {
+  const res = await fetchWithTenant(`${API_URL}/auth/change-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || 'Password change failed');
+  }
+  return res.json();
+};
+
 export const fetchEmployees = async (): Promise<Employee[]> => {
   const res = await fetchWithTenant(`${API_URL}/admin/employees`);
   if (!res.ok) throw new Error('Failed to fetch employees');
@@ -604,6 +637,87 @@ export const useSubmitOvertime = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['myOvertime'] });
+    },
+  });
+};
+
+export const useTeamLeaves = () => {
+  return useQuery({
+    queryKey: ['teamLeaves'],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/employee/leave/team`);
+      if (!res.ok) throw new Error('Failed to fetch team leaves');
+      return res.json();
+    },
+  });
+};
+
+export const useAdminLeaveRequests = () => {
+  return useQuery({
+    queryKey: ['adminLeaves'],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/admin/leaves`);
+      if (!res.ok) throw new Error('Failed to fetch admin leaves');
+      return res.json();
+    },
+  });
+};
+
+export const useUpdateLeaveRequest = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, status, days, managerComment }: any) => {
+      const res = await fetchWithTenant(`${API_URL}/admin/leaves/${id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status, days, managerComment }),
+      });
+      if (!res.ok) throw new Error('Failed to update leave request');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminLeaves'] });
+    },
+  });
+};
+
+export const useEmployeeLeaveBalances = (employeeId: string) => {
+  return useQuery({
+    queryKey: ['adminLeaveBalances', employeeId],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/admin/leaves/employee/${employeeId}/balances`);
+      if (!res.ok) throw new Error('Failed to fetch leave balances');
+      return res.json();
+    },
+    enabled: !!employeeId,
+  });
+};
+
+export const useUpdateLeaveBalances = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ employeeId, balances }: any) => {
+      const res = await fetchWithTenant(`${API_URL}/admin/leaves/employee/${employeeId}/balances`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ balances }),
+      });
+      if (!res.ok) throw new Error('Failed to update leave balances');
+      return res.json();
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['adminLeaveBalances', variables.employeeId] });
+    },
+  });
+};
+
+export const useMyCompensation = () => {
+  return useQuery({
+    queryKey: ['myCompensation'],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/employee/me/compensation`);
+      if (!res.ok) throw new Error('Failed to fetch compensation data');
+      return res.json();
     },
   });
 };

@@ -4,9 +4,10 @@ import { AppEnv } from '../../types';
 
 export const getEmployees = async (c: Context<AppEnv>) => {
   const companyId = c.get('companyId');
+  const search = c.req.query('search');
   const service = new EmployeeService(c.env.DB);
   
-  const result = await service.getAllByCompany(companyId);
+  const result = await service.getAllByCompany(companyId, search);
   return c.json(result);
 };
 
@@ -18,3 +19,4 @@ export const createEmployee = async (c: Context<AppEnv>) => {
   const result = await service.createForCompany(companyId, body);
   return c.json(result, 201);
 };
+

@@ -38,9 +38,11 @@ import {
 } from "recharts";
 import { MOCK_PAYROLL_ENTRIES, MOCK_EMPLOYEES } from "../../data/mocks";
 import { useNavigation } from "../../context/NavigationContext";
+import { useMyCompensation } from "../../api/client";
 
 const MyPayroll: React.FC = () => {
   const { setActiveTab } = useNavigation();
+  const { data: compData, isLoading } = useMyCompensation();
   const [activeView, setActiveView] = useState<
     "dashboard" | "payslip" | "history" | "compensation"
   >("dashboard");
@@ -557,9 +559,9 @@ const MyPayroll: React.FC = () => {
           </p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {[
-              { l: "Annual Salary", v: 450000 * 12 },
-              { l: "Health Benefits", v: 5000000 },
-              { l: "Pension Match", v: 360000 },
+              { l: "Annual Salary", v: compData ? compData.baseSalary * 12 : 450000 * 12 },
+              { l: "Health Benefits", v: compData?.benefits?.healthPremium ? compData.benefits.healthPremium * 12 : 5000000 },
+              { l: "Pension Match", v: compData?.benefits?.employerMatchRate ? (compData.baseSalary * (compData.benefits.employerMatchRate / 100)) * 12 : 360000 },
             ].map((item, i) => (
               <div key={i}>
                 <p className="text-[10px] font-black text-indigo-300 uppercase tracking-widest mb-2">
@@ -573,6 +575,10 @@ const MyPayroll: React.FC = () => {
       </section>
     </div>
   );
+
+  if (isLoading) {
+    return <div className="p-20 flex justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div></div>;
+  }
 
   return (
     <div className="container mx-auto">
