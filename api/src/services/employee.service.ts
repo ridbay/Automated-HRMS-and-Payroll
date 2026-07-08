@@ -48,4 +48,51 @@ export class EmployeeService {
     
     return newEmployee;
   }
+  async getFirstEmployeeId(companyId: string): Promise<string | null> {
+    const result = await this.db
+      .select({ id: schema.employees.id })
+      .from(schema.employees)
+      .where(eq(schema.employees.companyId, companyId))
+      .limit(1);
+    
+    return result[0]?.id || null;
+  }
+
+  async getEmployeeProfile(companyId: string, employeeId: string) {
+    const employee = await this.db.query.employees.findFirst({
+      where: and(eq(schema.employees.id, employeeId), eq(schema.employees.companyId, companyId)),
+      with: {
+        emergencyContacts: true,
+      },
+    });
+
+    return employee;
+  }
+
+  async updateEmployeeProfile(companyId: string, employeeId: string, data: Partial<typeof schema.employees.$inferInsert>) {
+    // Only allow specific self-service fields to be updated
+    const allowedUpdates = {
+      phone: data.phone,
+      email: data.email, 
+      location: data.location,
+      bankName: data.bankName,
+      accountNumber: data.accountNumber,
+      accountName: data.accountName,
+      maritalStatus: data.maritalStatus,
+    };
+
+    // Remove undefined values
+    const updateData = Object.fromEntries(
+      Object.entries(allowedUpdates).filter(([_, v]) => v !== undefined)
+    );
+
+    if (Object.keys(updateData).length > 0) {
+      await this.db
+        .update(schema.employees)
+        .set(updateData)
+        .where(and(eq(schema.employees.id, employeeId), eq(schema.employees.companyId, companyId)));
+    }
+
+    return this.getEmployeeProfile(companyId, employeeId);
+  }
 }

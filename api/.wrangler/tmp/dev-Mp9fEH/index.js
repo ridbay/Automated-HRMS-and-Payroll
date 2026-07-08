@@ -8417,6 +8417,37 @@ var EmployeeService = class {
     }
     return newEmployee;
   }
+  async getFirstEmployeeId(companyId) {
+    const result = await this.db.select({ id: employees.id }).from(employees).where(eq(employees.companyId, companyId)).limit(1);
+    return result[0]?.id || null;
+  }
+  async getEmployeeProfile(companyId, employeeId) {
+    const employee = await this.db.query.employees.findFirst({
+      where: and(eq(employees.id, employeeId), eq(employees.companyId, companyId)),
+      with: {
+        emergencyContacts: true
+      }
+    });
+    return employee;
+  }
+  async updateEmployeeProfile(companyId, employeeId, data) {
+    const allowedUpdates = {
+      phone: data.phone,
+      email: data.email,
+      location: data.location,
+      bankName: data.bankName,
+      accountNumber: data.accountNumber,
+      accountName: data.accountName,
+      maritalStatus: data.maritalStatus
+    };
+    const updateData = Object.fromEntries(
+      Object.entries(allowedUpdates).filter(([_, v]) => v !== void 0)
+    );
+    if (Object.keys(updateData).length > 0) {
+      await this.db.update(employees).set(updateData).where(and(eq(employees.id, employeeId), eq(employees.companyId, companyId)));
+    }
+    return this.getEmployeeProfile(companyId, employeeId);
+  }
 };
 
 // src/controllers/admin/employee.controller.ts
@@ -8833,10 +8864,49 @@ var getLeaveRequests = /* @__PURE__ */ __name(async (c) => {
   return c.json(result);
 }, "getLeaveRequests");
 
+// src/controllers/employee/profile.controller.ts
+var getMyProfile = /* @__PURE__ */ __name(async (c) => {
+  const companyId = c.get("companyId");
+  let employeeId = c.req.header("x-employee-id");
+  const service = new EmployeeService(c.env.DB);
+  if (!employeeId) {
+    const defaultId = await service.getFirstEmployeeId(companyId);
+    if (!defaultId) {
+      return c.json({ error: "No employee found to mock auth" }, 404);
+    }
+    employeeId = defaultId;
+  }
+  const profile = await service.getEmployeeProfile(companyId, employeeId);
+  if (!profile) {
+    return c.json({ error: "Employee not found" }, 404);
+  }
+  return c.json(profile);
+}, "getMyProfile");
+var updateMyProfile = /* @__PURE__ */ __name(async (c) => {
+  const companyId = c.get("companyId");
+  let employeeId = c.req.header("x-employee-id");
+  const service = new EmployeeService(c.env.DB);
+  if (!employeeId) {
+    const defaultId = await service.getFirstEmployeeId(companyId);
+    if (!defaultId) {
+      return c.json({ error: "No employee found to mock auth" }, 404);
+    }
+    employeeId = defaultId;
+  }
+  const data = await c.req.json();
+  const profile = await service.updateEmployeeProfile(companyId, employeeId, data);
+  if (!profile) {
+    return c.json({ error: "Employee not found" }, 404);
+  }
+  return c.json(profile);
+}, "updateMyProfile");
+
 // src/routes/employee.routes.ts
 var employeeRoutes = new Hono2();
 employeeRoutes.use("*", tenantMiddleware);
 employeeRoutes.get("/leave-requests", getLeaveRequests);
+employeeRoutes.get("/me", getMyProfile);
+employeeRoutes.put("/me", updateMyProfile);
 var employee_routes_default = employeeRoutes;
 
 // src/routes/index.ts

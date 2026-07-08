@@ -389,3 +389,34 @@ export const useDeleteRole = () => {
     },
   });
 };
+
+// --- Employee Self-Service API ---
+
+export const useMyProfile = () => {
+  return useQuery({
+    queryKey: ['myProfile'],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/employee/me`);
+      if (!res.ok) throw new Error('Failed to fetch employee profile');
+      return res.json();
+    },
+  });
+};
+
+export const useUpdateMyProfile = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: any) => {
+      const res = await fetchWithTenant(`${API_URL}/employee/me`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('Failed to update employee profile');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['myProfile'] });
+    },
+  });
+};
