@@ -60,7 +60,7 @@ const Sidebar: React.FC = () => {
     },
     { name: "My Performance", icon: <Trophy size={20} />, path: "performance" },
     { name: "My Documents", icon: <FileText size={20} />, path: "documents" },
-    { name: "Team Directory", icon: <Users size={20} />, path: "workforce" },
+    { name: "Team Directory", icon: <Users size={20} />, path: "directory" },
     { name: "Settings", icon: <Settings size={20} />, path: "settings" },
     { name: "Help & Support", icon: <LifeBuoy size={20} />, path: "help" },
   ];
@@ -68,7 +68,7 @@ const Sidebar: React.FC = () => {
   // Navigation for Managers
   const managerNav = [
     { name: "Dashboard", icon: <Home size={20} />, path: "manager-dashboard" },
-    { name: "My Team", icon: <Users size={20} />, path: "workforce" },
+    { name: "Team Directory", icon: <Users size={20} />, path: "directory" },
     { name: "Approvals", icon: <CheckSquare size={20} />, path: "approvals" },
     {
       name: "Team Performance",
@@ -125,7 +125,7 @@ const Sidebar: React.FC = () => {
     },
     { name: "Leave Requests", icon: <CheckSquare size={20} />, path: "leave-approvals" },
     { name: "Onboarding", icon: <Plane size={20} />, path: "onboarding" },
-    { name: "Org Chart", icon: <Network size={20} />, path: "org-chart" }, // Added
+    { name: "Directory & Org Chart", icon: <Network size={20} />, path: "directory" }, // Added
     { name: "Performance", icon: <Trophy size={20} />, path: "performance" },
     { name: "Benefits Admin", icon: <Heart size={20} />, path: "benefits" },
     {

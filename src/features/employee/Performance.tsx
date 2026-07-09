@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useAuth } from "../../context/AuthContext";
+import { useShoutouts, useActiveCycleAssessment, createAssessment, updateAssessment, submitAssessment } from "../../api/client";
 import { motion, AnimatePresence } from "framer-motion";
+import AssessmentWizard from "./AssessmentWizard";
 import {
   Trophy,
   Target,
@@ -80,11 +82,14 @@ const skillGapData = [
 const Performance: React.FC = () => {
   const { token, user } = useAuth();
   const companyId = (user as any)?.companyId || "comp-1234";
+  const { data: shoutouts = [] } = useShoutouts();
+  const { data: activeAssessment } = useActiveCycleAssessment('H2 2024');
   const [activeTab, setActiveTab] = useState<
     "dashboard" | "goals" | "reviews" | "feedback" | "growth"
   >("dashboard");
   const [showGoalModal, setShowGoalModal] = useState(false);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [showAssessmentWizard, setShowAssessmentWizard] = useState(false);
   const [celebrating, setCelebrating] = useState(false);
 
   // Recipient search state
@@ -184,6 +189,32 @@ const Performance: React.FC = () => {
   const triggerCelebration = () => {
     setCelebrating(true);
     setTimeout(() => setCelebrating(false), 3000);
+  };
+
+  const handleSaveAssessment = async (data: any) => {
+    try {
+      if (activeAssessment?.id) {
+        await updateAssessment(activeAssessment.id, data);
+      } else {
+        const result = await createAssessment({
+          cycleName: 'H2 2024',
+          ...data
+        });
+        // The active assessment query will refetch with the new data
+      }
+    } catch (error) {
+      console.error('Failed to save assessment:', error);
+    }
+  };
+
+  const handleSubmitAssessment = async (id: string) => {
+    try {
+      await submitAssessment(id);
+      setShowAssessmentWizard(false);
+      triggerCelebration();
+    } catch (error) {
+      console.error('Failed to submit assessment:', error);
+    }
   };
 
   const renderDashboard = () => (
@@ -460,20 +491,18 @@ const Performance: React.FC = () => {
 
             <div className="flex gap-2 mb-6">
               <span
-                className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${
-                  goal.priority === "high"
-                    ? "bg-rose-50 text-rose-500"
-                    : "bg-slate-100 text-slate-500"
-                }`}
+                className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${goal.priority === "high"
+                  ? "bg-rose-50 text-rose-500"
+                  : "bg-slate-100 text-slate-500"
+                  }`}
               >
                 {goal.priority} Priority
               </span>
               <span
-                className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${
-                  goal.status === "on_track"
-                    ? "bg-emerald-50 text-emerald-600"
-                    : "bg-amber-50 text-amber-600"
-                }`}
+                className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${goal.status === "on_track"
+                  ? "bg-emerald-50 text-emerald-600"
+                  : "bg-amber-50 text-amber-600"
+                  }`}
               >
                 {goal.status.replace("_", " ")}
               </span>
@@ -631,11 +660,10 @@ const Performance: React.FC = () => {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
-              className={`flex-1 lg:flex-none flex items-center justify-center gap-2 px-8 py-3.5 rounded-2xl text-[11px] font-black uppercase tracking-[0.15em] transition-all whitespace-nowrap ${
-                activeTab === tab.id
-                  ? "bg-indigo-600 text-white shadow-xl shadow-indigo-100"
-                  : "text-slate-400 hover:bg-slate-50 hover:text-slate-600"
-              }`}
+              className={`flex-1 lg:flex-none flex items-center justify-center gap-2 px-8 py-3.5 rounded-2xl text-[11px] font-black uppercase tracking-[0.15em] transition-all whitespace-nowrap ${activeTab === tab.id
+                ? "bg-indigo-600 text-white shadow-xl shadow-indigo-100"
+                : "text-slate-400 hover:bg-slate-50 hover:text-slate-600"
+                }`}
             >
               {tab.icon} {tab.name}
             </button>
@@ -674,99 +702,83 @@ const Performance: React.FC = () => {
               </div>
               <div className="space-y-8 relative">
                 <div className="absolute left-10 top-0 bottom-0 w-0.5 bg-slate-100 hidden md:block" />
-                {MOCK_FEEDBACK.map((fb, idx) => (
-                  <motion.div
-                    key={fb.id}
-                    initial={{ opacity: 0, x: -20 }}
-                    whileInView={{ opacity: 1, x: 0 }}
-                    viewport={{ once: true }}
-                    className="relative flex flex-col md:flex-row gap-8"
-                  >
-                    <div className="shrink-0 relative z-10 hidden md:block">
-                      <div className="w-20 h-20 bg-white rounded-3xl p-1.5 shadow-xl border border-slate-100">
-                        <img
-                          src={
-                            MOCK_EMPLOYEES.find((e) => e.id === fb.fromId)
-                              ?.avatar
-                          }
-                          className="w-full h-full rounded-2xl object-cover"
-                        />
-                      </div>
-                    </div>
-                    <div
-                      className={`bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm flex-1 relative group hover:border-indigo-100 transition-all ${
-                        fb.type === "praise" ? "bg-indigo-50/20" : ""
-                      }`}
+                {shoutouts.length === 0 ? (
+                  <div className="text-center py-12">
+                    <Ghost size={48} className="text-slate-300 mx-auto mb-4" />
+                    <p className="text-slate-400 font-medium">No shoutouts yet. Be the first to give recognition!</p>
+                  </div>
+                ) : (
+                  shoutouts.map((fb: any, idx: number) => (
+                    <motion.div
+                      key={fb.id}
+                      initial={{ opacity: 0, x: -20 }}
+                      whileInView={{ opacity: 1, x: 0 }}
+                      viewport={{ once: true }}
+                      className="relative flex flex-col md:flex-row gap-8"
                     >
-                      {fb.type === "praise" && (
-                        <div className="absolute top-8 right-10 text-indigo-500 animate-pulse">
-                          <Zap size={24} fill="currentColor" />
+                      <div className="shrink-0 relative z-10 hidden md:block">
+                        <div className="w-20 h-20 bg-white rounded-3xl p-1.5 shadow-xl border border-slate-100">
+                          <div className="w-full h-full rounded-2xl bg-indigo-100 flex items-center justify-center">
+                            <User size={32} className="text-indigo-400" />
+                          </div>
                         </div>
-                      )}
-                      <div className="flex items-center gap-4 mb-6">
-                        <div className="md:hidden w-12 h-12 rounded-xl overflow-hidden shadow-md">
-                          <img
-                            src={
-                              MOCK_EMPLOYEES.find((e) => e.id === fb.fromId)
-                                ?.avatar
-                            }
-                            className="w-full h-full object-cover"
-                          />
+                      </div>
+                      <div
+                        className={`bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm flex-1 relative group hover:border-indigo-100 transition-all ${fb.type === "praise" ? "bg-indigo-50/20" : ""
+                          }`}
+                      >
+                        {fb.type === "praise" && (
+                          <div className="absolute top-8 right-10 text-indigo-500 animate-pulse">
+                            <Zap size={24} fill="currentColor" />
+                          </div>
+                        )}
+                        <div className="flex items-center gap-4 mb-6">
+                          <div className="md:hidden w-12 h-12 rounded-xl overflow-hidden shadow-md bg-indigo-100 flex items-center justify-center">
+                            <User size={20} className="text-indigo-400" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-black text-slate-800">
+                              <span className="text-indigo-600">Anonymous</span>
+                              <span className="text-slate-300 mx-2 font-normal">
+                                sent to
+                              </span>
+                              {fb.toEmployeeName}
+                            </p>
+                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">
+                              {new Date(fb.createdAt).toLocaleDateString(
+                                "en-US",
+                                {
+                                  month: "short",
+                                  day: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                },
+                              )}
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-sm font-black text-slate-800">
-                            {
-                              MOCK_EMPLOYEES.find((e) => e.id === fb.fromId)
-                                ?.name
-                            }
-                            <span className="text-slate-300 mx-2 font-normal">
-                              sent to
-                            </span>
-                            {MOCK_EMPLOYEES.find((e) => e.id === fb.toId)?.name}
+                        <div className="relative">
+                          <div className="absolute -left-6 top-0 h-full w-1 bg-indigo-500 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
+                          <p className="text-slate-600 text-lg font-medium leading-relaxed italic">
+                            "{fb.message}"
                           </p>
-                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">
-                            {new Date(fb.timestamp).toLocaleDateString(
-                              "en-US",
-                              {
-                                month: "short",
-                                day: "numeric",
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              },
-                            )}
-                          </p>
                         </div>
-                      </div>
-                      <div className="relative">
-                        <div className="absolute -left-6 top-0 h-full w-1 bg-indigo-500 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
-                        <p className="text-slate-600 text-lg font-medium leading-relaxed italic">
-                          "{fb.message}"
-                        </p>
-                      </div>
-                      <div className="flex flex-wrap items-center justify-between gap-4 mt-8 pt-8 border-t border-slate-50">
-                        <div className="flex gap-2">
-                          {fb.tags.map((tag) => (
-                            <span
-                              key={tag}
-                              className="px-3 py-1 bg-white border border-slate-100 rounded-xl text-[9px] font-black uppercase tracking-widest text-slate-500 shadow-sm"
-                            >
-                              #{tag}
+                        <div className="flex items-center justify-between gap-4 mt-8 pt-8 border-t border-slate-50">
+                          <div className="flex items-center gap-2">
+                            <span className="px-3 py-1 bg-white border border-slate-100 rounded-xl text-[9px] font-black uppercase tracking-widest text-slate-500 shadow-sm">
+                              #{fb.type}
                             </span>
-                          ))}
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <button className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-xl text-[10px] font-black hover:bg-indigo-100 transition-all">
-                            <Heart size={14} fill="currentColor" />{" "}
-                            {fb.reactions}
-                          </button>
-                          <button className="text-slate-400 hover:text-indigo-600 transition-colors">
-                            <MessageSquare size={18} />
-                          </button>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <button className="text-slate-400 hover:text-indigo-600 transition-colors">
+                              <MessageSquare size={18} />
+                            </button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </motion.div>
-                ))}
+                    </motion.div>
+                  ))
+                )}
               </div>
             </div>
           )}
@@ -916,28 +928,64 @@ const Performance: React.FC = () => {
           )}
           {activeTab === "reviews" && (
             <div className="bg-white p-24 rounded-[4rem] border border-slate-200 shadow-sm flex flex-col items-center justify-center text-center">
-              <motion.div
-                animate={{ rotate: [0, 10, -10, 0] }}
-                transition={{ duration: 4, repeat: Infinity }}
-                className="w-32 h-32 bg-indigo-50 rounded-[2.5rem] flex items-center justify-center text-indigo-300 mb-10 shadow-inner"
-              >
-                <Star size={64} strokeWidth={1.5} />
-              </motion.div>
-              <h3 className="text-3xl font-black text-slate-800 mb-4 tracking-tighter">
-                Review Cycle Not Started
-              </h3>
-              <p className="text-slate-500 max-w-sm font-medium text-lg leading-relaxed">
-                The next appraisal window (H2 2024) opens in 12 days. Prepare
-                your self-reflections early!
-              </p>
-              <div className="flex gap-4 mt-12">
-                <button className="px-10 py-5 bg-indigo-600 text-white rounded-[2rem] font-black text-sm uppercase tracking-widest shadow-2xl shadow-indigo-100 hover:scale-105 active:scale-95 transition-all">
-                  Prepare My Assessment
-                </button>
-                <button className="px-10 py-5 bg-white border border-slate-200 text-slate-500 rounded-[2rem] font-black text-sm uppercase tracking-widest hover:bg-slate-50 transition-all">
-                  Review History
-                </button>
-              </div>
+              {activeAssessment ? (
+                <>
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    className="w-32 h-32 bg-emerald-50 rounded-[2.5rem] flex items-center justify-center text-emerald-500 mb-10 shadow-inner"
+                  >
+                    <CheckCircle2 size={64} strokeWidth={1.5} />
+                  </motion.div>
+                  <h3 className="text-3xl font-black text-slate-800 mb-4 tracking-tighter">
+                    Assessment in Progress
+                  </h3>
+                  <p className="text-slate-500 max-w-sm font-medium text-lg leading-relaxed mb-2">
+                    Your self-assessment for {activeAssessment.cycleName}
+                  </p>
+                  <span className={`px-4 py-2 rounded-full text-xs font-black uppercase tracking-widest ${activeAssessment.status === 'submitted' ? 'bg-emerald-100 text-emerald-600' :
+                    activeAssessment.status === 'under_review' ? 'bg-amber-100 text-amber-600' :
+                      'bg-slate-100 text-slate-600'
+                    }`}>
+                    {activeAssessment.status.replace('_', ' ')}
+                  </span>
+                  <div className="flex gap-4 mt-12">
+                    <button
+                      onClick={() => setShowAssessmentWizard(true)}
+                      className="px-10 py-5 bg-indigo-600 text-white rounded-[2rem] font-black text-sm uppercase tracking-widest shadow-2xl shadow-indigo-100 hover:scale-105 active:scale-95 transition-all"
+                    >
+                      {activeAssessment.status === 'draft' ? 'Continue Assessment' : 'View Assessment'}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <motion.div
+                    animate={{ rotate: [0, 10, -10, 0] }}
+                    transition={{ duration: 4, repeat: Infinity }}
+                    className="w-32 h-32 bg-indigo-50 rounded-[2.5rem] flex items-center justify-center text-indigo-300 mb-10 shadow-inner"
+                  >
+                    <Star size={64} strokeWidth={1.5} />
+                  </motion.div>
+                  <h3 className="text-3xl font-black text-slate-800 mb-4 tracking-tighter">
+                    Review Cycle Not Started
+                  </h3>
+                  <p className="text-slate-500 max-w-sm font-medium text-lg leading-relaxed">
+                    The next appraisal window (H2 2024) is open. Prepare your self-reflections early!
+                  </p>
+                  <div className="flex gap-4 mt-12">
+                    <button
+                      onClick={() => setShowAssessmentWizard(true)}
+                      className="px-10 py-5 bg-indigo-600 text-white rounded-[2rem] font-black text-sm uppercase tracking-widest shadow-2xl shadow-indigo-100 hover:scale-105 active:scale-95 transition-all"
+                    >
+                      Prepare My Assessment
+                    </button>
+                    <button className="px-10 py-5 bg-white border border-slate-200 text-slate-500 rounded-[2rem] font-black text-sm uppercase tracking-widest hover:bg-slate-50 transition-all">
+                      Review History
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </motion.div>
@@ -1129,11 +1177,10 @@ const Performance: React.FC = () => {
                     <button
                       key={value}
                       onClick={() => setSelectedType(value)}
-                      className={`py-4 border-2 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                        selectedType === value
-                          ? "bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-100"
-                          : "bg-slate-50 border-transparent hover:border-indigo-400 hover:bg-white text-slate-600"
-                      }`}
+                      className={`py-4 border-2 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${selectedType === value
+                        ? "bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-100"
+                        : "bg-slate-50 border-transparent hover:border-indigo-400 hover:bg-white text-slate-600"
+                        }`}
                     >
                       {label}
                     </button>
@@ -1181,6 +1228,16 @@ const Performance: React.FC = () => {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Assessment Wizard */}
+      <AssessmentWizard
+        isOpen={showAssessmentWizard}
+        onClose={() => setShowAssessmentWizard(false)}
+        cycleName="H2 2024"
+        existingAssessment={activeAssessment}
+        onSave={handleSaveAssessment}
+        onSubmit={handleSubmitAssessment}
+      />
     </div>
   );
 };

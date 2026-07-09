@@ -19,7 +19,7 @@ import LoginPage from "./features/core/LoginPage";
 import Profile from "./features/employee/Profile";
 import AssetManagement from "./features/admin/AssetManagement";
 import Onboarding from "./features/admin/Onboarding";
-import OrgChart from "./features/admin/OrgChart";
+import Directory from "./features/core/Directory";
 import AdminLeaveRequests from "./features/admin/AdminLeaveRequests";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { NavigationProvider, useNavigation } from "./context/NavigationContext";
@@ -67,8 +67,8 @@ const AppContent: React.FC = () => {
         return <AssetManagement />;
       case "onboarding":
         return <Onboarding />;
-      case "org-chart":
-        return <OrgChart />;
+      case "directory":
+        return <Directory />;
       case "attendance":
         return <Attendance />;
       case "performance":

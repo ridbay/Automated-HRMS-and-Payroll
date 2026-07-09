@@ -23,42 +23,72 @@ export class EmployeeService {
         ) as any
       );
     }
-    return this.db.query.employees.findMany({
+    const employees = await this.db.query.employees.findMany({
       where: and(...conditions),
       with: {
         emergencyContacts: true,
         employeeDocuments: true,
       },
     });
+
+    // Remove sensitive fields before sending to frontend
+    return employees.map(emp => {
+      const { passwordHash, passwordSalt, ...safeEmployee } = emp;
+      return safeEmployee;
+    });
+  }
+
+  async getDirectory(companyId: string) {
+    const directory = await this.db
+      .select({
+        id: schema.employees.id,
+        name: schema.employees.name,
+        lastName: schema.employees.lastName,
+        email: schema.employees.email,
+        phone: schema.employees.phone,
+        role: schema.employees.role,
+        department: schema.employees.department,
+        location: schema.employees.location,
+        avatar: schema.employees.avatar,
+        managerId: schema.employees.managerId,
+        managerName: schema.employees.managerName,
+      })
+      .from(schema.employees)
+      .where(eq(schema.employees.companyId, companyId));
+
+    return directory;
   }
 
   async createForCompany(companyId: string, payload: any) {
     const { emergencyContacts, ...employeeData } = payload;
-    
+
     // Auto generate ID if not provided
     if (!employeeData.id) {
       employeeData.id = `EMP-${crypto.randomUUID().split('-')[0].toUpperCase()}`;
     }
-    
+
     // Generate temporary password
     const temporaryPassword = `ZenHR-${crypto.randomUUID().split('-')[0]}`;
     const salt = generateSalt();
     const hashedPassword = await hashPassword(temporaryPassword, salt);
-    
+
     // Insert the employee
     const result = await this.db
       .insert(schema.employees)
-      .values({ 
-        ...employeeData, 
+      .values({
+        ...employeeData,
         companyId,
         passwordHash: hashedPassword,
         passwordSalt: salt,
         isPasswordChanged: false
       })
       .returning();
-      
+
     const newEmployee = result[0] as any;
-    newEmployee.temporaryPassword = temporaryPassword;
+
+    // Remove sensitive fields before sending to frontend
+    const { passwordHash, passwordSalt, ...safeEmployee } = newEmployee;
+    safeEmployee.temporaryPassword = temporaryPassword;
 
     // Insert emergency contacts if any exist
     if (emergencyContacts && emergencyContacts.length > 0) {
@@ -70,8 +100,8 @@ export class EmployeeService {
       }));
       await this.db.insert(schema.emergencyContacts).values(contactsToInsert);
     }
-    
-    return newEmployee;
+
+    return safeEmployee;
   }
   async getFirstEmployeeId(companyId: string): Promise<string | null> {
     const result = await this.db
@@ -79,25 +109,31 @@ export class EmployeeService {
       .from(schema.employees)
       .where(eq(schema.employees.companyId, companyId))
       .limit(1);
-    
+
     return result[0]?.id || null;
   }
 
   async getEmployeeProfile(companyId: string, employeeId: string) {
-    return this.db.query.employees.findFirst({
+    const employee = await this.db.query.employees.findFirst({
       where: and(eq(schema.employees.id, employeeId), eq(schema.employees.companyId, companyId)),
       with: {
         emergencyContacts: true,
         employeeDocuments: true,
       },
     });
+
+    if (!employee) return null;
+
+    // Remove sensitive fields before sending to frontend
+    const { passwordHash, passwordSalt, ...safeEmployee } = employee;
+    return safeEmployee;
   }
 
   async updateEmployeeProfile(companyId: string, employeeId: string, data: Partial<typeof schema.employees.$inferInsert>) {
     // Only allow specific self-service fields to be updated
     const allowedUpdates = {
       phone: data.phone,
-      email: data.email, 
+      email: data.email,
       location: data.location,
       bankName: data.bankName,
       accountNumber: data.accountNumber,
@@ -143,7 +179,7 @@ export class EmployeeService {
     };
     console.log("=== DEBUG SCHEMA ===", emergencyContacts);
     if (!emergencyContacts) {
-       console.error("emergencyContacts is undefined!");
+      console.error("emergencyContacts is undefined!");
     }
     const insertBuilder = this.db.insert(emergencyContacts);
     console.log("=== DEBUG INSERT BUILDER ===", Object.keys(insertBuilder), typeof insertBuilder.values);
@@ -167,7 +203,7 @@ export class EmployeeService {
   async addDocument(companyId: string, employeeId: string, bucket: R2Bucket, data: { name: string; type: string; file: File }) {
     const documentId = `DOC-${Math.floor(1000 + Math.random() * 9000)}`;
     const fileKey = `companies/${companyId}/employees/${employeeId}/documents/${documentId}-${data.file.name}`;
-    
+
     // Upload to R2
     await bucket.put(fileKey, await data.file.arrayBuffer(), {
       httpMetadata: { contentType: data.file.type }
@@ -206,7 +242,7 @@ export class EmployeeService {
     await this.db
       .delete(employeeDocuments)
       .where(eq(employeeDocuments.id, documentId));
-      
+
     return { success: true };
   }
 

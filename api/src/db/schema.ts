@@ -1,9 +1,9 @@
 export * from '../models/company.model';
-export { 
-  employees, 
-  emergencyContacts, 
+export {
+  employees,
+  emergencyContacts,
   employeeDocuments,
-  employeesRelations, 
+  employeesRelations,
   emergencyContactsRelations,
   employeeDocumentsRelations
 } from '../models/employee.model';
@@ -17,4 +17,5 @@ export * from '../models/role.model';
 export * from '../models/benefits.model';
 export * from '../models/feedback.model';
 export * from '../models/goal.model';
+export * from '../models/assessment.model';
 

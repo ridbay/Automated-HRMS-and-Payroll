@@ -4,19 +4,13 @@ import { AppEnv } from '../../types';
 
 export const getMyProfile = async (c: Context<AppEnv>) => {
   const companyId = c.get('companyId');
-  let employeeId = c.req.header('x-employee-id');
-  
-  const service = new EmployeeService(c.env.DB);
+  const employeeId = c.get('employeeId');
 
-  // Mock Auth: Auto-pick if missing
   if (!employeeId) {
-    const defaultId = await service.getFirstEmployeeId(companyId);
-    if (!defaultId) {
-      return c.json({ error: 'No employee found to mock auth' }, 404);
-    }
-    employeeId = defaultId;
+    return c.json({ error: 'Unauthorized: No employee ID found' }, 401);
   }
 
+  const service = new EmployeeService(c.env.DB);
   const profile = await service.getEmployeeProfile(companyId, employeeId);
   if (!profile) {
     return c.json({ error: 'Employee not found' }, 404);
@@ -25,24 +19,29 @@ export const getMyProfile = async (c: Context<AppEnv>) => {
   return c.json(profile);
 };
 
-export const updateMyProfile = async (c: Context<AppEnv>) => {
+export const getDirectory = async (c: Context<AppEnv>) => {
   const companyId = c.get('companyId');
-  let employeeId = c.req.header('x-employee-id');
-  
-  const service = new EmployeeService(c.env.DB);
-
-  // Mock Auth: Auto-pick if missing
-  if (!employeeId) {
-    const defaultId = await service.getFirstEmployeeId(companyId);
-    if (!defaultId) {
-      return c.json({ error: 'No employee found to mock auth' }, 404);
-    }
-    employeeId = defaultId;
+  if (!companyId) {
+    return c.json({ error: 'Unauthorized' }, 401);
   }
 
+  const service = new EmployeeService(c.env.DB);
+  const directory = await service.getDirectory(companyId);
+  return c.json(directory);
+};
+
+export const updateMyProfile = async (c: Context<AppEnv>) => {
+  const companyId = c.get('companyId');
+  const employeeId = c.get('employeeId');
+
+  if (!employeeId) {
+    return c.json({ error: 'Unauthorized: No employee ID found' }, 401);
+  }
+
+  const service = new EmployeeService(c.env.DB);
   const data = await c.req.json();
   const profile = await service.updateEmployeeProfile(companyId, employeeId, data);
-  
+
   if (!profile) {
     return c.json({ error: 'Employee not found' }, 404);
   }
@@ -52,13 +51,13 @@ export const updateMyProfile = async (c: Context<AppEnv>) => {
 
 export const addEmergencyContact = async (c: Context<AppEnv>) => {
   const companyId = c.get('companyId');
-  let employeeId = c.req.header('x-employee-id');
-  const service = new EmployeeService(c.env.DB);
+  const employeeId = c.get('employeeId');
+
   if (!employeeId) {
-    const defaultId = await service.getFirstEmployeeId(companyId);
-    if (!defaultId) return c.json({ error: 'No employee found' }, 404);
-    employeeId = defaultId;
+    return c.json({ error: 'Unauthorized: No employee ID found' }, 401);
   }
+
+  const service = new EmployeeService(c.env.DB);
   const data = await c.req.json();
   const contact = await service.addEmergencyContact(companyId, employeeId, data);
   return c.json(contact);
@@ -66,28 +65,27 @@ export const addEmergencyContact = async (c: Context<AppEnv>) => {
 
 export const deleteEmergencyContact = async (c: Context<AppEnv>) => {
   const companyId = c.get('companyId');
-  let employeeId = c.req.header('x-employee-id');
+  const employeeId = c.get('employeeId');
   const contactId = c.req.param('id');
-  const service = new EmployeeService(c.env.DB);
+
   if (!employeeId) {
-    const defaultId = await service.getFirstEmployeeId(companyId);
-    if (!defaultId) return c.json({ error: 'No employee found' }, 404);
-    employeeId = defaultId;
+    return c.json({ error: 'Unauthorized: No employee ID found' }, 401);
   }
+
+  const service = new EmployeeService(c.env.DB);
   await service.deleteEmergencyContact(companyId as string, employeeId, contactId as string);
   return c.json({ success: true });
 };
 
 export const uploadDocument = async (c: Context<AppEnv>) => {
   const companyId = c.get('companyId');
-  let employeeId = c.req.header('x-employee-id');
-  const service = new EmployeeService(c.env.DB);
+  const employeeId = c.get('employeeId');
+
   if (!employeeId) {
-    const defaultId = await service.getFirstEmployeeId(companyId);
-    if (!defaultId) return c.json({ error: 'No employee found' }, 404);
-    employeeId = defaultId;
+    return c.json({ error: 'Unauthorized: No employee ID found' }, 401);
   }
-  
+
+  const service = new EmployeeService(c.env.DB);
   const formData = await c.req.formData();
   const file = formData.get('file') as unknown as File;
   const name = formData.get('name') as string;
@@ -103,30 +101,29 @@ export const uploadDocument = async (c: Context<AppEnv>) => {
 
 export const deleteDocument = async (c: Context<AppEnv>) => {
   const companyId = c.get('companyId');
-  let employeeId = c.req.header('x-employee-id');
+  const employeeId = c.get('employeeId');
   const documentId = c.req.param('id');
-  const service = new EmployeeService(c.env.DB);
+
   if (!employeeId) {
-    const defaultId = await service.getFirstEmployeeId(companyId);
-    if (!defaultId) return c.json({ error: 'No employee found' }, 404);
-    employeeId = defaultId;
+    return c.json({ error: 'Unauthorized: No employee ID found' }, 401);
   }
-  
+
+  const service = new EmployeeService(c.env.DB);
   await service.deleteDocument(companyId as string, employeeId, c.env.BUCKET, documentId as string);
   return c.json({ success: true });
 };
 
 export const downloadDocument = async (c: Context<AppEnv>) => {
   const companyId = c.get('companyId') as string;
-  let employeeId = c.req.header('x-employee-id') || c.req.query('employeeId');
+  const employeeId = c.get('employeeId');
   const documentId = c.req.param('id');
-  const service = new EmployeeService(c.env.DB);
+
   if (!employeeId) {
-    const defaultId = await service.getFirstEmployeeId(companyId);
-    if (!defaultId) return c.json({ error: 'No employee found' }, 404);
-    employeeId = defaultId;
+    return c.json({ error: 'Unauthorized: No employee ID found' }, 401);
   }
-  
+
+  const service = new EmployeeService(c.env.DB);
+
   try {
     const { file, doc } = await service.getDocumentFile(companyId as string, employeeId, c.env.BUCKET, documentId as string);
     c.header('Content-Type', file.httpMetadata?.contentType || 'application/octet-stream');

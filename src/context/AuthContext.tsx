@@ -46,7 +46,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
         setUser(patched);
         localStorage.setItem('zenhr_user', JSON.stringify(patched));
       })
-      .catch(() => {/* silent */});
+      .catch(() => {/* silent */ });
   }, []);
 
   const logout = useCallback(() => {

@@ -83,7 +83,7 @@ export const previewPayroll = async (month?: number, year?: number) => {
   const query = new URLSearchParams();
   if (month) query.append('month', month.toString());
   if (year) query.append('year', year.toString());
-  
+
   const res = await fetchWithTenant(`${API_URL}/admin/payroll/preview?${query.toString()}`);
   if (!res.ok) throw new Error('Failed to preview payroll');
   const json = await res.json();
@@ -436,6 +436,17 @@ export const useMyProfile = () => {
   });
 };
 
+export const useDirectory = () => {
+  return useQuery({
+    queryKey: ['directory'],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/employee/directory`);
+      if (!res.ok) throw new Error('Failed to fetch directory');
+      return res.json();
+    },
+  });
+};
+
 export const useUpdateMyProfile = () => {
   const queryClient = useQueryClient();
   return useMutation({
@@ -531,7 +542,7 @@ export const getDocumentDownloadUrl = (id: string, companyId?: string, employeeI
   const queryParams = [];
   if (companyId) queryParams.push(`companyId=${companyId}`);
   if (employeeId) queryParams.push(`employeeId=${employeeId}`);
-  
+
   const queryString = queryParams.length > 0 ? `?${queryParams.join('&')}` : '';
   return `${API_URL}/employee/me/documents/${id}/download${queryString}`;
 };
@@ -720,4 +731,78 @@ export const useMyCompensation = () => {
       return res.json();
     },
   });
+};
+
+export const useShoutouts = () => {
+  return useQuery({
+    queryKey: ['shoutouts'],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/employee/feedback`);
+      if (!res.ok) throw new Error('Failed to fetch shoutouts');
+      return res.json();
+    },
+  });
+};
+
+export const useMyAssessments = () => {
+  return useQuery({
+    queryKey: ['myAssessments'],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/employee/assessments`);
+      if (!res.ok) throw new Error('Failed to fetch assessments');
+      return res.json();
+    },
+  });
+};
+
+export const useActiveCycleAssessment = (cycleName: string) => {
+  return useQuery({
+    queryKey: ['activeCycleAssessment', cycleName],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/employee/assessments/active?cycle=${encodeURIComponent(cycleName)}`);
+      if (!res.ok) throw new Error('Failed to fetch active assessment');
+      return res.json();
+    },
+    enabled: !!cycleName,
+  });
+};
+
+export const createAssessment = async (data: any) => {
+  const token = localStorage.getItem('zenhr_token');
+  const res = await fetch(`${API_URL}/employee/assessments`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error('Failed to create assessment');
+  return res.json();
+};
+
+export const updateAssessment = async (id: string, data: any) => {
+  const token = localStorage.getItem('zenhr_token');
+  const res = await fetch(`${API_URL}/employee/assessments/${id}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error('Failed to update assessment');
+  return res.json();
+};
+
+export const submitAssessment = async (id: string) => {
+  const token = localStorage.getItem('zenhr_token');
+  const res = await fetch(`${API_URL}/employee/assessments/${id}/submit`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+    },
+  });
+  if (!res.ok) throw new Error('Failed to submit assessment');
+  return res.json();
 };
