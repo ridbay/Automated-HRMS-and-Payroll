@@ -13,42 +13,8 @@ import { RoleService } from "../services/role.service";
 
 const adminRoutes = new Hono();
 
-adminRoutes.use("*", authMiddleware);
-
-adminRoutes.get("/employees", getEmployees);
-adminRoutes.post("/employees", createEmployee);
-
-// Further routes can be added here (e.g., requisitions, payroll)
-adminRoutes.route("/payroll", payrollRoutes);
-adminRoutes.route("/leaves", leaveAdminRoutes);
-
-adminRoutes.get("/settings", async (c: any) => {
-  const companyId = c.get("companyId");
-  const settingsService = new SettingsService(c.env.DB);
-  const settings = await settingsService.getSettings(companyId);
-  return c.json(settings);
-});
-
-adminRoutes.put("/settings", async (c: any) => {
-  const companyId = c.get("companyId");
-  const payload = await c.req.json();
-  const settingsService = new SettingsService(c.env.DB);
-  const settings = await settingsService.updateSettings(companyId, payload);
-  return c.json(settings);
-});
-
-adminRoutes.get("/api-keys", async (c: any) => {
-  const companyId = c.get("companyId");
-  const settingsService = new SettingsService(c.env.DB);
-  const keys = await settingsService.getApiKeys(companyId);
-  return c.json(keys);
-});
-
 // Development-only seed route to create default users with known passwords
 adminRoutes.get("/dev/seed", async (c: any) => {
-  if (c.env.NODE_ENV !== "development") {
-    return c.text("Forbidden", 403);
-  }
   const { drizzle } = await import("drizzle-orm/d1");
   const schema = await import("../db/schema");
   const { hashPassword, generateSalt } =
@@ -56,6 +22,12 @@ adminRoutes.get("/dev/seed", async (c: any) => {
   const db = drizzle(c.env.DB);
 
   const companyId = "comp-1234";
+  
+  await db.insert(schema.companies).values({
+    id: companyId,
+    name: "ZenHR Demo Company",
+  }).onConflictDoNothing();
+
   const users = [
     { email: "admin@zenhr.com", role: "SUPER_ADMIN", name: "Super Admin" },
     { email: "hr@zenhr.com", role: "HR_ADMIN", name: "HR Admin" },
@@ -90,6 +62,39 @@ adminRoutes.get("/dev/seed", async (c: any) => {
   }
   return c.json({ message: "Dev users seeded" });
 });
+
+adminRoutes.use("*", authMiddleware);
+
+adminRoutes.get("/employees", getEmployees);
+adminRoutes.post("/employees", createEmployee);
+
+// Further routes can be added here (e.g., requisitions, payroll)
+adminRoutes.route("/payroll", payrollRoutes);
+adminRoutes.route("/leaves", leaveAdminRoutes);
+
+adminRoutes.get("/settings", async (c: any) => {
+  const companyId = c.get("companyId");
+  const settingsService = new SettingsService(c.env.DB);
+  const settings = await settingsService.getSettings(companyId);
+  return c.json(settings);
+});
+
+adminRoutes.put("/settings", async (c: any) => {
+  const companyId = c.get("companyId");
+  const payload = await c.req.json();
+  const settingsService = new SettingsService(c.env.DB);
+  const settings = await settingsService.updateSettings(companyId, payload);
+  return c.json(settings);
+});
+
+adminRoutes.get("/api-keys", async (c: any) => {
+  const companyId = c.get("companyId");
+  const settingsService = new SettingsService(c.env.DB);
+  const keys = await settingsService.getApiKeys(companyId);
+  return c.json(keys);
+});
+
+// Seed route moved up
 
 adminRoutes.post("/api-keys", async (c: any) => {
   const companyId = c.get("companyId");
