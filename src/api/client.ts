@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Employee, JobRequisition, LeaveRequest } from '../types';
 import { MOCK_EMPLOYEES, MOCK_REQUISITIONS, MOCK_LEAVE_REQUESTS } from '../data/mocks';
 
-const API_URL = 'http://127.0.0.1:8787';
+const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8787';
 const MOCK_COMPANY_ID = 'comp-1234'; // Simulated logged-in tenant
 
 const fetchWithTenant = async (url: string, options: RequestInit = {}) => {
