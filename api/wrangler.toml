@@ -2,13 +2,15 @@ name = "zenhr-api"
 main = "src/index.ts"
 compatibility_date = "2024-03-20"
 compatibility_flags = ["nodejs_compat"]
+account_id = "3f509287c54b566a4a6fba51ec5bc842"
 
 [[d1_databases]]
 binding = "DB"
 database_name = "zenhr-d1"
-database_id = "00000000-0000-0000-0000-000000000000" # Placeholder, will be replaced when actually creating DB
+database_id = "869a6a84-f113-4772-8502-7560e4b6d764"
 migrations_dir = "drizzle"
 
-[[r2_buckets]]
-binding = "BUCKET"
-bucket_name = "zenhr-storage"
+# R2 Configuration commented out because it requires activation in the Cloudflare Dashboard
+# [[r2_buckets]]
+# binding = "BUCKET"
+# bucket_name = "zenhr-storage"
