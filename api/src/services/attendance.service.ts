@@ -101,6 +101,8 @@ export class AttendanceService {
       clockIn: clockInTime,
       status: 'present',
       locationIn: data.location,
+      latitudeIn: data.latitude,
+      longitudeIn: data.longitude,
       notes: data.notes,
       workHours: 0,
       overtime: 0,
@@ -125,6 +127,8 @@ export class AttendanceService {
       .set({
         clockOut: clockOutTime,
         locationOut: data.location,
+        latitudeOut: data.latitude,
+        longitudeOut: data.longitude,
         workHours,
       })
       .where(and(

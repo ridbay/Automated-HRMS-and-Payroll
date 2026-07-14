@@ -278,6 +278,8 @@ const Attendance: React.FC = () => {
   const handleClockAction = (note: string) => {
     const actionData = {
       location: location?.address || "Unknown Location",
+      latitude: location?.lat || null,
+      longitude: location?.lng || null,
       notes: note
     };
     const action = isClockedIn ? "clock-out" : "clock-in";
