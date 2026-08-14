@@ -8131,6 +8131,7 @@ __export(schema_exports, {
   departments: () => departments,
   emergencyContacts: () => emergencyContacts,
   emergencyContactsRelations: () => emergencyContactsRelations,
+  employeeAssets: () => employeeAssets,
   employeeBenefits: () => employeeBenefits,
   employeeBenefitsRelations: () => employeeBenefitsRelations,
   employeeDocuments: () => employeeDocuments,
@@ -8191,6 +8192,20 @@ var locations = sqliteTable("locations", {
   updatedAt: text("updated_at").$onUpdate(() => (/* @__PURE__ */ new Date()).toISOString())
 });
 
+// src/models/role.model.ts
+var roles = sqliteTable("roles", {
+  id: text("id").primaryKey(),
+  companyId: text("company_id").references(() => companies.id).notNull(),
+  name: text("name").notNull(),
+  description: text("description"),
+  permissions: text("permissions", { mode: "json" }).notNull(),
+  // JSON string representing the permission matrix
+  usersCount: integer("users_count").default(0),
+  color: text("color").default("slate"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").$onUpdate(() => (/* @__PURE__ */ new Date()).toISOString())
+});
+
 // src/models/employee.model.ts
 var employees = sqliteTable("employees", {
   id: text("id").primaryKey(),
@@ -8205,6 +8220,9 @@ var employees = sqliteTable("employees", {
   nationality: text("nationality"),
   maritalStatus: text("marital_status"),
   role: text("role"),
+  // Optional, additive fine-grained role — narrows what the fixed `role` above
+  // already allows via requireRole; see requirePermission in role.middleware.ts.
+  customRoleId: text("custom_role_id").references(() => roles.id),
   department: text("department"),
   departmentId: text("department_id").references(() => departments.id),
   location: text("location"),
@@ -8240,6 +8258,23 @@ var employees = sqliteTable("employees", {
   secondaryAccountNumber: text("secondary_account_number"),
   secondaryAccountName: text("secondary_account_name"),
   payoutMethod: text("payout_method"),
+  // Miscellaneous
+  privateNotes: text("private_notes"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").$onUpdate(() => (/* @__PURE__ */ new Date()).toISOString())
+});
+var employeeAssets = sqliteTable("employee_assets", {
+  id: text("id").primaryKey(),
+  companyId: text("company_id").notNull().references(() => companies.id),
+  employeeId: text("employee_id").notNull().references(() => employees.id),
+  name: text("name").notNull(),
+  category: text("category").notNull(),
+  serialNumber: text("serial_number"),
+  status: text("status").notNull().default("Assigned"),
+  condition: text("condition").notNull().default("Good"),
+  purchaseDate: text("purchase_date"),
+  value: integer("value"),
+  image: text("image"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").$onUpdate(() => (/* @__PURE__ */ new Date()).toISOString())
 });
@@ -8459,20 +8494,6 @@ var companySettings = sqliteTable("company_settings", {
   sessionTimeoutMins: integer("session_timeout_mins").default(60).notNull(),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").notNull().$onUpdate(() => (/* @__PURE__ */ new Date()).toISOString())
-});
-
-// src/models/role.model.ts
-var roles = sqliteTable("roles", {
-  id: text("id").primaryKey(),
-  companyId: text("company_id").references(() => companies.id).notNull(),
-  name: text("name").notNull(),
-  description: text("description"),
-  permissions: text("permissions", { mode: "json" }).notNull(),
-  // JSON string representing the permission matrix
-  usersCount: integer("users_count").default(0),
-  color: text("color").default("slate"),
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-  updatedAt: text("updated_at").$onUpdate(() => (/* @__PURE__ */ new Date()).toISOString())
 });
 
 // src/models/benefits.model.ts
@@ -9562,8 +9583,9 @@ var EmployeeService = class {
     });
     if (!doc) throw new Error("Document not found");
     try {
-      const fileKey = doc.url.split("/").pop();
-      if (fileKey) await bucket.delete(`documents/${employeeId}/${fileKey}`);
+      if (doc.fileKey) {
+        await bucket.delete(doc.fileKey);
+      }
     } catch (e) {
       console.error("Failed to delete from R2", e);
     }
@@ -9582,6 +9604,39 @@ var EmployeeService = class {
       ),
       orderBy: /* @__PURE__ */ __name((auditLogs2, { desc: desc4 }) => [desc4(auditLogs2.createdAt)], "orderBy")
     });
+  }
+  async getAssets(companyId, employeeId) {
+    return this.db.query.employeeAssets.findMany({
+      where: and(
+        eq(employeeAssets.companyId, companyId),
+        eq(employeeAssets.employeeId, employeeId)
+      )
+    });
+  }
+  async addAsset(companyId, employeeId, data) {
+    const id = `AST-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+    const result = await this.db.insert(employeeAssets).values({
+      id,
+      companyId,
+      employeeId,
+      name: data.name,
+      category: data.category,
+      serialNumber: data.serialNumber,
+      status: data.status || "Assigned",
+      condition: data.condition || "Good",
+      purchaseDate: data.purchaseDate,
+      value: data.value ? parseInt(data.value, 10) : null,
+      image: data.image
+    }).returning();
+    return result[0];
+  }
+  async deleteAsset(companyId, employeeId, assetId) {
+    const result = await this.db.delete(employeeAssets).where(and(
+      eq(employeeAssets.id, assetId),
+      eq(employeeAssets.companyId, companyId),
+      eq(employeeAssets.employeeId, employeeId)
+    )).returning();
+    return result[0];
   }
   async getDocumentFile(companyId, employeeId, bucket, documentId) {
     const doc = await this.db.query.employeeDocuments.findFirst({
@@ -9696,6 +9751,29 @@ var getAuditLogs = /* @__PURE__ */ __name(async (c) => {
   const result = await service.getAuditLogs(companyId, employeeId);
   return c.json(result);
 }, "getAuditLogs");
+var getAssets = /* @__PURE__ */ __name(async (c) => {
+  const companyId = c.get("companyId");
+  const employeeId = c.req.param("id");
+  const service = new EmployeeService(c.env.DB);
+  const result = await service.getAssets(companyId, employeeId);
+  return c.json(result);
+}, "getAssets");
+var addAsset = /* @__PURE__ */ __name(async (c) => {
+  const companyId = c.get("companyId");
+  const employeeId = c.req.param("id");
+  const service = new EmployeeService(c.env.DB);
+  const body = await c.req.json();
+  const result = await service.addAsset(companyId, employeeId, body);
+  return c.json(result, 201);
+}, "addAsset");
+var deleteAsset = /* @__PURE__ */ __name(async (c) => {
+  const companyId = c.get("companyId");
+  const employeeId = c.req.param("id");
+  const assetId = c.req.param("assetId");
+  const service = new EmployeeService(c.env.DB);
+  const result = await service.deleteAsset(companyId, employeeId, assetId);
+  return c.json(result);
+}, "deleteAsset");
 
 // src/middlewares/auth.middleware.ts
 var authMiddleware = /* @__PURE__ */ __name(async (c, next) => {
@@ -10531,6 +10609,9 @@ adminRoutes.post("/employees/:id/emergency-contacts", adminOnly2, addEmergencyCo
 adminRoutes.delete("/employees/:id/emergency-contacts/:contactId", adminOnly2, deleteEmergencyContact);
 adminRoutes.post("/employees/:id/documents", adminOnly2, addDocument);
 adminRoutes.delete("/employees/:id/documents/:documentId", adminOnly2, deleteDocument);
+adminRoutes.get("/employees/:id/assets", adminOnly2, getAssets);
+adminRoutes.post("/employees/:id/assets", adminOnly2, addAsset);
+adminRoutes.delete("/employees/:id/assets/:assetId", adminOnly2, deleteAsset);
 adminRoutes.get("/performance/employee/:id", adminOnly2, getEmployeeAssessments);
 adminRoutes.post("/performance/employee/:id", adminOnly2, addEmployeeAssessment);
 adminRoutes.get("/benefits/employee/:id", adminOnly2, getEmployeeBenefits);

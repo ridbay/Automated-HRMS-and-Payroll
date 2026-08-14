@@ -124,3 +124,29 @@ export const getAuditLogs = async (c: Context<AppEnv>) => {
   const result = await service.getAuditLogs(companyId, employeeId);
   return c.json(result);
 };
+
+export const getAssets = async (c: Context<AppEnv>) => {
+  const companyId = c.get('companyId');
+  const employeeId = c.req.param('id') as string;
+  const service = new EmployeeService(c.env.DB);
+  const result = await service.getAssets(companyId, employeeId);
+  return c.json(result);
+};
+
+export const addAsset = async (c: Context<AppEnv>) => {
+  const companyId = c.get('companyId');
+  const employeeId = c.req.param('id') as string;
+  const service = new EmployeeService(c.env.DB);
+  const body = await c.req.json();
+  const result = await service.addAsset(companyId, employeeId, body);
+  return c.json(result, 201);
+};
+
+export const deleteAsset = async (c: Context<AppEnv>) => {
+  const companyId = c.get('companyId');
+  const employeeId = c.req.param('id') as string;
+  const assetId = c.req.param('assetId') as string;
+  const service = new EmployeeService(c.env.DB);
+  const result = await service.deleteAsset(companyId, employeeId, assetId);
+  return c.json(result);
+};

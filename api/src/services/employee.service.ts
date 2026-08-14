@@ -300,8 +300,9 @@ export class EmployeeService {
 
     // Attempt to delete from R2
     try {
-      const fileKey = doc.url.split('/').pop();
-      if (fileKey) await bucket.delete(`documents/${employeeId}/${fileKey}`);
+      if (doc.fileKey) {
+        await bucket.delete(doc.fileKey);
+      }
     } catch (e) {
       console.error('Failed to delete from R2', e);
     }
@@ -325,6 +326,44 @@ export class EmployeeService {
       ),
       orderBy: (auditLogs: any, { desc }: any) => [desc(auditLogs.createdAt)],
     });
+  }
+
+  async getAssets(companyId: string, employeeId: string) {
+    return this.db.query.employeeAssets.findMany({
+      where: and(
+        eq(schema.employeeAssets.companyId, companyId),
+        eq(schema.employeeAssets.employeeId, employeeId)
+      )
+    });
+  }
+
+  async addAsset(companyId: string, employeeId: string, data: any) {
+    const id = `AST-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+    const result = await this.db.insert(schema.employeeAssets).values({
+      id,
+      companyId,
+      employeeId,
+      name: data.name,
+      category: data.category,
+      serialNumber: data.serialNumber,
+      status: data.status || 'Assigned',
+      condition: data.condition || 'Good',
+      purchaseDate: data.purchaseDate,
+      value: data.value ? parseInt(data.value, 10) : null,
+      image: data.image
+    }).returning();
+    return result[0];
+  }
+
+  async deleteAsset(companyId: string, employeeId: string, assetId: string) {
+    const result = await this.db.delete(schema.employeeAssets)
+      .where(and(
+        eq(schema.employeeAssets.id, assetId),
+        eq(schema.employeeAssets.companyId, companyId),
+        eq(schema.employeeAssets.employeeId, employeeId)
+      ))
+      .returning();
+    return result[0];
   }
 
   async getDocumentFile(companyId: string, employeeId: string, bucket: R2Bucket, documentId: string) {

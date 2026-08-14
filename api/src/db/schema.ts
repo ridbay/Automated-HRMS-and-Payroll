@@ -3,6 +3,7 @@ export {
   employees,
   emergencyContacts,
   employeeDocuments,
+  employeeAssets,
   employeesRelations,
   emergencyContactsRelations,
   employeeDocumentsRelations

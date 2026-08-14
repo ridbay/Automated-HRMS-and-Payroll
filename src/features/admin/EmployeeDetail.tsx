@@ -41,7 +41,7 @@ import {
   Save,
   XCircle,
 } from "lucide-react";
-import { getDocumentDownloadUrl, useEmployeeLeaveBalances, useUpdateLeaveBalances, useEmployeeProfile, useEmployeeDirectReports, useAddAdminEmergencyContact, useDeleteAdminEmergencyContact, useUploadEmployeeDocument, useDeleteEmployeeDocument, useUpdateAdminEmployee, useEmployeeAssessments, useCreateAssessment, useEmployeePayslips, useEmployeeBenefits, useUpdateEmployeeBenefits, useEmployeeTrainings, useAddEmployeeTraining, useEmployeeLeaveRequests, useEmployeeAuditLogs } from "../../api/client";
+import { getDocumentDownloadUrl, useEmployeeLeaveBalances, useUpdateLeaveBalances, useEmployeeProfile, useEmployeeDirectReports, useAddAdminEmergencyContact, useDeleteAdminEmergencyContact, useUploadEmployeeDocument, useDeleteEmployeeDocument, useUpdateAdminEmployee, useEmployeeAssessments, useCreateAssessment, useEmployeePayslips, useEmployeeBenefits, useUpdateEmployeeBenefits, useEmployeeTrainings, useAddEmployeeTraining, useEmployeeLeaveRequests, useEmployeeAuditLogs, useEmployeeAssets, useAddEmployeeAsset, useDeleteEmployeeAsset } from "../../api/client";
 import { usePopup } from "../../components/PopupProvider";
 import { Employee } from "../../types/index";
 import { MOCK_ASSETS } from "../../data/mocks";
@@ -88,6 +88,11 @@ const EmployeeDetail: React.FC<Props> = ({ employee: initialEmployee, onBack }) 
 
   const employee = profile || initialEmployee;
   const [activeTab, setActiveTab] = useState("personal");
+  const [privateNotes, setPrivateNotes] = useState(employee.privateNotes || "");
+
+  const { data: assetsData } = useEmployeeAssets(employee.id);
+  const addAssetMutation = useAddEmployeeAsset();
+  const deleteAssetMutation = useDeleteEmployeeAsset();
   const [isLoading, setIsLoading] = useState(false);
 
   // Simulated loading effect when switching tabs
@@ -1048,11 +1053,17 @@ const EmployeeDetail: React.FC<Props> = ({ employee: initialEmployee, onBack }) 
                       <ShieldAlert size={16} /> HR Private Notes
                     </h4>
                     <textarea
+                      value={privateNotes}
+                      onChange={(e) => setPrivateNotes(e.target.value)}
                       className="w-full h-40 bg-white border-none rounded-xl p-4 text-xs font-medium text-slate-600 outline-none resize-none mb-4"
                       placeholder="Add private administrative notes here..."
                     />
-                    <button className="w-full py-3 bg-amber-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg hover:bg-amber-600">
-                      Save Note
+                    <button 
+                      onClick={() => updateEmployeeMutation.mutate({ id: employee.id, data: { privateNotes } })}
+                      disabled={updateEmployeeMutation.isPending}
+                      className="w-full py-3 bg-amber-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg hover:bg-amber-600 disabled:opacity-50"
+                    >
+                      {updateEmployeeMutation.isPending ? "Saving..." : "Save Note"}
                     </button>
                   </div>
                 </div>
@@ -1092,21 +1103,17 @@ const EmployeeDetail: React.FC<Props> = ({ employee: initialEmployee, onBack }) 
                     <Box className="text-indigo-600" /> Assigned Assets
                   </h3>
                   <div className="space-y-6">
-                    {MOCK_ASSETS.filter(
-                      (asset) => asset.assignedTo === employee.id,
-                    ).length > 0 ? (
-                      MOCK_ASSETS.filter(
-                        (asset) => asset.assignedTo === employee.id,
-                      ).map((asset) => (
+                    {(assetsData && assetsData.length > 0) ? (
+                      assetsData.map((asset: any) => (
                         <div
                           key={asset.id}
-                          className="flex items-center gap-6 p-6 bg-slate-50 rounded-2xl border border-slate-100"
+                          className="flex items-center gap-6 p-6 bg-slate-50 rounded-2xl border border-slate-100 relative group"
                         >
-                          <div className="w-16 h-16 bg-white rounded-xl flex items-center justify-center shrink-0 border border-slate-100">
+                          <div className="w-16 h-16 bg-white rounded-xl flex items-center justify-center shrink-0 border border-slate-100 overflow-hidden">
                             {asset.image ? (
                               <img
                                 src={asset.image}
-                                className="w-12 h-12 object-contain"
+                                className="w-full h-full object-cover"
                               />
                             ) : (
                               <Box className="text-slate-300" />
@@ -1117,7 +1124,7 @@ const EmployeeDetail: React.FC<Props> = ({ employee: initialEmployee, onBack }) 
                               {asset.name}
                             </h4>
                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                              SN: {asset.serialNumber}
+                              {asset.category} • SN: {asset.serialNumber || 'N/A'}
                             </p>
                           </div>
                           <div className="text-right">
@@ -1125,9 +1132,19 @@ const EmployeeDetail: React.FC<Props> = ({ employee: initialEmployee, onBack }) 
                               {asset.condition}
                             </span>
                             <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">
-                              {asset.purchaseDate}
+                              {asset.purchaseDate || 'No Date'}
                             </p>
                           </div>
+                          <button
+                            onClick={async () => {
+                              if (await confirm(`Are you sure you want to unassign and delete ${asset.name}?`)) {
+                                deleteAssetMutation.mutate({ employeeId: employee.id, assetId: asset.id });
+                              }
+                            }}
+                            className="absolute top-4 right-4 p-2 bg-white text-red-500 rounded-xl shadow-lg opacity-0 group-hover:opacity-100 hover:bg-red-500 hover:text-white transition-all"
+                          >
+                            <Trash2 size={16} />
+                          </button>
                         </div>
                       ))
                     ) : (
@@ -1138,11 +1155,31 @@ const EmployeeDetail: React.FC<Props> = ({ employee: initialEmployee, onBack }) 
                         <p className="text-slate-400 font-bold text-sm">
                           No assets assigned to this employee.
                         </p>
-                        <button className="mt-4 px-6 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-100 transition-all">
-                          Assign Asset
-                        </button>
                       </div>
                     )}
+                    <button 
+                      onClick={async () => {
+                        const name = await prompt("Asset Name (e.g. MacBook Pro):", "");
+                        if (!name) return;
+                        const category = await prompt("Category (e.g. Laptop, Phone):", "Laptop");
+                        if (!category) return;
+                        const serialNumber = await prompt("Serial Number:", "");
+                        const condition = await prompt("Condition (e.g. New, Good, Fair):", "Good");
+                        
+                        addAssetMutation.mutate({
+                          employeeId: employee.id,
+                          data: {
+                            name,
+                            category,
+                            serialNumber,
+                            condition
+                          }
+                        });
+                      }}
+                      className="mt-4 px-6 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-100 transition-all block mx-auto"
+                    >
+                      Assign Asset
+                    </button>
                   </div>
                 </div>
               )}

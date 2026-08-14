@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { requireRole } from './role.middleware';
+import { requireRole, hasCustomPermission, requirePermission } from './role.middleware';
 
 describe('Role Middleware', () => {
   it('should call next when the role is in the allow-list', async () => {

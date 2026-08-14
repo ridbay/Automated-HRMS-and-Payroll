@@ -967,6 +967,52 @@ export const useEmployeeAuditLogs = (employeeId: string) => {
     enabled: !!employeeId,
   });
 };
+
+export const useEmployeeAssets = (employeeId: string) => {
+  return useQuery({
+    queryKey: ['employeeAssets', employeeId],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/admin/employees/${employeeId}/assets`);
+      if (!res.ok) throw new Error('Failed to fetch assets');
+      return res.json();
+    },
+    enabled: !!employeeId,
+  });
+};
+
+export const useAddEmployeeAsset = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ employeeId, data }: { employeeId: string; data: any }) => {
+      const res = await fetchWithTenant(`${API_URL}/admin/employees/${employeeId}/assets`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('Failed to add asset');
+      return res.json();
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['employeeAssets', variables.employeeId] });
+    },
+  });
+};
+
+export const useDeleteEmployeeAsset = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ employeeId, assetId }: { employeeId: string; assetId: string }) => {
+      const res = await fetchWithTenant(`${API_URL}/admin/employees/${employeeId}/assets/${assetId}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) throw new Error('Failed to delete asset');
+      return res.json();
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['employeeAssets', variables.employeeId] });
+    },
+  });
+};
 export const useUpdateLeaveBalances = () => {
   const queryClient = useQueryClient();
   return useMutation({

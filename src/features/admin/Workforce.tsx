@@ -1485,14 +1485,7 @@ const Workforce: React.FC = () => {
                     Departments
                   </h4>
                   <div className="grid grid-cols-2 gap-3">
-                    {[
-                      "Engineering",
-                      "Design",
-                      "Marketing",
-                      "Sales",
-                      "Product",
-                      "Legal",
-                    ].map((d) => (
+                    {departments.map((dept: any) => dept.name).map((d: string) => (
                       <button
                         key={d}
                         onClick={() =>

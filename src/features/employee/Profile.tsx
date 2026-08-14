@@ -618,10 +618,7 @@ const Profile: React.FC = () => {
                             <button 
                               onClick={async () => {
                                 if(await confirm('Are you sure you want to delete this document?')) {
-                                  deleteDocMutation.mutate({ 
-                                    employeeId: me.id,
-                                    documentId: doc.id
-                                  });
+                                  deleteDocMutation.mutate(doc.id);
                                 }
                               }}
                               className="p-2 bg-red-100 text-red-600 rounded-xl shadow-lg hover:bg-red-600 hover:text-white transition-all"

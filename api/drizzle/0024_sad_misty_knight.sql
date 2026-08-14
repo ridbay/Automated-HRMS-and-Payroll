@@ -1,0 +1,1 @@
+ALTER TABLE `employees` ADD `custom_role_id` text REFERENCES roles(id);

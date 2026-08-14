@@ -10,7 +10,10 @@ import {
   deleteEmergencyContact,
   addDocument,
   deleteDocument,
-  getAuditLogs
+  getAuditLogs,
+  getAssets,
+  addAsset,
+  deleteAsset
 } from "../controllers/admin/employee.controller";
 import { authMiddleware } from "../middlewares/auth.middleware";
 import { requireRole } from "../middlewares/role.middleware";
@@ -113,8 +116,14 @@ import { getEmployeeAssessments, addEmployeeAssessment } from "../controllers/ad
 import { getEmployeeBenefits, updateEmployeeBenefits } from "../controllers/admin/benefits.controller";
 import { getEmployeeTrainings, addEmployeeTraining } from "../controllers/admin/training.controller";
 
+// Documents
 adminRoutes.post("/employees/:id/documents", adminOnly, addDocument);
 adminRoutes.delete("/employees/:id/documents/:documentId", adminOnly, deleteDocument);
+
+// Assets
+adminRoutes.get("/employees/:id/assets", adminOnly, getAssets);
+adminRoutes.post("/employees/:id/assets", adminOnly, addAsset);
+adminRoutes.delete("/employees/:id/assets/:assetId", adminOnly, deleteAsset);
 
 adminRoutes.get("/performance/employee/:id", adminOnly, getEmployeeAssessments);
 adminRoutes.post("/performance/employee/:id", adminOnly, addEmployeeAssessment);

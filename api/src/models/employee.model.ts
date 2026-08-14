@@ -2,6 +2,7 @@ import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core';
 import { relations, sql } from 'drizzle-orm';
 import { companies } from './company.model';
 import { departments } from './org.model';
+import { roles } from './role.model';
 
 export const employees = sqliteTable('employees', {
   id: text('id').primaryKey(),
@@ -16,6 +17,9 @@ export const employees = sqliteTable('employees', {
   nationality: text('nationality'),
   maritalStatus: text('marital_status'),
   role: text('role'),
+  // Optional, additive fine-grained role — narrows what the fixed `role` above
+  // already allows via requireRole; see requirePermission in role.middleware.ts.
+  customRoleId: text('custom_role_id').references(() => roles.id),
   department: text('department'),
   departmentId: text('department_id').references(() => departments.id),
   location: text('location'),
@@ -52,6 +56,24 @@ export const employees = sqliteTable('employees', {
   secondaryAccountNumber: text('secondary_account_number'),
   secondaryAccountName: text('secondary_account_name'),
   payoutMethod: text('payout_method'),
+  // Miscellaneous
+  privateNotes: text('private_notes'),
+  createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text('updated_at').$onUpdate(() => new Date().toISOString()),
+});
+
+export const employeeAssets = sqliteTable('employee_assets', {
+  id: text('id').primaryKey(),
+  companyId: text('company_id').notNull().references(() => companies.id),
+  employeeId: text('employee_id').notNull().references(() => employees.id),
+  name: text('name').notNull(),
+  category: text('category').notNull(),
+  serialNumber: text('serial_number'),
+  status: text('status').notNull().default('Assigned'),
+  condition: text('condition').notNull().default('Good'),
+  purchaseDate: text('purchase_date'),
+  value: integer('value'),
+  image: text('image'),
   createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text('updated_at').$onUpdate(() => new Date().toISOString()),
 });
