@@ -288,26 +288,43 @@ export class EmployeeService {
   }
 
   async deleteDocument(companyId: string, employeeId: string, bucket: R2Bucket, documentId: string) {
-    // Get document to find fileKey
     const doc = await this.db.query.employeeDocuments.findFirst({
       where: and(
-        eq(employeeDocuments.id, documentId),
-        eq(employeeDocuments.companyId, companyId),
-        eq(employeeDocuments.employeeId, employeeId)
+        eq(schema.employeeDocuments.id, documentId),
+        eq(schema.employeeDocuments.companyId, companyId),
+        eq(schema.employeeDocuments.employeeId, employeeId)
       )
     });
 
     if (!doc) throw new Error('Document not found');
 
-    // Delete from R2
-    await bucket.delete(doc.fileKey);
+    // Attempt to delete from R2
+    try {
+      const fileKey = doc.url.split('/').pop();
+      if (fileKey) await bucket.delete(`documents/${employeeId}/${fileKey}`);
+    } catch (e) {
+      console.error('Failed to delete from R2', e);
+    }
 
-    // Delete from DB
-    await this.db
-      .delete(employeeDocuments)
-      .where(eq(employeeDocuments.id, documentId));
+    const result = await this.db.delete(schema.employeeDocuments)
+      .where(and(
+        eq(schema.employeeDocuments.id, documentId),
+        eq(schema.employeeDocuments.companyId, companyId),
+        eq(schema.employeeDocuments.employeeId, employeeId)
+      ))
+      .returning();
 
-    return { success: true };
+    return result[0];
+  }
+
+  async getAuditLogs(companyId: string, employeeId: string) {
+    return this.db.query.auditLogs.findMany({
+      where: and(
+        eq(schema.auditLogs.companyId, companyId),
+        eq(schema.auditLogs.employeeId, employeeId)
+      ),
+      orderBy: (auditLogs: any, { desc }: any) => [desc(auditLogs.createdAt)],
+    });
   }
 
   async getDocumentFile(companyId: string, employeeId: string, bucket: R2Bucket, documentId: string) {

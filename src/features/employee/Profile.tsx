@@ -40,6 +40,7 @@ import {
   useDeleteDocumentMutation,
   getDocumentDownloadUrl
 } from "../../api/client";
+import { usePopup } from "../../components/PopupProvider";
 import { useAuth } from "../../context/AuthContext";
 
 const ProfileField = ({
@@ -146,6 +147,7 @@ const Profile: React.FC = () => {
   const updateProfileMutation = useUpdateMyProfile();
   const addEmergencyContact = useAddEmergencyContact();
   const deleteEmergencyContact = useDeleteEmergencyContact();
+  const { confirm } = usePopup();
 
   const handleOpenSecondaryBank = () => {
     setSecondaryBankDetails({
@@ -614,9 +616,12 @@ const Profile: React.FC = () => {
                           </p>
                           <div className="absolute bottom-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
                             <button 
-                              onClick={() => {
-                                if(confirm('Are you sure you want to delete this document?')) {
-                                  deleteDocMutation.mutate(doc.id);
+                              onClick={async () => {
+                                if(await confirm('Are you sure you want to delete this document?')) {
+                                  deleteDocMutation.mutate({ 
+                                    employeeId: me.id,
+                                    documentId: doc.id
+                                  });
                                 }
                               }}
                               className="p-2 bg-red-100 text-red-600 rounded-xl shadow-lg hover:bg-red-600 hover:text-white transition-all"

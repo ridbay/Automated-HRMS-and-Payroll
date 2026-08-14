@@ -135,13 +135,17 @@ const AppContent: React.FC = () => {
   );
 };
 
+import { PopupProvider } from "./components/PopupProvider";
+
 const App: React.FC = () => {
   return (
-    <AuthProvider>
-      <NavigationProvider>
-        <AppContent />
-      </NavigationProvider>
-    </AuthProvider>
+    <PopupProvider>
+      <AuthProvider>
+        <NavigationProvider>
+          <AppContent />
+        </NavigationProvider>
+      </AuthProvider>
+    </PopupProvider>
   );
 };
 

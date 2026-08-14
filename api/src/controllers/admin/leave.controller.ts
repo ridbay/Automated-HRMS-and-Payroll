@@ -53,3 +53,12 @@ export const updateEmployeeLeaveBalances = async (c: Context<AppEnv>) => {
   const updated = await leaveService.updateEmployeeLeaveBalances(companyId, employeeId, balances);
   return c.json(updated);
 };
+
+export const getEmployeeLeaveRequests = async (c: Context<AppEnv>) => {
+  const companyId = c.get('companyId') as string;
+  const employeeId = c.req.param('id') as string;
+  const leaveService = new LeaveService(c.env.DB);
+  
+  const requests = await leaveService.getEmployeeLeaveRequests(companyId, employeeId);
+  return c.json(requests);
+};

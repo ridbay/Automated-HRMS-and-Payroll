@@ -36,13 +36,12 @@ export const lockPayroll = async (c: Context) => {
 
 import { eq, and, desc } from 'drizzle-orm';
 import { payslips, payrollRuns } from '../../db/schema';
-import { getDb } from '../../db/client';
 
 export const getEmployeePayslips = async (c: Context) => {
   try {
-    const employeeId = c.req.param('id');
+    const employeeId = c.req.param('id') as string;
     const companyId = c.get('companyId');
-    const db = getDb(c.env.DB);
+    const db = c.get('db');
 
     const records = await db
       .select({

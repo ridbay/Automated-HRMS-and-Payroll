@@ -1,13 +1,12 @@
 import { Context } from 'hono';
 import { eq, and, desc } from 'drizzle-orm';
 import { employeeTrainings } from '../../db/schema';
-import { getDb } from '../../db/client';
 
 export const getEmployeeTrainings = async (c: Context) => {
   try {
-    const employeeId = c.req.param('id');
+    const employeeId = c.req.param('id') as string;
     const companyId = c.get('companyId');
-    const db = getDb(c.env.DB);
+    const db = c.get('db');
 
     const records = await db
       .select()
@@ -23,9 +22,9 @@ export const getEmployeeTrainings = async (c: Context) => {
 
 export const addEmployeeTraining = async (c: Context) => {
   try {
-    const employeeId = c.req.param('id');
+    const employeeId = c.req.param('id') as string;
     const companyId = c.get('companyId');
-    const db = getDb(c.env.DB);
+    const db = c.get('db');
     const body = await c.req.json();
 
     const id = `TRN-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;

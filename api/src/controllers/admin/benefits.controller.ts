@@ -1,13 +1,12 @@
 import { Context } from 'hono';
 import { eq, and } from 'drizzle-orm';
 import { employeeBenefits } from '../../db/schema';
-import { getDb } from '../../db/client';
 
 export const getEmployeeBenefits = async (c: Context) => {
   try {
-    const employeeId = c.req.param('id');
+    const employeeId = c.req.param('id') as string;
     const companyId = c.get('companyId');
-    const db = getDb(c.env.DB);
+    const db = c.get('db');
 
     const record = await db
       .select()
@@ -23,9 +22,9 @@ export const getEmployeeBenefits = async (c: Context) => {
 
 export const updateEmployeeBenefits = async (c: Context) => {
   try {
-    const employeeId = c.req.param('id');
+    const employeeId = c.req.param('id') as string;
     const companyId = c.get('companyId');
-    const db = getDb(c.env.DB);
+    const db = c.get('db');
     const body = await c.req.json();
 
     const existing = await db

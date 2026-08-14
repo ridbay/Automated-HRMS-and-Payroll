@@ -11,8 +11,9 @@ import {
   Info, ArrowRight, UserPlus, MoreHorizontal,
   LayoutGrid, Share2, Terminal, Code,
   Copy, KeyRound, Loader2, PlaySquare, Workflow,
-  X, ChevronDown, Crown, Star
+  X, ChevronDown, Crown, Star, Shield
 } from 'lucide-react';
+import { usePopup } from '../../components/PopupProvider';
 import {
   useSettings, useUpdateSettings, useApiKeys, useCreateApiKey, useDeleteApiKey,
   useCompany, useUpdateCompany,
@@ -22,15 +23,24 @@ import {
   useRoles, useCreateRole, useUpdateRole, useDeleteRole,
   useEmployees
 } from '../../api/client';
+import { useAuth } from '../../context/AuthContext';
 
 const Settings: React.FC = () => {
   const [activeSection, setActiveSection] = useState('profile');
   const [isSaving, setIsSaving] = useState(false);
   const [newKeyName, setNewKeyName] = useState('');
+  const { prompt } = usePopup();
 
-  const { data: settings, isLoading: isSettingsLoading } = useSettings();
+  // These sections (Company Profile, Departments & Locations, Roles & Permissions,
+  // API Access) are backed by admin-only endpoints. Every role's nav links to this
+  // same Settings page, so guard the underlying queries rather than let non-admins
+  // hit a wall of 403s.
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'HR_ADMIN';
+
+  const { data: settings, isLoading: isSettingsLoading } = useSettings(isAdmin);
   const updateSettingsMutation = useUpdateSettings();
-  const { data: apiKeys, isLoading: isKeysLoading } = useApiKeys();
+  const { data: apiKeys, isLoading: isKeysLoading } = useApiKeys(isAdmin);
   const createApiKeyMutation = useCreateApiKey();
   const deleteApiKeyMutation = useDeleteApiKey();
 
@@ -53,11 +63,11 @@ const Settings: React.FC = () => {
     setTimeout(() => setIsSaving(false), 1500);
   };
 
-  const { data: company, isLoading: isCompanyLoading } = useCompany();
+  const { data: company, isLoading: isCompanyLoading } = useCompany(isAdmin);
   const updateCompanyMutation = useUpdateCompany();
-  const { data: departments, isLoading: isDeptsLoading } = useDepartments();
-  const { data: locations, isLoading: isLocsLoading } = useLocations();
-  const { data: employees = [] } = useEmployees();
+  const { data: departments, isLoading: isDeptsLoading } = useDepartments(isAdmin);
+  const { data: locations, isLoading: isLocsLoading } = useLocations(isAdmin);
+  const { data: employees = [] } = useEmployees(isAdmin);
   const createDept = useCreateDepartment();
   const deleteDept = useDeleteDepartment();
   const updateDept = useUpdateDepartment();
@@ -65,7 +75,7 @@ const Settings: React.FC = () => {
   const removeDeptMember = useRemoveDepartmentMember();
   const createLoc = useCreateLocation();
   const deleteLoc = useDeleteLocation();
-  const { data: roles, isLoading: isRolesLoading } = useRoles();
+  const { data: roles, isLoading: isRolesLoading } = useRoles(isAdmin);
   const createRole = useCreateRole();
 
   const [expandedDeptId, setExpandedDeptId] = useState<string | null>(null);
@@ -392,8 +402,8 @@ const Settings: React.FC = () => {
               <p className="text-sm text-slate-500 font-medium">Define access layers and administrative permissions.</p>
             </div>
             <button 
-              onClick={() => {
-                const name = prompt("Enter role name:");
+              onClick={async () => {
+                const name = await prompt("Enter role name:");
                 if (name) createRole.mutate({ name, permissions: { all: false }, color: 'indigo', description: 'Custom role' });
               }}
               disabled={createRole.isPending}

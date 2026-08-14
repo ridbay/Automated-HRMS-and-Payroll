@@ -17,7 +17,7 @@ import {
   Timer,
   Loader2,
 } from "lucide-react";
-import { useMyLeave, useApplyLeave, useEmployees, useMyProfile, useTeamLeaves } from "../../api/client";
+import { useMyLeave, useApplyLeave, useDirectory, useMyProfile, useTeamLeaves } from "../../api/client";
 import { useNavigation } from "../../context/NavigationContext";
 import Celebration from "../../components/Celebration";
 
@@ -31,7 +31,7 @@ const Leave: React.FC = () => {
   const { data: leaveData, isLoading } = useMyLeave();
   const applyLeaveMutation = useApplyLeave();
   const { data: teamLeavesData, isLoading: teamLeavesLoading } = useTeamLeaves();
-  const { data: employees } = useEmployees();
+  const { data: employees } = useDirectory();
   const { data: me } = useMyProfile();
 
   // Request Form State

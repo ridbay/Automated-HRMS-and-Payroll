@@ -41,8 +41,8 @@ import {
   Save,
   XCircle,
 } from "lucide-react";
-import { formatCurrency } from "../../utils/format";
-import { getDocumentDownloadUrl, useEmployeeLeaveBalances, useUpdateLeaveBalances, useEmployeeProfile, useEmployeeDirectReports, useAddAdminEmergencyContact, useDeleteAdminEmergencyContact, useUploadEmployeeDocument, useDeleteEmployeeDocument, useUpdateAdminEmployee, useEmployeeAssessments, useCreateAssessment, useEmployeePayslips, useEmployeeBenefits, useUpdateEmployeeBenefits, useEmployeeTrainings, useAddEmployeeTraining } from "../../api/client";
+import { getDocumentDownloadUrl, useEmployeeLeaveBalances, useUpdateLeaveBalances, useEmployeeProfile, useEmployeeDirectReports, useAddAdminEmergencyContact, useDeleteAdminEmergencyContact, useUploadEmployeeDocument, useDeleteEmployeeDocument, useUpdateAdminEmployee, useEmployeeAssessments, useCreateAssessment, useEmployeePayslips, useEmployeeBenefits, useUpdateEmployeeBenefits, useEmployeeTrainings, useAddEmployeeTraining, useEmployeeLeaveRequests, useEmployeeAuditLogs } from "../../api/client";
+import { usePopup } from "../../components/PopupProvider";
 import { Employee } from "../../types/index";
 import { MOCK_ASSETS } from "../../data/mocks";
 import {
@@ -80,6 +80,11 @@ const EmployeeDetail: React.FC<Props> = ({ employee: initialEmployee, onBack }) 
 
   const { data: trainingsData } = useEmployeeTrainings(initialEmployee.id);
   const addTrainingMutation = useAddEmployeeTraining();
+
+  const { data: leaveRequestsData } = useEmployeeLeaveRequests(initialEmployee.id);
+  const { data: auditLogsData } = useEmployeeAuditLogs(initialEmployee.id);
+
+  const { alert, confirm, prompt } = usePopup();
 
   const employee = profile || initialEmployee;
   const [activeTab, setActiveTab] = useState("personal");
@@ -131,24 +136,15 @@ const EmployeeDetail: React.FC<Props> = ({ employee: initialEmployee, onBack }) 
   const tabs = [
     { id: "personal", label: "Personal", icon: <User size={16} /> },
     { id: "employment", label: "Employment", icon: <Briefcase size={16} /> },
-    { id: "compensation", label: "Comp", icon: <DollarSign size={16} /> },
     { id: "attendance", label: "Time", icon: <Clock size={16} /> },
-    { id: "leaves", label: "Leaves", icon: <Calendar size={16} /> },
-    { id: "performance", label: "Perf", icon: <Trophy size={16} /> },
-    {
-      id: "documents",
-      label: "Documents",
-      icon: <FileText size={16} />,
-    },
-    {
-      id: "assets",
-      label: "Assets",
-      icon: <Box size={16} />,
-    },
+    { id: "leave", label: "Leave", icon: <Calendar size={16} /> },
+    { id: "performance", label: "Performance", icon: <TrendingUp size={16} /> },
     { id: "payroll", label: "Payroll", icon: <Wallet size={16} /> },
     { id: "benefits", label: "Benefits", icon: <Heart size={16} /> },
-    { id: "training", label: "Development", icon: <BookOpen size={16} /> },
+    { id: "training", label: "Training", icon: <BookOpen size={16} /> },
+    { id: "documents", label: "Documents", icon: <FileText size={16} /> },
     { id: "disciplinary", label: "Notes", icon: <AlertCircle size={16} /> },
+    { id: "assets", label: "Assets", icon: <Box size={16} /> },
     { id: "activity", label: "Audit", icon: <History size={16} /> },
   ];
 
@@ -466,9 +462,10 @@ const EmployeeDetail: React.FC<Props> = ({ employee: initialEmployee, onBack }) 
                                 </p>
                               </div>
                               <button
-                                onClick={() => {
-                                  if (window.confirm("Delete this contact?")) {
-                                    deleteContactMutation.mutate({ employeeId: employee.id, contactId: contact.id });
+                                onClick={async () => {
+                                  if (await confirm("Delete this contact?")) {
+                                    deleteContactMutation.mutate({
+                                      employeeId: employee.id, contactId: contact.id });
                                   }
                                 }}
                                 className="p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
@@ -483,12 +480,13 @@ const EmployeeDetail: React.FC<Props> = ({ employee: initialEmployee, onBack }) 
                           </div>
                         )}
                         <button 
-                          onClick={() => {
-                            const name = window.prompt("Contact Name:");
+                          onClick={async () => {
+                            const name = await prompt("Contact Name:");
                             if (!name) return;
-                            const phone = window.prompt("Contact Phone:");
+                            const phone = await prompt("Contact Phone:");
                             if (!phone) return;
-                            const relationship = window.prompt("Relationship:");
+                            const relationship = await prompt("Relationship:");
+                            if (!relationship) return;
                             addContactMutation.mutate({
                               employeeId: employee.id,
                               data: { name, phone, relationship: relationship || "Family", isPrimary: employee.emergencyContacts?.length === 0 }
@@ -515,12 +513,12 @@ const EmployeeDetail: React.FC<Props> = ({ employee: initialEmployee, onBack }) 
                       <p className="text-xs text-slate-400 font-bold mt-1">Manage employee assessments and ratings</p>
                     </div>
                     <button
-                      onClick={() => {
-                        const cycleName = window.prompt("Cycle Name (e.g. Q1 2024, H1 2024):");
+                      onClick={async () => {
+                        const cycleName = await prompt("Cycle Name (e.g. Q1 2024, H1 2024):");
                         if (!cycleName) return;
-                        const managerRating = window.prompt("Rating (e.g. Exceeds Expectations, Meets Expectations):");
+                        const managerRating = await prompt("Rating (e.g. Exceeds Expectations, Meets Expectations):");
                         if (!managerRating) return;
-                        const managerComment = window.prompt("Manager Comment:");
+                        const managerComment = await prompt("Manager Comment:");
                         if (!managerComment) return;
                         
                         createAssessmentMutation.mutate({ employeeId: employee.id, data: { cycleName, managerRating, managerComment } });
@@ -571,12 +569,12 @@ const EmployeeDetail: React.FC<Props> = ({ employee: initialEmployee, onBack }) 
                         type="file" 
                         id="document-upload" 
                         className="hidden" 
-                        onChange={(e) => {
+                        onChange={async (e) => {
                           const file = e.target.files?.[0];
                           if (!file) return;
-                          const name = window.prompt("Document Name (e.g. ID Card, Resume):", file.name);
+                          const name = await prompt("Document Name (e.g. ID Card, Resume):", file.name);
                           if (!name) return;
-                          const type = window.prompt("Document Type (e.g. Identity, Tax, Contract):", "Identity");
+                          const type = await prompt("Document Type (e.g. Identity, Tax, Contract):", "Identity");
                           if (!type) return;
                           uploadDocMutation.mutate({ employeeId: employee.id, file, name, type });
                         }}
@@ -626,8 +624,8 @@ const EmployeeDetail: React.FC<Props> = ({ employee: initialEmployee, onBack }) 
                           </p>
                           <div className="absolute bottom-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
                             <button
-                              onClick={() => {
-                                if (window.confirm("Delete this document?")) {
+                              onClick={async () => {
+                                if (await confirm("Delete this document?")) {
                                   deleteDocMutation.mutate({ employeeId: employee.id, documentId: doc.id });
                                 }
                               }}
@@ -684,12 +682,12 @@ const EmployeeDetail: React.FC<Props> = ({ employee: initialEmployee, onBack }) 
                           Contract Status
                         </h4>
                         <button
-                          onClick={() => {
-                            const employmentType = window.prompt("Employment Type (e.g. Permanent, Contract):", employee.employmentType || "");
+                          onClick={async () => {
+                            const employmentType = await prompt("Employment Type (e.g. Permanent, Contract):", employee.employmentType || "");
                             if (employmentType === null) return;
-                            const status = window.prompt("Status (e.g. Active, Terminated, On Leave):", employee.status || "");
+                            const status = await prompt("Status (e.g. Active, Terminated, On Leave):", employee.status || "");
                             if (status === null) return;
-                            const probationEnd = window.prompt("Probation End Date (YYYY-MM-DD):", employee.probationEnd || "");
+                            const probationEnd = await prompt("Probation End Date (YYYY-MM-DD):", employee.probationEnd || "");
                             if (probationEnd === null) return;
                             
                             // useUpdateAdminEmployee is available? wait, I need to make sure useUpdateAdminEmployee is imported and initialized.
@@ -753,19 +751,41 @@ const EmployeeDetail: React.FC<Props> = ({ employee: initialEmployee, onBack }) 
 
             {activeTab === "attendance" && (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                  <section className="lg:col-span-2 bg-white p-10 rounded-[3rem] border border-slate-200 shadow-sm">
+                  <section className="lg:col-span-2 bg-white p-10 rounded-[3rem] border border-slate-200 shadow-sm flex items-center justify-center">
+                    <p className="text-slate-400 font-bold text-sm uppercase tracking-widest text-center">Timesheets and Attendance Logs<br/><span className="text-[10px]">No records for the current period.</span></p>
+                  </section>
+                  <section className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm flex flex-col items-center justify-center text-center">
+                    <div className="w-40 h-40 rounded-full border-[12px] border-emerald-100 flex items-center justify-center relative mb-6">
+                      <span className="text-4xl font-black text-emerald-600">
+                        98%
+                      </span>
+                      <div className="absolute top-0 left-0 w-full h-full border-[12px] border-emerald-500 rounded-full border-t-transparent border-l-transparent rotate-45" />
+                    </div>
+                    <h4 className="text-lg font-black text-slate-800">
+                      Punctuality Score
+                    </h4>
+                    <p className="text-xs font-medium text-slate-500 mt-2 max-w-[200px]">
+                      Consistently clocks in before 9:00 AM. Top 5% of
+                      workforce.
+                    </p>
+                  </section>
+                </div>
+              )}
+
+              {activeTab === "leave" && (
+                <div className="space-y-10">
+                  <section className="bg-white p-10 rounded-[3rem] border border-slate-200 shadow-sm">
                     <div className="flex justify-between items-center mb-8">
                       <h3 className="text-xl font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
                         <Clock className="text-amber-500" /> Leave Balances
                       </h3>
                       <button
-                        onClick={() => {
-                          const type = window.prompt("Leave Type to Edit (e.g. Annual, Sick, Casual):");
+                        onClick={async () => {
+                          const type = await prompt("Leave Type to Edit (e.g. Annual, Sick, Casual):");
                           if (!type) return;
-                          const totalStr = window.prompt("New Total Days:");
+                          const totalStr = await prompt("New Total Days:");
                           if (!totalStr || isNaN(parseInt(totalStr))) return;
                           
-                          // Convert existing to map, update the specific one, then send the full array as required by the endpoint
                           const currentBalances = leaveBalancesData || [];
                           const existingIndex = currentBalances.findIndex((b: any) => b.type.toLowerCase() === type.toLowerCase());
                           let newBalances = [...currentBalances];
@@ -812,41 +832,30 @@ const EmployeeDetail: React.FC<Props> = ({ employee: initialEmployee, onBack }) 
                         Recent Activity
                       </h4>
                       <div className="space-y-4">
-                        <div className="flex items-center justify-between p-4 border border-slate-100 rounded-2xl">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center">
-                              <Calendar size={20} />
+                        {(!leaveRequestsData || leaveRequestsData.length === 0) ? (
+                           <div className="p-4 border border-slate-100 rounded-2xl text-slate-400 font-bold text-sm text-center">No recent leave requests</div>
+                        ) : leaveRequestsData.slice(0, 5).map((req: any, i: number) => (
+                          <div key={i} className="flex items-center justify-between p-4 border border-slate-100 rounded-2xl">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center">
+                                <Calendar size={20} />
+                              </div>
+                              <div>
+                                <p className="text-sm font-black text-slate-800">
+                                  {req.type}
+                                </p>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase">
+                                  {req.startDate} {req.startDate !== req.endDate ? `- ${req.endDate}` : ''} • {req.days} days
+                                </p>
+                              </div>
                             </div>
-                            <div>
-                              <p className="text-sm font-black text-slate-800">
-                                Remote Work Request
-                              </p>
-                              <p className="text-[10px] font-bold text-slate-400 uppercase">
-                                May 12 • Approved
-                              </p>
-                            </div>
+                            <span className={`text-xs font-bold px-3 py-1 rounded-lg ${req.status === 'approved' ? 'text-emerald-600 bg-emerald-50' : req.status === 'rejected' ? 'text-rose-600 bg-rose-50' : 'text-amber-600 bg-amber-50'}`}>
+                              {req.status}
+                            </span>
                           </div>
-                          <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-lg">
-                            Approved
-                          </span>
-                        </div>
+                        ))}
                       </div>
                     </div>
-                  </section>
-                  <section className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm flex flex-col items-center justify-center text-center">
-                    <div className="w-40 h-40 rounded-full border-[12px] border-emerald-100 flex items-center justify-center relative mb-6">
-                      <span className="text-4xl font-black text-emerald-600">
-                        98%
-                      </span>
-                      <div className="absolute top-0 left-0 w-full h-full border-[12px] border-emerald-500 rounded-full border-t-transparent border-l-transparent rotate-45" />
-                    </div>
-                    <h4 className="text-lg font-black text-slate-800">
-                      Punctuality Score
-                    </h4>
-                    <p className="text-xs font-medium text-slate-500 mt-2 max-w-[200px]">
-                      Consistently clocks in before 9:00 AM. Top 5% of
-                      workforce.
-                    </p>
                   </section>
                 </div>
               )}
@@ -959,10 +968,10 @@ const EmployeeDetail: React.FC<Props> = ({ employee: initialEmployee, onBack }) 
                     </div>
                   ))}
                   <button 
-                    onClick={() => {
-                      const healthProvider = window.prompt("Health Provider (e.g. AXA Mansard):", benefitsData?.healthProvider || "");
+                    onClick={async () => {
+                      const healthProvider = await prompt("Health Provider (e.g. AXA Mansard):", benefitsData?.healthProvider || "");
                       if (healthProvider === null) return;
-                      const healthPlan = window.prompt("Health Plan (e.g. Gold Plan):", benefitsData?.healthPlan || "");
+                      const healthPlan = await prompt("Health Plan (e.g. Gold Plan):", benefitsData?.healthPlan || "");
                       if (healthPlan === null) return;
                       updateBenefitsMutation.mutate({ employeeId: employee.id, data: { healthProvider, healthPlan } });
                     }}
@@ -983,10 +992,10 @@ const EmployeeDetail: React.FC<Props> = ({ employee: initialEmployee, onBack }) 
                       <p className="text-xs text-slate-400 font-bold mt-1">Track assigned courses and development</p>
                     </div>
                     <button 
-                      onClick={() => {
-                        const courseName = window.prompt("Course Name:");
+                      onClick={async () => {
+                        const courseName = await prompt("Course Name:");
                         if (!courseName) return;
-                        const provider = window.prompt("Provider (e.g. Frontend Masters):");
+                        const provider = await prompt("Provider (e.g. Frontend Masters):");
                         if (!provider) return;
                         addTrainingMutation.mutate({ employeeId: employee.id, data: { courseName, provider, status: 'in_progress', date: new Date().toISOString().split('T')[0] } });
                       }}
@@ -1055,33 +1064,24 @@ const EmployeeDetail: React.FC<Props> = ({ employee: initialEmployee, onBack }) 
                     <History className="text-slate-400" /> System Audit Trail
                   </h3>
                   <div className="space-y-8 pl-8 border-l-2 border-slate-100">
-                    {[
-                      {
-                        action: "Updated Bank Details",
-                        user: "System Admin",
-                        time: "2 hours ago",
-                      },
-                      {
-                        action: "Approved Leave Request",
-                        user: "Sarah Boss (Manager)",
-                        time: "Yesterday",
-                      },
-                      {
-                        action: "Profile Created",
-                        user: "System Admin",
-                        time: "Jun 1, 2024",
-                      },
-                    ].map((log, i) => (
-                      <div key={i} className="relative">
-                        <div className="absolute -left-[39px] w-4 h-4 bg-slate-200 rounded-full border-4 border-white shadow-sm" />
-                        <p className="text-sm font-black text-slate-800">
-                          {log.action}
-                        </p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase">
-                          By {log.user} • {log.time}
-                        </p>
-                      </div>
-                    ))}
+                    {(!auditLogsData || auditLogsData.length === 0) ? (
+                      <p className="text-slate-400 font-bold text-sm">No audit logs available.</p>
+                    ) : (
+                      auditLogsData.map((log: any, i: number) => (
+                        <div key={i} className="relative">
+                          <div className="absolute -left-[39px] w-4 h-4 bg-slate-200 rounded-full border-4 border-white shadow-sm" />
+                          <p className="text-sm font-black text-slate-800">
+                            {log.action}
+                          </p>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">
+                            {log.details}
+                          </p>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">
+                            By {log.actorName} • {new Date(log.createdAt).toLocaleString()}
+                          </p>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
               )}

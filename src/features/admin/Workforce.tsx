@@ -56,6 +56,7 @@ import {
   Check,
   FileCheck,
 } from "lucide-react";
+import { usePopup } from "../../components/PopupProvider";
 import { Employee } from "../../types/index";
 import { useEmployees, useCreateEmployee, useDeleteAdminEmployee, useUpdateAdminEmployee, useDepartments } from "../../api/client";
 import Celebration from "../../components/Celebration";
@@ -67,6 +68,7 @@ const Workforce: React.FC = () => {
   const createEmployeeMutation = useCreateEmployee();
   const deleteEmployeeMutation = useDeleteAdminEmployee();
   const updateEmployeeMutation = useUpdateAdminEmployee();
+  const { alert: popupAlert, confirm } = usePopup();
 
   const [formData, setFormData] = useState<any>({
     role: "Software Engineer",
@@ -638,7 +640,6 @@ const Workforce: React.FC = () => {
                     "Automated Wallet (Instant)",
                     "Cash / Cheque",
                   ].map((method, i) => (
-                    /* Fixed unintentional comparison of index i to string on line 327 */
                     <button
                       key={i}
                       onClick={() => setFormData({ ...formData, payoutMethod: method })}
@@ -1324,9 +1325,9 @@ const Workforce: React.FC = () => {
                           <Eye size={16} />
                         </button>
                         <button
-                          onClick={(e) => {
+                          onClick={async (e) => {
                             e.stopPropagation();
-                            if (window.confirm("Are you sure you want to delete this employee?")) {
+                            if (await confirm("Are you sure you want to delete this employee?")) {
                               deleteEmployeeMutation.mutate(emp.id);
                             }
                           }}
@@ -1429,8 +1430,8 @@ const Workforce: React.FC = () => {
                 <Send size={16} /> Send Email
               </button>
               <button
-                onClick={() => {
-                  if (window.confirm(`Are you sure you want to delete ${selectedEmployees.length} employees?`)) {
+                onClick={async () => {
+                  if (await confirm(`Are you sure you want to delete ${selectedEmployees.length} employees?`)) {
                     Promise.all(selectedEmployees.map(id => deleteEmployeeMutation.mutateAsync(id))).then(() => setSelectedEmployees([]));
                   }
                 }}
@@ -1701,7 +1702,7 @@ const Workforce: React.FC = () => {
                         };
 
                         const handleError = (error: any) => {
-                          alert(error.message || "An error occurred");
+                          popupAlert(error.message || "An error occurred");
                         };
 
                         if (formData.id) {

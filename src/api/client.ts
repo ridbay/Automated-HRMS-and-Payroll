@@ -122,10 +122,11 @@ export const lockPayroll = async (payrollData: any) => {
 };
 
 // React Query Hooks
-export const useEmployees = () => {
+export const useEmployees = (enabled: boolean = true) => {
   return useQuery({
     queryKey: ['employees'],
     queryFn: fetchEmployees,
+    enabled,
   });
 };
 
@@ -304,7 +305,7 @@ export const useDashboardStats = () => {
   });
 };
 
-export const useSettings = () => {
+export const useSettings = (enabled: boolean = true) => {
   return useQuery({
     queryKey: ['settings'],
     queryFn: async () => {
@@ -313,6 +314,7 @@ export const useSettings = () => {
       const json = await response.json();
       return json;
     },
+    enabled,
   });
 };
 
@@ -335,7 +337,7 @@ export const useUpdateSettings = () => {
   });
 };
 
-export const useApiKeys = () => {
+export const useApiKeys = (enabled: boolean = true) => {
   return useQuery({
     queryKey: ['api-keys'],
     queryFn: async () => {
@@ -344,6 +346,7 @@ export const useApiKeys = () => {
       const json = await response.json();
       return json;
     },
+    enabled,
   });
 };
 
@@ -411,7 +414,7 @@ export const useLockPayroll = () => {
 };
 
 // --- Company Profile ---
-export const useCompany = () => {
+export const useCompany = (enabled: boolean = true) => {
   return useQuery({
     queryKey: ['company'],
     queryFn: async () => {
@@ -419,6 +422,7 @@ export const useCompany = () => {
       if (!res.ok) throw new Error('Failed to fetch company profile');
       return res.json();
     },
+    enabled,
   });
 };
 
@@ -441,7 +445,7 @@ export const useUpdateCompany = () => {
 };
 
 // --- Org (Departments & Locations) ---
-export const useDepartments = () => {
+export const useDepartments = (enabled: boolean = true) => {
   return useQuery({
     queryKey: ['departments'],
     queryFn: async () => {
@@ -449,6 +453,7 @@ export const useDepartments = () => {
       if (!res.ok) throw new Error('Failed to fetch departments');
       return res.json();
     },
+    enabled,
   });
 };
 
@@ -552,7 +557,7 @@ export const useRemoveDepartmentMember = () => {
   });
 };
 
-export const useLocations = () => {
+export const useLocations = (enabled: boolean = true) => {
   return useQuery({
     queryKey: ['locations'],
     queryFn: async () => {
@@ -560,6 +565,7 @@ export const useLocations = () => {
       if (!res.ok) throw new Error('Failed to fetch locations');
       return res.json();
     },
+    enabled,
   });
 };
 
@@ -596,7 +602,7 @@ export const useDeleteLocation = () => {
 };
 
 // --- Roles & Permissions ---
-export const useRoles = () => {
+export const useRoles = (enabled: boolean = true) => {
   return useQuery({
     queryKey: ['roles'],
     queryFn: async () => {
@@ -604,6 +610,7 @@ export const useRoles = () => {
       if (!res.ok) throw new Error('Failed to fetch roles');
       return res.json();
     },
+    enabled,
   });
 };
 
@@ -938,6 +945,28 @@ export const useEmployeeLeaveBalances = (employeeId: string) => {
   });
 };
 
+export const useEmployeeLeaveRequests = (employeeId: string) => {
+  return useQuery({
+    queryKey: ['employeeLeaveRequests', employeeId],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/leaves/employee/${employeeId}/requests`);
+      if (!res.ok) throw new Error('Failed to fetch leave requests');
+      return res.json();
+    },
+    enabled: !!employeeId,
+  });
+};
+export const useEmployeeAuditLogs = (employeeId: string) => {
+  return useQuery({
+    queryKey: ['employeeAuditLogs', employeeId],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/admin/employees/${employeeId}/audit-logs`);
+      if (!res.ok) throw new Error('Failed to fetch audit logs');
+      return res.json();
+    },
+    enabled: !!employeeId,
+  });
+};
 export const useUpdateLeaveBalances = () => {
   const queryClient = useQueryClient();
   return useMutation({

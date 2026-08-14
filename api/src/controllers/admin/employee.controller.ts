@@ -115,3 +115,12 @@ export const deleteDocument = async (c: Context<AppEnv>) => {
   const result = await service.deleteDocument(companyId, employeeId, c.env.BUCKET, documentId);
   return c.json(result);
 };
+
+export const getAuditLogs = async (c: Context<AppEnv>) => {
+  const companyId = c.get('companyId');
+  const employeeId = c.req.param('id') as string;
+  const service = new EmployeeService(c.env.DB);
+  
+  const result = await service.getAuditLogs(companyId, employeeId);
+  return c.json(result);
+};
