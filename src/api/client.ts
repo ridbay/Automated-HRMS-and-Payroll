@@ -87,10 +87,48 @@ export const createEmployee = async (newEmployee: Partial<Employee>): Promise<Em
   return res.json();
 };
 
+// The API doesn't track the candidate pipeline yet, so every requisition it
+// returns is padded with a zeroed-out stage breakdown to satisfy the shape
+// the UI (kanban/grid/list) already renders against.
+const withEmptyPipeline = (req: any): JobRequisition => ({
+  ...req,
+  applicantsByStage: req.applicantsByStage || {
+    applied: 0,
+    screening: 0,
+    interview: 0,
+    offer: 0,
+    hired: 0,
+  },
+});
+
+// All three requisition list views (all/pending/mine) read from the same
+// table, so any create/approve/reject/status/delete mutation invalidates all
+// of them together to keep every screen in sync.
+const invalidateJobRequisitions = (queryClient: ReturnType<typeof useQueryClient>) => {
+  queryClient.invalidateQueries({ queryKey: ['jobRequisitions'] });
+  queryClient.invalidateQueries({ queryKey: ['pendingJobRequisitions'] });
+  queryClient.invalidateQueries({ queryKey: ['myJobRequisitions'] });
+};
+
 export const fetchJobRequisitions = async (): Promise<JobRequisition[]> => {
   const res = await fetchWithTenant(`${API_URL}/admin/job-requisitions`);
   if (!res.ok) throw new Error('Failed to fetch job requisitions');
-  return res.json();
+  const data = await res.json();
+  return data.map(withEmptyPipeline);
+};
+
+export const fetchPendingJobRequisitions = async (): Promise<JobRequisition[]> => {
+  const res = await fetchWithTenant(`${API_URL}/admin/job-requisitions/pending`);
+  if (!res.ok) throw new Error('Failed to fetch pending job requisitions');
+  const data = await res.json();
+  return data.map(withEmptyPipeline);
+};
+
+export const fetchMyJobRequisitions = async (): Promise<JobRequisition[]> => {
+  const res = await fetchWithTenant(`${API_URL}/admin/job-requisitions/mine`);
+  if (!res.ok) throw new Error('Failed to fetch my job requisitions');
+  const data = await res.json();
+  return data.map(withEmptyPipeline);
 };
 
 export const fetchLeaveRequests = async (): Promise<LeaveRequest[]> => {
@@ -279,7 +317,7 @@ export const useDeleteJobRequisition = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const response = await fetchWithTenant(`${API_URL}/admin/jobs/${id}`, {
+      const response = await fetchWithTenant(`${API_URL}/admin/job-requisitions/${id}`, {
         method: 'DELETE',
       });
       if (!response.ok) throw new Error('Failed to delete job requisition');
@@ -287,7 +325,80 @@ export const useDeleteJobRequisition = () => {
       return json;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['jobs'] });
+      invalidateJobRequisitions(queryClient);
+    },
+  });
+};
+
+export const useCreateJobRequisition = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: Partial<JobRequisition>) => {
+      const res = await fetchWithTenant(`${API_URL}/admin/job-requisitions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to submit job requisition');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      invalidateJobRequisitions(queryClient);
+    },
+  });
+};
+
+export const useApproveJobRequisition = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetchWithTenant(`${API_URL}/admin/job-requisitions/${id}/approve`, {
+        method: 'PATCH',
+      });
+      if (!res.ok) throw new Error('Failed to approve job requisition');
+      return res.json();
+    },
+    onSuccess: () => {
+      invalidateJobRequisitions(queryClient);
+    },
+  });
+};
+
+export const useRejectJobRequisition = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, reason }: { id: string; reason?: string }) => {
+      const res = await fetchWithTenant(`${API_URL}/admin/job-requisitions/${id}/reject`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason }),
+      });
+      if (!res.ok) throw new Error('Failed to reject job requisition');
+      return res.json();
+    },
+    onSuccess: () => {
+      invalidateJobRequisitions(queryClient);
+    },
+  });
+};
+
+export const useUpdateJobRequisitionStatus = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+      const res = await fetchWithTenant(`${API_URL}/admin/job-requisitions/${id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) throw new Error('Failed to update job requisition status');
+      return res.json();
+    },
+    onSuccess: () => {
+      invalidateJobRequisitions(queryClient);
     },
   });
 };
@@ -386,10 +497,29 @@ export const useDeleteApiKey = () => {
   });
 };
 
-export const useJobRequisitions = () => {
+export const useJobRequisitions = (enabled: boolean = true) => {
   return useQuery({
     queryKey: ['jobRequisitions'],
     queryFn: fetchJobRequisitions,
+    enabled,
+  });
+};
+
+// The pending-approval queue, for HR Admin / Super Admin reviewing requests.
+export const usePendingJobRequisitions = (enabled: boolean = true) => {
+  return useQuery({
+    queryKey: ['pendingJobRequisitions'],
+    queryFn: fetchPendingJobRequisitions,
+    enabled,
+  });
+};
+
+// A requester's own submitted requisitions (e.g. a Manager tracking their asks).
+export const useMyJobRequisitions = (enabled: boolean = true) => {
+  return useQuery({
+    queryKey: ['myJobRequisitions'],
+    queryFn: fetchMyJobRequisitions,
+    enabled,
   });
 };
 
@@ -900,6 +1030,37 @@ export const useTeamLeaves = () => {
       const res = await fetchWithTenant(`${API_URL}/employee/leave/team`);
       if (!res.ok) throw new Error('Failed to fetch team leaves');
       return res.json();
+    },
+  });
+};
+
+// Manager-scoped pending leave requests for the caller's direct reports.
+export const useTeamPendingLeaves = () => {
+  return useQuery({
+    queryKey: ['teamPendingLeaves'],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/employee/leave/team-requests`);
+      if (!res.ok) throw new Error('Failed to fetch pending team leave requests');
+      return res.json();
+    },
+  });
+};
+
+export const useUpdateTeamLeaveStatus = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, status, managerComment }: { id: string; status: 'approved' | 'rejected'; managerComment?: string }) => {
+      const res = await fetchWithTenant(`${API_URL}/employee/leave/team-requests/${id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status, managerComment }),
+      });
+      if (!res.ok) throw new Error('Failed to update leave request status');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['teamPendingLeaves'] });
+      queryClient.invalidateQueries({ queryKey: ['teamLeaves'] });
     },
   });
 };

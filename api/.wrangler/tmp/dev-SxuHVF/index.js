@@ -8128,6 +8128,7 @@ __export(schema_exports, {
   auditLogs: () => auditLogs,
   companies: () => companies,
   companySettings: () => companySettings,
+  complianceTasks: () => complianceTasks,
   departments: () => departments,
   emergencyContacts: () => emergencyContacts,
   emergencyContactsRelations: () => emergencyContactsRelations,
@@ -8144,13 +8145,21 @@ __export(schema_exports, {
   jobRequisitions: () => jobRequisitions,
   leaveBalances: () => leaveBalances,
   leaveRequests: () => leaveRequests,
+  loanRepayments: () => loanRepayments,
+  loanRepaymentsRelations: () => loanRepaymentsRelations,
+  loans: () => loans,
+  loansRelations: () => loansRelations,
   locations: () => locations,
   overtimeRequests: () => overtimeRequests,
+  payGrades: () => payGrades,
   payrollRuns: () => payrollRuns,
   payrollRunsRelations: () => payrollRunsRelations,
+  payrollSettings: () => payrollSettings,
   payslips: () => payslips,
   payslipsRelations: () => payslipsRelations,
   roles: () => roles,
+  salaryComponents: () => salaryComponents,
+  taxBrackets: () => taxBrackets,
   walletTransactions: () => walletTransactions
 });
 
@@ -8350,6 +8359,9 @@ var overtimeRequests = sqliteTable("overtime_requests", {
   reason: text("reason").notNull(),
   deliverable: text("deliverable"),
   status: text("status").notNull().default("pending"),
+  // Set when a manager/admin approves or rejects the request — mirrors leaveRequests.
+  managerId: text("manager_id"),
+  managerComment: text("manager_comment"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").$onUpdate(() => (/* @__PURE__ */ new Date()).toISOString())
 });
@@ -8403,13 +8415,26 @@ var jobRequisitions = sqliteTable("job_requisitions", {
   title: text("title").notNull(),
   department: text("department").notNull(),
   location: text("location").notNull(),
+  employmentType: text("employment_type"),
+  // 'Full-time' | 'Contract' | 'Intern' | 'Consultant'
   hiringManager: text("hiring_manager").notNull(),
   managerAvatar: text("manager_avatar"),
   priority: text("priority").notNull(),
+  // 'Pending Approval' | 'Open' | 'On Hold' | 'Filled' | 'Cancelled' | 'Rejected'
   status: text("status").notNull(),
   dateOpened: text("date_opened").notNull(),
   targetHireDate: text("target_hire_date").notNull(),
   daysOpen: integer("days_open").notNull(),
+  justification: text("justification"),
+  budgetRange: text("budget_range"),
+  // Who requested this requisition (audit trail for the approval workflow)
+  requestedById: text("requested_by_id"),
+  requestedByName: text("requested_by_name"),
+  // Who reviewed it (approved or rejected) and when
+  reviewedById: text("reviewed_by_id"),
+  reviewedByName: text("reviewed_by_name"),
+  reviewedAt: text("reviewed_at"),
+  rejectionReason: text("rejection_reason"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").$onUpdate(() => (/* @__PURE__ */ new Date()).toISOString())
 });
@@ -8437,16 +8462,127 @@ var auditLogs = sqliteTable("audit_logs", {
 });
 
 // src/models/payroll.model.ts
+var payrollSettings = sqliteTable("payroll_settings", {
+  companyId: text("company_id").primaryKey().references(() => companies.id),
+  payCycle: text("pay_cycle").notNull().default("monthly"),
+  // 'monthly' | 'biweekly' | 'weekly'
+  cutoffDay: integer("cutoff_day").notNull().default(20),
+  paymentDay: integer("payment_day").notNull().default(25),
+  workingDaysPerMonth: integer("working_days_per_month").notNull().default(22),
+  prorationEnabled: integer("proration_enabled", { mode: "boolean" }).notNull().default(true),
+  minWageCheckEnabled: integer("min_wage_check_enabled", { mode: "boolean" }).notNull().default(true),
+  minWageAnnual: integer("min_wage_annual").notNull().default(36e4),
+  // Nigeria national minimum wage baseline
+  pensionEmployeeRate: real("pension_employee_rate").notNull().default(8),
+  // % of basic+housing+transport
+  pensionEmployerRate: real("pension_employer_rate").notNull().default(10),
+  applyConsolidatedReliefAllowance: integer("apply_cra", { mode: "boolean" }).notNull().default(true),
+  currency: text("currency").notNull().default("NGN"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").$onUpdate(() => (/* @__PURE__ */ new Date()).toISOString())
+});
+var taxBrackets = sqliteTable("tax_brackets", {
+  id: text("id").primaryKey(),
+  companyId: text("company_id").notNull().references(() => companies.id),
+  minIncome: integer("min_income").notNull(),
+  // annual, inclusive
+  maxIncome: integer("max_income"),
+  // annual, inclusive; null = no upper bound
+  ratePercent: real("rate_percent").notNull(),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").$onUpdate(() => (/* @__PURE__ */ new Date()).toISOString())
+});
+var salaryComponents = sqliteTable("salary_components", {
+  id: text("id").primaryKey(),
+  companyId: text("company_id").notNull().references(() => companies.id),
+  name: text("name").notNull(),
+  type: text("type").notNull(),
+  // 'earning' | 'deduction'
+  calculationType: text("calculation_type").notNull().default("fixed"),
+  // 'fixed' | 'percentage_of_basic' | 'percentage_of_gross'
+  value: real("value").notNull().default(0),
+  // amount (fixed) or percent (percentage_*)
+  taxable: integer("taxable", { mode: "boolean" }).notNull().default(true),
+  statutory: integer("statutory", { mode: "boolean" }).notNull().default(false),
+  // system-managed, cannot be deleted
+  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").$onUpdate(() => (/* @__PURE__ */ new Date()).toISOString())
+});
+var payGrades = sqliteTable("pay_grades", {
+  id: text("id").primaryKey(),
+  companyId: text("company_id").notNull().references(() => companies.id),
+  name: text("name").notNull(),
+  level: integer("level").notNull().default(1),
+  minSalary: integer("min_salary").notNull().default(0),
+  maxSalary: integer("max_salary").notNull().default(0),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").$onUpdate(() => (/* @__PURE__ */ new Date()).toISOString())
+});
+var loans = sqliteTable("loans", {
+  id: text("id").primaryKey(),
+  companyId: text("company_id").notNull().references(() => companies.id),
+  employeeId: text("employee_id").notNull().references(() => employees.id),
+  principal: integer("principal").notNull(),
+  interestRatePercent: real("interest_rate_percent").notNull().default(0),
+  durationMonths: integer("duration_months").notNull(),
+  monthlyInstallment: integer("monthly_installment").notNull(),
+  remainingBalance: integer("remaining_balance").notNull(),
+  status: text("status").notNull().default("active"),
+  // 'active' | 'completed' | 'paused' | 'cancelled'
+  purpose: text("purpose"),
+  startDate: text("start_date").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").$onUpdate(() => (/* @__PURE__ */ new Date()).toISOString())
+});
+var loanRepayments = sqliteTable("loan_repayments", {
+  id: text("id").primaryKey(),
+  companyId: text("company_id").notNull().references(() => companies.id),
+  loanId: text("loan_id").notNull().references(() => loans.id),
+  payrollRunId: text("payroll_run_id"),
+  amount: integer("amount").notNull(),
+  balanceAfter: integer("balance_after").notNull(),
+  paidAt: text("paid_at").notNull().default(sql`CURRENT_TIMESTAMP`)
+});
+var complianceTasks = sqliteTable("compliance_tasks", {
+  id: text("id").primaryKey(),
+  companyId: text("company_id").notNull().references(() => companies.id),
+  payrollRunId: text("payroll_run_id"),
+  title: text("title").notNull(),
+  type: text("type").notNull(),
+  // 'tax' | 'pension' | 'other'
+  dueDate: text("due_date").notNull(),
+  amount: integer("amount").notNull().default(0),
+  status: text("status").notNull().default("pending"),
+  // 'pending' | 'completed'
+  reference: text("reference"),
+  completedAt: text("completed_at"),
+  completedBy: text("completed_by"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").$onUpdate(() => (/* @__PURE__ */ new Date()).toISOString())
+});
 var payrollRuns = sqliteTable("payroll_runs", {
   id: text("id").primaryKey(),
   companyId: text("company_id").notNull().references(() => companies.id),
   periodMonth: integer("period_month").notNull(),
   periodYear: integer("period_year").notNull(),
+  // 'draft' | 'pending_approval' | 'approved' | 'rejected' | 'paid'
   status: text("status").notNull().default("draft"),
-  // 'draft', 'locked', 'paid'
   totalGross: integer("total_gross").notNull().default(0),
   totalNet: integer("total_net").notNull().default(0),
   totalTaxes: integer("total_taxes").notNull().default(0),
+  totalPension: integer("total_pension").notNull().default(0),
+  totalLoanDeductions: integer("total_loan_deductions").notNull().default(0),
+  employeeCount: integer("employee_count").notNull().default(0),
+  dueDate: text("due_date"),
+  submittedBy: text("submitted_by"),
+  submittedAt: text("submitted_at"),
+  approvedBy: text("approved_by"),
+  approvedAt: text("approved_at"),
+  rejectedReason: text("rejected_reason"),
+  paidAt: text("paid_at"),
+  notes: text("notes"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`).$onUpdate(() => (/* @__PURE__ */ new Date()).toISOString())
 });
@@ -8454,12 +8590,26 @@ var payslips = sqliteTable("payslips", {
   id: text("id").primaryKey(),
   runId: text("run_id").notNull().references(() => payrollRuns.id),
   employeeId: text("employee_id").notNull().references(() => employees.id),
+  // Snapshots so historical payslips stay accurate even if the employee record changes later.
+  employeeName: text("employee_name"),
+  department: text("department"),
+  bankName: text("bank_name"),
+  accountNumber: text("account_number"),
+  accountName: text("account_name"),
   basicSalary: integer("basic_salary").notNull().default(0),
   allowances: integer("allowances").notNull().default(0),
+  bonuses: integer("bonuses").notNull().default(0),
   grossPay: integer("gross_pay").notNull().default(0),
   taxDeductions: integer("tax_deductions").notNull().default(0),
   pensionDeductions: integer("pension_deductions").notNull().default(0),
+  loanDeductions: integer("loan_deductions").notNull().default(0),
+  otherDeductions: integer("other_deductions").notNull().default(0),
   netPay: integer("net_pay").notNull().default(0),
+  isProrated: integer("is_prorated", { mode: "boolean" }).notNull().default(false),
+  workingDays: integer("working_days"),
+  presentDays: integer("present_days"),
+  absentDays: integer("absent_days"),
+  overtimeHours: real("overtime_hours"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").$onUpdate(() => (/* @__PURE__ */ new Date()).toISOString())
 });
@@ -8474,6 +8624,19 @@ var payslipsRelations = relations(payslips, ({ one }) => ({
   employee: one(employees, {
     fields: [payslips.employeeId],
     references: [employees.id]
+  })
+}));
+var loansRelations = relations(loans, ({ one, many }) => ({
+  employee: one(employees, {
+    fields: [loans.employeeId],
+    references: [employees.id]
+  }),
+  repayments: many(loanRepayments)
+}));
+var loanRepaymentsRelations = relations(loanRepayments, ({ one }) => ({
+  loan: one(loans, {
+    fields: [loanRepayments.loanId],
+    references: [loans.id]
   })
 }));
 
@@ -8492,6 +8655,11 @@ var companySettings = sqliteTable("company_settings", {
   require2fa: integer("require_2fa", { mode: "boolean" }).default(false).notNull(),
   passwordMinLength: integer("password_min_length").default(12).notNull(),
   sessionTimeoutMins: integer("session_timeout_mins").default(60).notNull(),
+  // Attendance policy — drives the on-time/late tag applied at clock-in and
+  // the standard shift length used to compute overtime at clock-out.
+  attendanceStartTime: text("attendance_start_time").default("09:00").notNull(),
+  attendanceEndTime: text("attendance_end_time").default("17:00").notNull(),
+  attendanceGraceMinutes: integer("attendance_grace_minutes").default(15).notNull(),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").notNull().$onUpdate(() => (/* @__PURE__ */ new Date()).toISOString())
 });
@@ -9602,7 +9770,7 @@ var EmployeeService = class {
         eq(auditLogs.companyId, companyId),
         eq(auditLogs.employeeId, employeeId)
       ),
-      orderBy: /* @__PURE__ */ __name((auditLogs2, { desc: desc4 }) => [desc4(auditLogs2.createdAt)], "orderBy")
+      orderBy: /* @__PURE__ */ __name((auditLogs2, { desc: desc3 }) => [desc3(auditLogs2.createdAt)], "orderBy")
     });
   }
   async getAssets(companyId, employeeId) {
@@ -9811,49 +9979,360 @@ var requireRole = /* @__PURE__ */ __name((...allowedRoles) => {
     await next();
   };
 }, "requireRole");
+var hasCustomPermission = /* @__PURE__ */ __name(async (db, employeeId, moduleKey, action) => {
+  const employee = await db.query.employees.findFirst({
+    where: eq(employees.id, employeeId)
+  });
+  if (!employee?.customRoleId) return true;
+  const role = await db.query.roles.findFirst({
+    where: eq(roles.id, employee.customRoleId)
+  });
+  const permissions = role?.permissions || {};
+  return permissions?.[moduleKey]?.[action] === true;
+}, "hasCustomPermission");
+var requirePermission = /* @__PURE__ */ __name((moduleKey, action) => {
+  return async (c, next) => {
+    const employeeId = c.get("employeeId");
+    if (!employeeId) {
+      return c.json({ error: "Forbidden: insufficient permissions" }, 403);
+    }
+    const db = drizzle(c.env.DB, { schema: schema_exports });
+    const allowed = await hasCustomPermission(db, employeeId, moduleKey, action);
+    if (!allowed) {
+      return c.json({ error: "Forbidden: custom role does not grant this permission" }, 403);
+    }
+    await next();
+  };
+}, "requirePermission");
 
 // src/services/payroll.service.ts
-var PayrollService = class {
-  constructor(db) {
-    this.db = db;
+var genId = /* @__PURE__ */ __name((prefix) => `${prefix}-${crypto.randomUUID().split("-")[0].toUpperCase()}`, "genId");
+var DEFAULT_TAX_BRACKETS = [
+  { minIncome: 0, maxIncome: 3e5, ratePercent: 7 },
+  { minIncome: 300001, maxIncome: 6e5, ratePercent: 11 },
+  { minIncome: 600001, maxIncome: 11e5, ratePercent: 15 },
+  { minIncome: 1100001, maxIncome: 16e5, ratePercent: 19 },
+  { minIncome: 1600001, maxIncome: 32e5, ratePercent: 21 },
+  { minIncome: 3200001, maxIncome: null, ratePercent: 24 }
+];
+var DEFAULT_SETTINGS = {
+  payCycle: "monthly",
+  cutoffDay: 20,
+  paymentDay: 25,
+  workingDaysPerMonth: 22,
+  prorationEnabled: true,
+  minWageCheckEnabled: true,
+  minWageAnnual: 36e4,
+  pensionEmployeeRate: 8,
+  pensionEmployerRate: 10,
+  applyConsolidatedReliefAllowance: true,
+  currency: "NGN"
+};
+function calculateAnnualPaye(taxableAnnualIncome, brackets) {
+  const sorted = [...brackets].sort((a, b) => a.minIncome - b.minIncome);
+  let remaining = Math.max(0, taxableAnnualIncome);
+  let tax = 0;
+  for (const band of sorted) {
+    if (remaining <= 0) break;
+    const width = band.maxIncome != null ? Math.max(0, band.maxIncome - band.minIncome + 1) : Infinity;
+    const amountInBand = Math.min(remaining, width);
+    tax += amountInBand * (band.ratePercent / 100);
+    remaining -= amountInBand;
   }
+  return Math.round(tax);
+}
+__name(calculateAnnualPaye, "calculateAnnualPaye");
+var nextPeriod = /* @__PURE__ */ __name((month, year) => month === 12 ? { month: 1, year: year + 1 } : { month: month + 1, year }, "nextPeriod");
+var PayrollService = class {
   static {
     __name(this, "PayrollService");
   }
-  async previewRun(companyId, month, year) {
-    const activeEmployees = await this.db.query.employees.findMany({
-      where: and(
-        eq(employees.companyId, companyId),
-        eq(employees.status, "active")
-      )
+  db;
+  constructor(dbBinding) {
+    this.db = drizzle(dbBinding, { schema: schema_exports });
+  }
+  // ---------------- Settings ----------------
+  async getSettings(companyId) {
+    const existing = await this.db.query.payrollSettings.findFirst({
+      where: eq(payrollSettings.companyId, companyId)
     });
+    if (existing) return existing;
+    const settings = { companyId, ...DEFAULT_SETTINGS };
+    await this.db.insert(payrollSettings).values(settings);
+    return settings;
+  }
+  async updateSettings(companyId, payload) {
+    await this.getSettings(companyId);
+    const { companyId: _drop, createdAt, updatedAt, ...rest } = payload || {};
+    await this.db.update(payrollSettings).set(rest).where(eq(payrollSettings.companyId, companyId));
+    return this.getSettings(companyId);
+  }
+  // ---------------- Tax brackets ----------------
+  async getTaxBrackets(companyId) {
+    const existing = await this.db.query.taxBrackets.findMany({
+      where: eq(taxBrackets.companyId, companyId),
+      orderBy: [asc(taxBrackets.sortOrder)]
+    });
+    if (existing.length > 0) return existing;
+    const rows = DEFAULT_TAX_BRACKETS.map((b, i) => ({ id: genId("TB"), companyId, ...b, sortOrder: i }));
+    await this.db.insert(taxBrackets).values(rows);
+    return rows;
+  }
+  async replaceTaxBrackets(companyId, brackets) {
+    await this.db.delete(taxBrackets).where(eq(taxBrackets.companyId, companyId));
+    const rows = (brackets || []).map((b, i) => ({
+      id: genId("TB"),
+      companyId,
+      minIncome: Number(b.minIncome) || 0,
+      maxIncome: b.maxIncome === null || b.maxIncome === "" || b.maxIncome === void 0 ? null : Number(b.maxIncome),
+      ratePercent: Number(b.ratePercent) || 0,
+      sortOrder: i
+    }));
+    if (rows.length > 0) await this.db.insert(taxBrackets).values(rows);
+    return rows;
+  }
+  // ---------------- Salary components ----------------
+  async getSalaryComponents(companyId) {
+    const existing = await this.db.query.salaryComponents.findMany({
+      where: eq(salaryComponents.companyId, companyId)
+    });
+    if (existing.length > 0) return existing;
+    const defaults = [
+      { name: "Basic Salary", type: "earning", calculationType: "percentage_of_gross", value: 40, taxable: true, statutory: true },
+      { name: "Housing Allowance", type: "earning", calculationType: "percentage_of_basic", value: 50, taxable: true, statutory: false },
+      { name: "Transport Allowance", type: "earning", calculationType: "percentage_of_gross", value: 10, taxable: true, statutory: false },
+      { name: "Pension Contribution", type: "deduction", calculationType: "percentage_of_basic", value: 8, taxable: false, statutory: true }
+    ].map((c) => ({ id: genId("SC"), companyId, active: true, ...c }));
+    await this.db.insert(salaryComponents).values(defaults);
+    return defaults;
+  }
+  async createSalaryComponent(companyId, payload) {
+    const row = { id: genId("SC"), companyId, active: true, statutory: false, taxable: true, ...payload };
+    await this.db.insert(salaryComponents).values(row);
+    return row;
+  }
+  async updateSalaryComponent(companyId, id, payload) {
+    const { id: _id, companyId: _c, ...rest } = payload || {};
+    await this.db.update(salaryComponents).set(rest).where(and(eq(salaryComponents.id, id), eq(salaryComponents.companyId, companyId)));
+    return this.db.query.salaryComponents.findFirst({ where: eq(salaryComponents.id, id) });
+  }
+  async deleteSalaryComponent(companyId, id) {
+    const existing = await this.db.query.salaryComponents.findFirst({
+      where: and(eq(salaryComponents.id, id), eq(salaryComponents.companyId, companyId))
+    });
+    if (!existing) return null;
+    if (existing.statutory) throw new Error("Statutory components cannot be deleted");
+    await this.db.delete(salaryComponents).where(eq(salaryComponents.id, id));
+    return existing;
+  }
+  // ---------------- Pay grades ----------------
+  async getPayGrades(companyId) {
+    return this.db.query.payGrades.findMany({ where: eq(payGrades.companyId, companyId), orderBy: [asc(payGrades.level)] });
+  }
+  async createPayGrade(companyId, payload) {
+    const row = { id: genId("PG"), companyId, ...payload };
+    await this.db.insert(payGrades).values(row);
+    return row;
+  }
+  async updatePayGrade(companyId, id, payload) {
+    const { id: _id, companyId: _c, ...rest } = payload || {};
+    await this.db.update(payGrades).set(rest).where(and(eq(payGrades.id, id), eq(payGrades.companyId, companyId)));
+    return this.db.query.payGrades.findFirst({ where: eq(payGrades.id, id) });
+  }
+  async deletePayGrade(companyId, id) {
+    const existing = await this.db.query.payGrades.findFirst({ where: and(eq(payGrades.id, id), eq(payGrades.companyId, companyId)) });
+    if (!existing) return null;
+    await this.db.delete(payGrades).where(eq(payGrades.id, id));
+    return existing;
+  }
+  // ---------------- Loans ----------------
+  async getLoans(companyId) {
+    const rows = await this.db.query.loans.findMany({
+      where: eq(loans.companyId, companyId),
+      orderBy: [desc(loans.createdAt)]
+    });
+    const employees2 = await this.db.query.employees.findMany({ where: eq(employees.companyId, companyId) });
+    const byId = new Map(employees2.map((e) => [e.id, e]));
+    return rows.map((l) => {
+      const emp = byId.get(l.employeeId);
+      return { ...l, employeeName: emp ? `${emp.name} ${emp.lastName || ""}`.trim() : "Unknown" };
+    });
+  }
+  async createLoan(companyId, payload) {
+    const principal = Number(payload.principal) || 0;
+    const durationMonths = Math.max(1, Number(payload.durationMonths) || 1);
+    const interestRatePercent = Number(payload.interestRatePercent) || 0;
+    const totalRepayable = principal + principal * (interestRatePercent / 100);
+    const monthlyInstallment = Math.round(totalRepayable / durationMonths);
+    const row = {
+      id: genId("LN"),
+      companyId,
+      employeeId: payload.employeeId,
+      principal,
+      interestRatePercent,
+      durationMonths,
+      monthlyInstallment,
+      remainingBalance: Math.round(totalRepayable),
+      status: "active",
+      purpose: payload.purpose || null,
+      startDate: payload.startDate || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10)
+    };
+    await this.db.insert(loans).values(row);
+    return row;
+  }
+  async updateLoan(companyId, id, payload) {
+    const { id: _id, companyId: _c, employeeId, ...rest } = payload || {};
+    await this.db.update(loans).set(rest).where(and(eq(loans.id, id), eq(loans.companyId, companyId)));
+    return this.db.query.loans.findFirst({ where: eq(loans.id, id) });
+  }
+  async deleteLoan(companyId, id) {
+    const existing = await this.db.query.loans.findFirst({ where: and(eq(loans.id, id), eq(loans.companyId, companyId)) });
+    if (!existing) return null;
+    await this.db.delete(loans).where(eq(loans.id, id));
+    return existing;
+  }
+  async getLoanRepayments(companyId, loanId) {
+    return this.db.query.loanRepayments.findMany({
+      where: and(eq(loanRepayments.loanId, loanId), eq(loanRepayments.companyId, companyId)),
+      orderBy: [desc(loanRepayments.paidAt)]
+    });
+  }
+  async getActiveLoansByEmployee(companyId) {
+    const rows = await this.db.query.loans.findMany({
+      where: and(eq(loans.companyId, companyId), eq(loans.status, "active"))
+    });
+    const map = /* @__PURE__ */ new Map();
+    for (const l of rows) map.set(l.employeeId, l);
+    return map;
+  }
+  // ---------------- Attendance summary ----------------
+  async getAttendanceSummary(companyId, month, year) {
+    const start = `${year}-${String(month).padStart(2, "0")}-01`;
+    const lastDay = new Date(year, month, 0).getDate();
+    const end = `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+    const rows = await this.db.select({
+      employeeId: attendanceRecords.employeeId,
+      status: attendanceRecords.status,
+      overtime: attendanceRecords.overtime
+    }).from(attendanceRecords).where(
+      and(
+        eq(attendanceRecords.companyId, companyId),
+        gte(attendanceRecords.date, start),
+        lte(attendanceRecords.date, end)
+      )
+    );
+    const map = /* @__PURE__ */ new Map();
+    for (const r of rows) {
+      const cur = map.get(r.employeeId) || { present: 0, overtime: 0 };
+      if (r.status === "present") cur.present += 1;
+      cur.overtime += r.overtime || 0;
+      map.set(r.employeeId, cur);
+    }
+    return map;
+  }
+  // ---------------- Exceptions (dashboard) ----------------
+  buildExceptions(activeEmployees) {
+    const exceptions = [];
+    for (const emp of activeEmployees) {
+      const name = `${emp.name} ${emp.lastName || ""}`.trim();
+      if (!emp.accountNumber || !emp.bankName) {
+        exceptions.push({ employeeId: emp.id, employeeName: name, issue: "Missing Bank Details", severity: "red", type: "Compliance" });
+      }
+      if (!emp.salary && !emp.baseSalary) {
+        exceptions.push({ employeeId: emp.id, employeeName: name, issue: "Salary Not Configured", severity: "red", type: "Calculation" });
+      }
+      if (!emp.pfa && !emp.pensionId) {
+        exceptions.push({ employeeId: emp.id, employeeName: name, issue: "Missing PFA / Pension ID", severity: "orange", type: "Statutory" });
+      }
+      if (!emp.tin) {
+        exceptions.push({ employeeId: emp.id, employeeName: name, issue: "Missing TIN", severity: "orange", type: "Statutory" });
+      }
+    }
+    return exceptions;
+  }
+  // ---------------- Core computation ----------------
+  computePayslip(emp, settings, brackets, month, year, attendance, loan, overrides) {
+    const workingDays = settings.workingDaysPerMonth || 22;
+    const daysInMonth = new Date(year, month, 0).getDate();
+    let proratedDays = daysInMonth;
+    let isProrated = false;
+    if (settings.prorationEnabled && emp.hireDate) {
+      const hire = new Date(emp.hireDate);
+      if (!Number.isNaN(hire.getTime()) && hire.getFullYear() === year && hire.getMonth() + 1 === month) {
+        proratedDays = Math.max(0, daysInMonth - hire.getDate() + 1);
+        isProrated = true;
+      }
+    }
+    const prorationFactor = daysInMonth > 0 ? proratedDays / daysInMonth : 1;
+    const annualSalary = emp.salary || emp.baseSalary || 0;
+    const grossMonthlyFull = Math.round(annualSalary / 12);
+    const proratedGross = Math.round(grossMonthlyFull * prorationFactor);
+    const basicSalary = Math.round(proratedGross * 0.4);
+    const allowances = proratedGross - basicSalary;
+    const bonuses = Math.max(0, Math.round(Number(overrides?.bonuses) || 0));
+    const grossPay = proratedGross + bonuses;
+    const pensionableBase = basicSalary + allowances;
+    const pensionDeductions = Math.round(pensionableBase * ((settings.pensionEmployeeRate ?? 8) / 100));
+    const grossAnnual = grossPay * 12;
+    let taxableAnnual;
+    if (settings.applyConsolidatedReliefAllowance) {
+      const cra = Math.max(2e5, grossAnnual * 0.01) + grossAnnual * 0.2;
+      taxableAnnual = Math.max(0, grossAnnual - cra - pensionDeductions * 12);
+    } else {
+      taxableAnnual = Math.max(0, grossAnnual - pensionDeductions * 12);
+    }
+    const taxDeductions = Math.round(calculateAnnualPaye(taxableAnnual, brackets) / 12);
+    const loanDeduction = loan && loan.remainingBalance > 0 ? Math.min(loan.monthlyInstallment, loan.remainingBalance) : 0;
+    const otherDeductions = Math.max(0, Math.round(Number(overrides?.otherDeductions) || 0));
+    const netPay = grossPay - taxDeductions - pensionDeductions - loanDeduction - otherDeductions;
+    return {
+      id: crypto.randomUUID(),
+      employeeId: emp.id,
+      employeeName: `${emp.name} ${emp.lastName || ""}`.trim(),
+      department: emp.department || "Unassigned",
+      bankName: emp.bankName || null,
+      accountNumber: emp.accountNumber || null,
+      accountName: emp.accountName || null,
+      basicSalary,
+      allowances,
+      bonuses,
+      grossPay,
+      taxDeductions,
+      pensionDeductions,
+      loanDeductions: loanDeduction,
+      otherDeductions,
+      netPay,
+      isProrated,
+      workingDays,
+      presentDays: attendance?.present ?? workingDays,
+      absentDays: Math.max(0, workingDays - (attendance?.present ?? workingDays)),
+      overtimeHours: attendance?.overtime ?? 0,
+      loanId: loan?.id || null
+    };
+  }
+  async previewRun(companyId, month, year, overrides = {}) {
+    const activeEmployees = await this.db.query.employees.findMany({
+      where: and(eq(employees.companyId, companyId), eq(employees.status, "active"))
+    });
+    const [settings, brackets, attendanceMap, loanMap] = await Promise.all([
+      this.getSettings(companyId),
+      this.getTaxBrackets(companyId),
+      this.getAttendanceSummary(companyId, month, year),
+      this.getActiveLoansByEmployee(companyId)
+    ]);
     let totalGross = 0;
     let totalNet = 0;
     let totalTaxes = 0;
+    let totalPension = 0;
+    let totalLoanDeductions = 0;
     const payslips2 = activeEmployees.map((emp) => {
-      const annualSalary = emp.salary || 0;
-      const grossPay = Math.round(annualSalary / 12);
-      const basicSalary = Math.round(grossPay * 0.4);
-      const allowances = grossPay - basicSalary;
-      const pensionDeductions = Math.round(basicSalary * 0.08);
-      const taxableIncome = Math.max(0, grossPay - pensionDeductions);
-      const taxDeductions = Math.round(taxableIncome * 0.1);
-      const netPay = grossPay - taxDeductions - pensionDeductions;
-      totalGross += grossPay;
-      totalNet += netPay;
-      totalTaxes += taxDeductions;
-      return {
-        id: crypto.randomUUID(),
-        employeeId: emp.id,
-        employeeName: `${emp.name} ${emp.lastName || ""}`.trim(),
-        department: emp.department || "Unassigned",
-        basicSalary,
-        allowances,
-        grossPay,
-        taxDeductions,
-        pensionDeductions,
-        netPay
-      };
+      const ps = this.computePayslip(emp, settings, brackets, month, year, attendanceMap.get(emp.id), loanMap.get(emp.id), overrides?.[emp.id]);
+      totalGross += ps.grossPay;
+      totalNet += ps.netPay;
+      totalTaxes += ps.taxDeductions;
+      totalPension += ps.pensionDeductions;
+      totalLoanDeductions += ps.loanDeductions;
+      return ps;
     });
     return {
       periodMonth: month,
@@ -9862,88 +10341,520 @@ var PayrollService = class {
       totalGross,
       totalNet,
       totalTaxes,
+      totalPension,
+      totalLoanDeductions,
       employeeCount: activeEmployees.length,
+      exceptions: this.buildExceptions(activeEmployees),
       payslips: payslips2
     };
   }
-  async lockRun(companyId, payload) {
-    const runId = crypto.randomUUID();
+  // ---------------- Run lifecycle ----------------
+  async submitRun(companyId, submittedBy, payload) {
+    const { periodMonth, periodYear, overrides, notes } = payload;
+    const preview = await this.previewRun(companyId, periodMonth, periodYear, overrides || {});
+    const settings = await this.getSettings(companyId);
+    const runId = genId("RUN");
     await this.db.insert(payrollRuns).values({
       id: runId,
       companyId,
-      periodMonth: payload.periodMonth,
-      periodYear: payload.periodYear,
-      status: "locked",
-      totalGross: payload.totalGross,
-      totalNet: payload.totalNet,
-      totalTaxes: payload.totalTaxes
+      periodMonth,
+      periodYear,
+      status: "pending_approval",
+      totalGross: preview.totalGross,
+      totalNet: preview.totalNet,
+      totalTaxes: preview.totalTaxes,
+      totalPension: preview.totalPension,
+      totalLoanDeductions: preview.totalLoanDeductions,
+      employeeCount: preview.employeeCount,
+      dueDate: `${periodYear}-${String(periodMonth).padStart(2, "0")}-${String(settings.paymentDay).padStart(2, "0")}`,
+      submittedBy: submittedBy || null,
+      submittedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      notes: notes || null
     });
-    if (payload.payslips && payload.payslips.length > 0) {
-      const payslipsToInsert = payload.payslips.map((ps) => ({
-        id: ps.id || crypto.randomUUID(),
-        runId,
-        employeeId: ps.employeeId,
-        basicSalary: ps.basicSalary,
-        allowances: ps.allowances,
-        grossPay: ps.grossPay,
-        taxDeductions: ps.taxDeductions,
-        pensionDeductions: ps.pensionDeductions,
-        netPay: ps.netPay
-      }));
-      await this.db.insert(payslips).values(payslipsToInsert);
+    if (preview.payslips.length > 0) {
+      await this.db.insert(payslips).values(
+        preview.payslips.map((ps) => ({
+          id: ps.id,
+          runId,
+          employeeId: ps.employeeId,
+          employeeName: ps.employeeName,
+          department: ps.department,
+          bankName: ps.bankName,
+          accountNumber: ps.accountNumber,
+          accountName: ps.accountName,
+          basicSalary: ps.basicSalary,
+          allowances: ps.allowances,
+          bonuses: ps.bonuses,
+          grossPay: ps.grossPay,
+          taxDeductions: ps.taxDeductions,
+          pensionDeductions: ps.pensionDeductions,
+          loanDeductions: ps.loanDeductions,
+          otherDeductions: ps.otherDeductions,
+          netPay: ps.netPay,
+          isProrated: ps.isProrated,
+          workingDays: ps.workingDays,
+          presentDays: ps.presentDays,
+          absentDays: ps.absentDays,
+          overtimeHours: ps.overtimeHours
+        }))
+      );
     }
-    return { runId, status: "locked" };
+    return this.getRun(companyId, runId);
+  }
+  async getRuns(companyId, status) {
+    const where = status ? and(eq(payrollRuns.companyId, companyId), eq(payrollRuns.status, status)) : eq(payrollRuns.companyId, companyId);
+    return this.db.query.payrollRuns.findMany({
+      where,
+      orderBy: [desc(payrollRuns.periodYear), desc(payrollRuns.periodMonth)]
+    });
+  }
+  async getRun(companyId, runId) {
+    const run = await this.db.query.payrollRuns.findFirst({
+      where: and(eq(payrollRuns.id, runId), eq(payrollRuns.companyId, companyId))
+    });
+    if (!run) return null;
+    const payslips2 = await this.db.query.payslips.findMany({ where: eq(payslips.runId, runId) });
+    return { ...run, payslips: payslips2 };
+  }
+  async approveRun(companyId, runId, approvedBy) {
+    const run = await this.getRun(companyId, runId);
+    if (!run) return null;
+    if (run.status !== "pending_approval") throw new Error(`Cannot approve a run in "${run.status}" status`);
+    await this.db.update(payrollRuns).set({ status: "approved", approvedBy: approvedBy || null, approvedAt: (/* @__PURE__ */ new Date()).toISOString() }).where(eq(payrollRuns.id, runId));
+    return this.getRun(companyId, runId);
+  }
+  async rejectRun(companyId, runId, reason) {
+    const run = await this.getRun(companyId, runId);
+    if (!run) return null;
+    if (run.status !== "pending_approval") throw new Error(`Cannot reject a run in "${run.status}" status`);
+    await this.db.update(payrollRuns).set({ status: "rejected", rejectedReason: reason || null }).where(eq(payrollRuns.id, runId));
+    return this.getRun(companyId, runId);
+  }
+  async markRunPaid(companyId, runId) {
+    const run = await this.getRun(companyId, runId);
+    if (!run) return null;
+    if (run.status !== "approved") throw new Error(`Cannot mark a run in "${run.status}" status as paid`);
+    const paidAt = (/* @__PURE__ */ new Date()).toISOString();
+    await this.db.update(payrollRuns).set({ status: "paid", paidAt }).where(eq(payrollRuns.id, runId));
+    for (const ps of run.payslips) {
+      if (!ps.loanDeductions) continue;
+      const loan = await this.db.query.loans.findFirst({ where: eq(loans.employeeId, ps.employeeId) });
+      const activeLoan = loan && loan.status === "active" ? loan : await this.db.query.loans.findFirst({
+        where: and(eq(loans.companyId, companyId), eq(loans.employeeId, ps.employeeId), eq(loans.status, "active"))
+      });
+      if (!activeLoan) continue;
+      const newBalance = Math.max(0, activeLoan.remainingBalance - ps.loanDeductions);
+      await this.db.update(loans).set({ remainingBalance: newBalance, status: newBalance === 0 ? "completed" : "active" }).where(eq(loans.id, activeLoan.id));
+      await this.db.insert(loanRepayments).values({
+        id: genId("RPY"),
+        companyId,
+        loanId: activeLoan.id,
+        payrollRunId: runId,
+        amount: ps.loanDeductions,
+        balanceAfter: newBalance,
+        paidAt
+      });
+    }
+    const np = nextPeriod(run.periodMonth, run.periodYear);
+    const pad = /* @__PURE__ */ __name((n) => String(n).padStart(2, "0"), "pad");
+    const periodLabel = new Date(run.periodYear, run.periodMonth - 1, 1).toLocaleString("en-US", { month: "long", year: "numeric" });
+    await this.db.insert(complianceTasks).values([
+      {
+        id: genId("CT"),
+        companyId,
+        payrollRunId: runId,
+        title: `${periodLabel} PAYE Filing`,
+        type: "tax",
+        dueDate: `${np.year}-${pad(np.month)}-10`,
+        amount: run.totalTaxes,
+        status: "pending"
+      },
+      {
+        id: genId("CT"),
+        companyId,
+        payrollRunId: runId,
+        title: `${periodLabel} Pension Remittance`,
+        type: "pension",
+        dueDate: `${np.year}-${pad(np.month)}-07`,
+        amount: run.totalPension,
+        status: "pending"
+      }
+    ]);
+    return this.getRun(companyId, runId);
+  }
+  async getBankFile(companyId, runId) {
+    const run = await this.getRun(companyId, runId);
+    if (!run) return null;
+    const header = "Employee ID,Employee Name,Bank Name,Account Number,Account Name,Net Pay\n";
+    const lines = run.payslips.map(
+      (ps) => [ps.employeeId, ps.employeeName, ps.bankName || "", ps.accountNumber || "", ps.accountName || "", ps.netPay].join(",")
+    );
+    return { filename: `bank-file-${run.periodYear}-${String(run.periodMonth).padStart(2, "0")}.csv`, content: header + lines.join("\n") };
+  }
+  // ---------------- Compliance ----------------
+  async getComplianceTasks(companyId) {
+    return this.db.query.complianceTasks.findMany({
+      where: eq(complianceTasks.companyId, companyId),
+      orderBy: [desc(complianceTasks.dueDate)]
+    });
+  }
+  async completeComplianceTask(companyId, id, completedBy, reference) {
+    const existing = await this.db.query.complianceTasks.findFirst({
+      where: and(eq(complianceTasks.id, id), eq(complianceTasks.companyId, companyId))
+    });
+    if (!existing) return null;
+    await this.db.update(complianceTasks).set({ status: "completed", completedAt: (/* @__PURE__ */ new Date()).toISOString(), completedBy: completedBy || null, reference: reference || null }).where(eq(complianceTasks.id, id));
+    return this.db.query.complianceTasks.findFirst({ where: eq(complianceTasks.id, id) });
+  }
+  // ---------------- Dashboard ----------------
+  async getDashboard(companyId, month, year) {
+    const [preview, latestRuns, complianceTasks2, loans2] = await Promise.all([
+      this.previewRun(companyId, month, year),
+      this.getRuns(companyId),
+      this.getComplianceTasks(companyId),
+      this.getLoans(companyId)
+    ]);
+    const currentRun = latestRuns.find((r) => r.periodMonth === month && r.periodYear === year) || null;
+    const pendingCompliance = complianceTasks2.filter((t) => t.status === "pending");
+    const activeLoans = loans2.filter((l) => l.status === "active");
+    return {
+      periodMonth: month,
+      periodYear: year,
+      currentRun,
+      preview: currentRun ? null : preview,
+      // once a run exists for the period, its persisted figures are authoritative
+      employeeCount: preview.employeeCount,
+      totalGross: currentRun ? currentRun.totalGross : preview.totalGross,
+      totalNet: currentRun ? currentRun.totalNet : preview.totalNet,
+      totalTaxes: currentRun ? currentRun.totalTaxes : preview.totalTaxes,
+      totalPension: currentRun ? currentRun.totalPension : preview.totalPension,
+      totalLoanDeductions: currentRun ? currentRun.totalLoanDeductions : preview.totalLoanDeductions,
+      exceptions: preview.exceptions,
+      pendingComplianceCount: pendingCompliance.length,
+      upcomingRemittances: pendingCompliance.slice(0, 5),
+      activeLoanCount: activeLoans.length,
+      activeLoanBalance: activeLoans.reduce((sum, l) => sum + l.remainingBalance, 0),
+      recentRuns: latestRuns.slice(0, 5)
+    };
   }
 };
 
 // src/controllers/admin/payroll.controller.ts
-var previewPayroll = /* @__PURE__ */ __name(async (c) => {
-  const companyId = c.get("companyId");
-  const month = parseInt(c.req.query("month") || (/* @__PURE__ */ new Date()).getMonth().toString()) + 1;
-  const year = parseInt(c.req.query("year") || (/* @__PURE__ */ new Date()).getFullYear().toString());
-  const db = c.get("db");
-  const payrollService = new PayrollService(db);
+var currentPeriod = /* @__PURE__ */ __name((c) => {
+  const now = /* @__PURE__ */ new Date();
+  const month = parseInt(c.req.query("month") || "") || now.getMonth() + 1;
+  const year = parseInt(c.req.query("year") || "") || now.getFullYear();
+  return { month, year };
+}, "currentPeriod");
+var getPayrollSettings = /* @__PURE__ */ __name(async (c) => {
   try {
-    const preview = await payrollService.previewRun(companyId, month, year);
+    const service = new PayrollService(c.env.DB);
+    return c.json({ data: await service.getSettings(c.get("companyId")) });
+  } catch (error) {
+    return c.json({ error: error.message }, 500);
+  }
+}, "getPayrollSettings");
+var updatePayrollSettings = /* @__PURE__ */ __name(async (c) => {
+  try {
+    const service = new PayrollService(c.env.DB);
+    const payload = await c.req.json();
+    return c.json({ data: await service.updateSettings(c.get("companyId"), payload) });
+  } catch (error) {
+    return c.json({ error: error.message }, 500);
+  }
+}, "updatePayrollSettings");
+var getTaxBrackets = /* @__PURE__ */ __name(async (c) => {
+  try {
+    const service = new PayrollService(c.env.DB);
+    return c.json({ data: await service.getTaxBrackets(c.get("companyId")) });
+  } catch (error) {
+    return c.json({ error: error.message }, 500);
+  }
+}, "getTaxBrackets");
+var updateTaxBrackets = /* @__PURE__ */ __name(async (c) => {
+  try {
+    const service = new PayrollService(c.env.DB);
+    const { brackets } = await c.req.json();
+    return c.json({ data: await service.replaceTaxBrackets(c.get("companyId"), brackets) });
+  } catch (error) {
+    return c.json({ error: error.message }, 500);
+  }
+}, "updateTaxBrackets");
+var getSalaryComponents = /* @__PURE__ */ __name(async (c) => {
+  try {
+    const service = new PayrollService(c.env.DB);
+    return c.json({ data: await service.getSalaryComponents(c.get("companyId")) });
+  } catch (error) {
+    return c.json({ error: error.message }, 500);
+  }
+}, "getSalaryComponents");
+var createSalaryComponent = /* @__PURE__ */ __name(async (c) => {
+  try {
+    const service = new PayrollService(c.env.DB);
+    const payload = await c.req.json();
+    return c.json({ data: await service.createSalaryComponent(c.get("companyId"), payload) }, 201);
+  } catch (error) {
+    return c.json({ error: error.message }, 500);
+  }
+}, "createSalaryComponent");
+var updateSalaryComponent = /* @__PURE__ */ __name(async (c) => {
+  try {
+    const service = new PayrollService(c.env.DB);
+    const payload = await c.req.json();
+    const updated = await service.updateSalaryComponent(c.get("companyId"), c.req.param("id"), payload);
+    if (!updated) return c.json({ error: "Not found" }, 404);
+    return c.json({ data: updated });
+  } catch (error) {
+    return c.json({ error: error.message }, 500);
+  }
+}, "updateSalaryComponent");
+var deleteSalaryComponent = /* @__PURE__ */ __name(async (c) => {
+  try {
+    const service = new PayrollService(c.env.DB);
+    const deleted = await service.deleteSalaryComponent(c.get("companyId"), c.req.param("id"));
+    if (!deleted) return c.json({ error: "Not found" }, 404);
+    return c.json({ data: deleted });
+  } catch (error) {
+    return c.json({ error: error.message }, error.message?.includes("cannot be deleted") ? 400 : 500);
+  }
+}, "deleteSalaryComponent");
+var getPayGrades = /* @__PURE__ */ __name(async (c) => {
+  try {
+    const service = new PayrollService(c.env.DB);
+    return c.json({ data: await service.getPayGrades(c.get("companyId")) });
+  } catch (error) {
+    return c.json({ error: error.message }, 500);
+  }
+}, "getPayGrades");
+var createPayGrade = /* @__PURE__ */ __name(async (c) => {
+  try {
+    const service = new PayrollService(c.env.DB);
+    const payload = await c.req.json();
+    return c.json({ data: await service.createPayGrade(c.get("companyId"), payload) }, 201);
+  } catch (error) {
+    return c.json({ error: error.message }, 500);
+  }
+}, "createPayGrade");
+var updatePayGrade = /* @__PURE__ */ __name(async (c) => {
+  try {
+    const service = new PayrollService(c.env.DB);
+    const payload = await c.req.json();
+    const updated = await service.updatePayGrade(c.get("companyId"), c.req.param("id"), payload);
+    if (!updated) return c.json({ error: "Not found" }, 404);
+    return c.json({ data: updated });
+  } catch (error) {
+    return c.json({ error: error.message }, 500);
+  }
+}, "updatePayGrade");
+var deletePayGrade = /* @__PURE__ */ __name(async (c) => {
+  try {
+    const service = new PayrollService(c.env.DB);
+    const deleted = await service.deletePayGrade(c.get("companyId"), c.req.param("id"));
+    if (!deleted) return c.json({ error: "Not found" }, 404);
+    return c.json({ data: deleted });
+  } catch (error) {
+    return c.json({ error: error.message }, 500);
+  }
+}, "deletePayGrade");
+var getLoans = /* @__PURE__ */ __name(async (c) => {
+  try {
+    const service = new PayrollService(c.env.DB);
+    return c.json({ data: await service.getLoans(c.get("companyId")) });
+  } catch (error) {
+    return c.json({ error: error.message }, 500);
+  }
+}, "getLoans");
+var createLoan = /* @__PURE__ */ __name(async (c) => {
+  try {
+    const service = new PayrollService(c.env.DB);
+    const payload = await c.req.json();
+    if (!payload.employeeId || !payload.principal) {
+      return c.json({ error: "employeeId and principal are required" }, 400);
+    }
+    return c.json({ data: await service.createLoan(c.get("companyId"), payload) }, 201);
+  } catch (error) {
+    return c.json({ error: error.message }, 500);
+  }
+}, "createLoan");
+var updateLoan = /* @__PURE__ */ __name(async (c) => {
+  try {
+    const service = new PayrollService(c.env.DB);
+    const payload = await c.req.json();
+    const updated = await service.updateLoan(c.get("companyId"), c.req.param("id"), payload);
+    if (!updated) return c.json({ error: "Not found" }, 404);
+    return c.json({ data: updated });
+  } catch (error) {
+    return c.json({ error: error.message }, 500);
+  }
+}, "updateLoan");
+var deleteLoan = /* @__PURE__ */ __name(async (c) => {
+  try {
+    const service = new PayrollService(c.env.DB);
+    const deleted = await service.deleteLoan(c.get("companyId"), c.req.param("id"));
+    if (!deleted) return c.json({ error: "Not found" }, 404);
+    return c.json({ data: deleted });
+  } catch (error) {
+    return c.json({ error: error.message }, 500);
+  }
+}, "deleteLoan");
+var getLoanRepayments = /* @__PURE__ */ __name(async (c) => {
+  try {
+    const service = new PayrollService(c.env.DB);
+    return c.json({ data: await service.getLoanRepayments(c.get("companyId"), c.req.param("id")) });
+  } catch (error) {
+    return c.json({ error: error.message }, 500);
+  }
+}, "getLoanRepayments");
+var previewPayroll = /* @__PURE__ */ __name(async (c) => {
+  try {
+    const { month, year } = currentPeriod(c);
+    const service = new PayrollService(c.env.DB);
+    const preview = await service.previewRun(c.get("companyId"), month, year);
     return c.json({ data: preview }, 200);
   } catch (error) {
     console.error("Error previewing payroll:", error);
     return c.json({ error: error.message || "Internal Server Error" }, 500);
   }
 }, "previewPayroll");
-var lockPayroll = /* @__PURE__ */ __name(async (c) => {
-  const companyId = c.get("companyId");
-  const payload = await c.req.json();
-  const db = c.get("db");
-  const payrollService = new PayrollService(db);
+var recomputePreview = /* @__PURE__ */ __name(async (c) => {
   try {
-    const result = await payrollService.lockRun(companyId, payload);
-    return c.json({ data: result }, 201);
+    const body = await c.req.json();
+    const service = new PayrollService(c.env.DB);
+    const preview = await service.previewRun(c.get("companyId"), body.periodMonth, body.periodYear, body.overrides || {});
+    return c.json({ data: preview }, 200);
   } catch (error) {
-    console.error("Error locking payroll:", error);
+    console.error("Error recomputing payroll preview:", error);
     return c.json({ error: error.message || "Internal Server Error" }, 500);
   }
-}, "lockPayroll");
+}, "recomputePreview");
+var submitPayrollRun = /* @__PURE__ */ __name(async (c) => {
+  try {
+    const payload = await c.req.json();
+    if (!payload.periodMonth || !payload.periodYear) {
+      return c.json({ error: "periodMonth and periodYear are required" }, 400);
+    }
+    const service = new PayrollService(c.env.DB);
+    const run = await service.submitRun(c.get("companyId"), c.get("employeeId"), payload);
+    return c.json({ data: run }, 201);
+  } catch (error) {
+    console.error("Error submitting payroll run:", error);
+    return c.json({ error: error.message || "Internal Server Error" }, 500);
+  }
+}, "submitPayrollRun");
+var getPayrollRuns = /* @__PURE__ */ __name(async (c) => {
+  try {
+    const service = new PayrollService(c.env.DB);
+    const status = c.req.query("status");
+    return c.json({ data: await service.getRuns(c.get("companyId"), status) });
+  } catch (error) {
+    return c.json({ error: error.message }, 500);
+  }
+}, "getPayrollRuns");
+var getPayrollRun = /* @__PURE__ */ __name(async (c) => {
+  try {
+    const service = new PayrollService(c.env.DB);
+    const run = await service.getRun(c.get("companyId"), c.req.param("id"));
+    if (!run) return c.json({ error: "Not found" }, 404);
+    return c.json({ data: run });
+  } catch (error) {
+    return c.json({ error: error.message }, 500);
+  }
+}, "getPayrollRun");
+var approvePayrollRun = /* @__PURE__ */ __name(async (c) => {
+  try {
+    const service = new PayrollService(c.env.DB);
+    const run = await service.approveRun(c.get("companyId"), c.req.param("id"), c.get("employeeId"));
+    if (!run) return c.json({ error: "Not found" }, 404);
+    return c.json({ data: run });
+  } catch (error) {
+    return c.json({ error: error.message }, 400);
+  }
+}, "approvePayrollRun");
+var rejectPayrollRun = /* @__PURE__ */ __name(async (c) => {
+  try {
+    const service = new PayrollService(c.env.DB);
+    const { reason } = await c.req.json().catch(() => ({ reason: void 0 }));
+    const run = await service.rejectRun(c.get("companyId"), c.req.param("id"), reason);
+    if (!run) return c.json({ error: "Not found" }, 404);
+    return c.json({ data: run });
+  } catch (error) {
+    return c.json({ error: error.message }, 400);
+  }
+}, "rejectPayrollRun");
+var markPayrollRunPaid = /* @__PURE__ */ __name(async (c) => {
+  try {
+    const service = new PayrollService(c.env.DB);
+    const run = await service.markRunPaid(c.get("companyId"), c.req.param("id"));
+    if (!run) return c.json({ error: "Not found" }, 404);
+    return c.json({ data: run });
+  } catch (error) {
+    return c.json({ error: error.message }, 400);
+  }
+}, "markPayrollRunPaid");
+var getBankFile = /* @__PURE__ */ __name(async (c) => {
+  try {
+    const service = new PayrollService(c.env.DB);
+    const file = await service.getBankFile(c.get("companyId"), c.req.param("id"));
+    if (!file) return c.json({ error: "Not found" }, 404);
+    c.header("Content-Type", "text/csv");
+    c.header("Content-Disposition", `attachment; filename="${file.filename}"`);
+    return c.body(file.content);
+  } catch (error) {
+    return c.json({ error: error.message }, 500);
+  }
+}, "getBankFile");
+var getComplianceTasks = /* @__PURE__ */ __name(async (c) => {
+  try {
+    const service = new PayrollService(c.env.DB);
+    return c.json({ data: await service.getComplianceTasks(c.get("companyId")) });
+  } catch (error) {
+    return c.json({ error: error.message }, 500);
+  }
+}, "getComplianceTasks");
+var completeComplianceTask = /* @__PURE__ */ __name(async (c) => {
+  try {
+    const service = new PayrollService(c.env.DB);
+    const { reference } = await c.req.json().catch(() => ({ reference: void 0 }));
+    const task = await service.completeComplianceTask(c.get("companyId"), c.req.param("id"), c.get("employeeId"), reference);
+    if (!task) return c.json({ error: "Not found" }, 404);
+    return c.json({ data: task });
+  } catch (error) {
+    return c.json({ error: error.message }, 500);
+  }
+}, "completeComplianceTask");
+var getPayrollDashboard = /* @__PURE__ */ __name(async (c) => {
+  try {
+    const { month, year } = currentPeriod(c);
+    const service = new PayrollService(c.env.DB);
+    return c.json({ data: await service.getDashboard(c.get("companyId"), month, year) });
+  } catch (error) {
+    console.error("Error building payroll dashboard:", error);
+    return c.json({ error: error.message || "Internal Server Error" }, 500);
+  }
+}, "getPayrollDashboard");
 var getEmployeePayslips = /* @__PURE__ */ __name(async (c) => {
   try {
     const employeeId = c.req.param("id");
     const companyId = c.get("companyId");
-    const db = c.get("db");
+    const db = drizzle(c.env.DB, { schema: schema_exports });
     const records = await db.select({
       id: payslips.id,
       runId: payslips.runId,
       basicSalary: payslips.basicSalary,
       allowances: payslips.allowances,
+      bonuses: payslips.bonuses,
       grossPay: payslips.grossPay,
       taxDeductions: payslips.taxDeductions,
       pensionDeductions: payslips.pensionDeductions,
+      loanDeductions: payslips.loanDeductions,
+      otherDeductions: payslips.otherDeductions,
       netPay: payslips.netPay,
       createdAt: payslips.createdAt,
       periodMonth: payrollRuns.periodMonth,
       periodYear: payrollRuns.periodYear,
       status: payrollRuns.status
     }).from(payslips).innerJoin(payrollRuns, eq(payslips.runId, payrollRuns.id)).where(and(eq(payslips.employeeId, employeeId), eq(payrollRuns.companyId, companyId))).orderBy(desc(payrollRuns.periodYear), desc(payrollRuns.periodMonth));
-    return c.json(records);
+    return c.json({ data: records });
   } catch (error) {
     return c.json({ error: error.message }, 500);
   }
@@ -9962,9 +10873,38 @@ var tenantMiddleware = /* @__PURE__ */ __name(async (c, next) => {
 // src/routes/payroll.routes.ts
 var payrollRoutes = new Hono2();
 payrollRoutes.use("*", tenantMiddleware);
-payrollRoutes.get("/preview", requireRole("SUPER_ADMIN", "HR_ADMIN", "MANAGER", "PAYROLL_OFFICER"), previewPayroll);
-payrollRoutes.post("/lock", requireRole("SUPER_ADMIN", "HR_ADMIN", "PAYROLL_OFFICER"), lockPayroll);
-payrollRoutes.get("/employee/:id/payslips", requireRole("SUPER_ADMIN", "HR_ADMIN", "PAYROLL_OFFICER"), getEmployeePayslips);
+var adminOnly = requireRole("SUPER_ADMIN", "HR_ADMIN", "PAYROLL_OFFICER");
+var adminOrManager = requireRole("SUPER_ADMIN", "HR_ADMIN", "MANAGER", "PAYROLL_OFFICER");
+payrollRoutes.get("/settings", adminOnly, requirePermission("payroll", "view"), getPayrollSettings);
+payrollRoutes.put("/settings", adminOnly, requirePermission("payroll", "edit"), updatePayrollSettings);
+payrollRoutes.get("/tax-brackets", adminOnly, requirePermission("payroll", "view"), getTaxBrackets);
+payrollRoutes.put("/tax-brackets", adminOnly, requirePermission("payroll", "edit"), updateTaxBrackets);
+payrollRoutes.get("/salary-components", adminOnly, requirePermission("payroll", "view"), getSalaryComponents);
+payrollRoutes.post("/salary-components", adminOnly, requirePermission("payroll", "create"), createSalaryComponent);
+payrollRoutes.put("/salary-components/:id", adminOnly, requirePermission("payroll", "edit"), updateSalaryComponent);
+payrollRoutes.delete("/salary-components/:id", adminOnly, requirePermission("payroll", "delete"), deleteSalaryComponent);
+payrollRoutes.get("/pay-grades", adminOnly, requirePermission("payroll", "view"), getPayGrades);
+payrollRoutes.post("/pay-grades", adminOnly, requirePermission("payroll", "create"), createPayGrade);
+payrollRoutes.put("/pay-grades/:id", adminOnly, requirePermission("payroll", "edit"), updatePayGrade);
+payrollRoutes.delete("/pay-grades/:id", adminOnly, requirePermission("payroll", "delete"), deletePayGrade);
+payrollRoutes.get("/loans", adminOnly, requirePermission("payroll", "view"), getLoans);
+payrollRoutes.post("/loans", adminOnly, requirePermission("payroll", "create"), createLoan);
+payrollRoutes.put("/loans/:id", adminOnly, requirePermission("payroll", "edit"), updateLoan);
+payrollRoutes.delete("/loans/:id", adminOnly, requirePermission("payroll", "delete"), deleteLoan);
+payrollRoutes.get("/loans/:id/repayments", adminOnly, requirePermission("payroll", "view"), getLoanRepayments);
+payrollRoutes.get("/preview", adminOrManager, requirePermission("payroll", "view"), previewPayroll);
+payrollRoutes.post("/preview", adminOnly, requirePermission("payroll", "edit"), recomputePreview);
+payrollRoutes.get("/dashboard", adminOrManager, requirePermission("payroll", "view"), getPayrollDashboard);
+payrollRoutes.post("/runs", adminOnly, requirePermission("payroll", "create"), submitPayrollRun);
+payrollRoutes.get("/runs", adminOrManager, requirePermission("payroll", "view"), getPayrollRuns);
+payrollRoutes.get("/runs/:id", adminOnly, requirePermission("payroll", "view"), getPayrollRun);
+payrollRoutes.post("/runs/:id/approve", adminOnly, requirePermission("payroll", "approve"), approvePayrollRun);
+payrollRoutes.post("/runs/:id/reject", adminOnly, requirePermission("payroll", "edit"), rejectPayrollRun);
+payrollRoutes.post("/runs/:id/mark-paid", adminOnly, requirePermission("payroll", "edit"), markPayrollRunPaid);
+payrollRoutes.get("/runs/:id/bank-file", adminOnly, requirePermission("payroll", "view"), getBankFile);
+payrollRoutes.get("/compliance", adminOnly, requirePermission("payroll", "view"), getComplianceTasks);
+payrollRoutes.put("/compliance/:id", adminOnly, requirePermission("payroll", "edit"), completeComplianceTask);
+payrollRoutes.get("/employee/:id/payslips", adminOnly, requirePermission("payroll", "view"), getEmployeePayslips);
 var payroll_routes_default = payrollRoutes;
 
 // src/services/leave.service.ts
@@ -9999,13 +10939,51 @@ var LeaveService = class {
     ).all();
     return requests;
   }
+  async getPendingTeamLeaveRequests(companyId, managerId) {
+    return this.db.select({
+      id: leaveRequests.id,
+      employeeId: leaveRequests.employeeId,
+      name: employees.name,
+      lastName: employees.lastName,
+      avatar: employees.avatar,
+      type: leaveRequests.type,
+      startDate: leaveRequests.startDate,
+      endDate: leaveRequests.endDate,
+      days: leaveRequests.days,
+      reason: leaveRequests.reason,
+      status: leaveRequests.status
+    }).from(leaveRequests).innerJoin(employees, eq(leaveRequests.employeeId, employees.id)).where(
+      and(
+        eq(leaveRequests.companyId, companyId),
+        eq(leaveRequests.status, "pending"),
+        eq(employees.managerId, managerId)
+      )
+    ).all();
+  }
+  async updateTeamLeaveRequestStatus(companyId, managerId, requestId, data) {
+    const request = await this.db.query.leaveRequests.findFirst({
+      where: and(eq(leaveRequests.id, requestId), eq(leaveRequests.companyId, companyId))
+    });
+    if (!request) return null;
+    const employee = await this.db.query.employees.findFirst({
+      where: eq(employees.id, request.employeeId)
+    });
+    if (!employee || employee.managerId !== managerId) {
+      return null;
+    }
+    return this.updateLeaveRequestStatus(companyId, requestId, {
+      status: data.status,
+      managerComment: data.managerComment,
+      managerId
+    });
+  }
   async getEmployeeLeaveRequests(companyId, employeeId) {
     return this.db.query.leaveRequests.findMany({
       where: and(
         eq(leaveRequests.companyId, companyId),
         eq(leaveRequests.employeeId, employeeId)
       ),
-      orderBy: /* @__PURE__ */ __name((leaveRequests2, { desc: desc4 }) => [desc4(leaveRequests2.appliedOn)], "orderBy")
+      orderBy: /* @__PURE__ */ __name((leaveRequests2, { desc: desc3 }) => [desc3(leaveRequests2.appliedOn)], "orderBy")
     });
   }
   async calculateLeaveBalances(companyId, employeeId) {
@@ -10144,13 +11122,226 @@ var getEmployeeLeaveRequests = /* @__PURE__ */ __name(async (c) => {
 
 // src/routes/leave-admin.routes.ts
 var leaveAdminRoutes = new Hono2();
-var adminOnly = requireRole("SUPER_ADMIN", "HR_ADMIN");
-leaveAdminRoutes.get("/", adminOnly, getAllLeaves);
-leaveAdminRoutes.put("/:id/status", adminOnly, updateLeaveStatus);
-leaveAdminRoutes.get("/employee/:id/balances", adminOnly, getEmployeeLeaveBalances);
-leaveAdminRoutes.put("/employee/:id/balances", adminOnly, updateEmployeeLeaveBalances);
-leaveAdminRoutes.get("/employee/:id/requests", adminOnly, getEmployeeLeaveRequests);
+var adminOnly2 = requireRole("SUPER_ADMIN", "HR_ADMIN");
+var view = requirePermission("leave", "view");
+var approve = requirePermission("leave", "approve");
+leaveAdminRoutes.get("/", adminOnly2, view, getAllLeaves);
+leaveAdminRoutes.put("/:id/status", adminOnly2, approve, updateLeaveStatus);
+leaveAdminRoutes.get("/employee/:id/balances", adminOnly2, view, getEmployeeLeaveBalances);
+leaveAdminRoutes.put("/employee/:id/balances", adminOnly2, approve, updateEmployeeLeaveBalances);
+leaveAdminRoutes.get("/employee/:id/requests", adminOnly2, view, getEmployeeLeaveRequests);
 var leave_admin_routes_default = leaveAdminRoutes;
+
+// src/services/requisition.service.ts
+var DAY_MS = 24 * 60 * 60 * 1e3;
+var withComputedDaysOpen = /* @__PURE__ */ __name((row) => {
+  const opened = new Date(row.dateOpened).getTime();
+  const daysOpen = Number.isFinite(opened) ? Math.max(0, Math.floor((Date.now() - opened) / DAY_MS)) : 0;
+  return { ...row, daysOpen };
+}, "withComputedDaysOpen");
+var RequisitionService = class {
+  static {
+    __name(this, "RequisitionService");
+  }
+  db;
+  constructor(dbBinding) {
+    this.db = drizzle(dbBinding, { schema: schema_exports });
+  }
+  async getAllByCompany(companyId) {
+    const rows = await this.db.query.jobRequisitions.findMany({
+      where: eq(jobRequisitions.companyId, companyId),
+      orderBy: /* @__PURE__ */ __name((jobRequisitions2, { desc: desc3 }) => [desc3(jobRequisitions2.createdAt)], "orderBy")
+    });
+    return rows.map(withComputedDaysOpen);
+  }
+  async getPendingByCompany(companyId) {
+    const rows = await this.db.query.jobRequisitions.findMany({
+      where: and(
+        eq(jobRequisitions.companyId, companyId),
+        eq(jobRequisitions.status, "Pending Approval")
+      ),
+      orderBy: /* @__PURE__ */ __name((jobRequisitions2, { asc: asc2 }) => [asc2(jobRequisitions2.createdAt)], "orderBy")
+    });
+    return rows.map(withComputedDaysOpen);
+  }
+  async getMineByCompany(companyId, employeeId) {
+    const rows = await this.db.query.jobRequisitions.findMany({
+      where: and(
+        eq(jobRequisitions.companyId, companyId),
+        eq(jobRequisitions.requestedById, employeeId)
+      ),
+      orderBy: /* @__PURE__ */ __name((jobRequisitions2, { desc: desc3 }) => [desc3(jobRequisitions2.createdAt)], "orderBy")
+    });
+    return rows.map(withComputedDaysOpen);
+  }
+  async create(companyId, requester, data) {
+    const id = `REQ-${Math.floor(1e3 + Math.random() * 9e3)}`;
+    const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+    const autoApprove = requester.role === "SUPER_ADMIN" || requester.role === "HR_ADMIN";
+    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+    const result = await this.db.insert(jobRequisitions).values({
+      id,
+      companyId,
+      title: data.title,
+      department: data.department,
+      location: data.location,
+      employmentType: data.employmentType || null,
+      hiringManager: data.hiringManager || requester.name,
+      managerAvatar: data.managerAvatar || requester.avatar || null,
+      priority: data.priority || "Medium",
+      status: autoApprove ? "Open" : "Pending Approval",
+      dateOpened: today,
+      targetHireDate: data.targetHireDate || today,
+      daysOpen: 0,
+      justification: data.justification || null,
+      budgetRange: data.budgetRange || null,
+      requestedById: requester.id,
+      requestedByName: requester.name,
+      reviewedById: autoApprove ? requester.id : null,
+      reviewedByName: autoApprove ? requester.name : null,
+      reviewedAt: autoApprove ? nowIso : null
+    }).returning();
+    return withComputedDaysOpen(result[0]);
+  }
+  async approve(companyId, id, reviewer) {
+    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+    const result = await this.db.update(jobRequisitions).set({
+      status: "Open",
+      // The position is "opened" as of the approval, so time-to-fill tracking
+      // starts here rather than at the original request date.
+      dateOpened: nowIso.split("T")[0],
+      reviewedById: reviewer.id,
+      reviewedByName: reviewer.name,
+      reviewedAt: nowIso,
+      rejectionReason: null
+    }).where(and(eq(jobRequisitions.companyId, companyId), eq(jobRequisitions.id, id))).returning();
+    return result[0] ? withComputedDaysOpen(result[0]) : null;
+  }
+  async reject(companyId, id, reviewer, reason) {
+    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+    const result = await this.db.update(jobRequisitions).set({
+      status: "Rejected",
+      reviewedById: reviewer.id,
+      reviewedByName: reviewer.name,
+      reviewedAt: nowIso,
+      rejectionReason: reason || null
+    }).where(and(eq(jobRequisitions.companyId, companyId), eq(jobRequisitions.id, id))).returning();
+    return result[0] ? withComputedDaysOpen(result[0]) : null;
+  }
+  async updateStatus(companyId, id, status) {
+    const result = await this.db.update(jobRequisitions).set({ status }).where(and(eq(jobRequisitions.companyId, companyId), eq(jobRequisitions.id, id))).returning();
+    return result[0] ? withComputedDaysOpen(result[0]) : null;
+  }
+  async remove(companyId, id) {
+    const result = await this.db.delete(jobRequisitions).where(and(eq(jobRequisitions.companyId, companyId), eq(jobRequisitions.id, id))).returning();
+    return result[0] || null;
+  }
+};
+
+// src/controllers/admin/requisition.controller.ts
+var VALID_MANUAL_STATUSES = ["Open", "On Hold", "Filled", "Cancelled"];
+var getActor = /* @__PURE__ */ __name(async (c) => {
+  const employeeId = c.get("employeeId");
+  const role = c.get("role");
+  if (!employeeId) {
+    return { id: "system", name: "System", avatar: null, role };
+  }
+  const db = drizzle(c.env.DB, { schema: schema_exports });
+  const employee = await db.query.employees.findFirst({
+    where: eq(employees.id, employeeId)
+  });
+  const name = employee ? [employee.name, employee.lastName].filter(Boolean).join(" ") : "Unknown";
+  return { id: employeeId, name, avatar: employee?.avatar || null, role };
+}, "getActor");
+var getAllRequisitions = /* @__PURE__ */ __name(async (c) => {
+  const companyId = c.get("companyId");
+  const service = new RequisitionService(c.env.DB);
+  const rows = await service.getAllByCompany(companyId);
+  return c.json(rows);
+}, "getAllRequisitions");
+var getPendingRequisitions = /* @__PURE__ */ __name(async (c) => {
+  const companyId = c.get("companyId");
+  const service = new RequisitionService(c.env.DB);
+  const rows = await service.getPendingByCompany(companyId);
+  return c.json(rows);
+}, "getPendingRequisitions");
+var getMyRequisitions = /* @__PURE__ */ __name(async (c) => {
+  const companyId = c.get("companyId");
+  const employeeId = c.get("employeeId");
+  if (!employeeId) return c.json([]);
+  const service = new RequisitionService(c.env.DB);
+  const rows = await service.getMineByCompany(companyId, employeeId);
+  return c.json(rows);
+}, "getMyRequisitions");
+var createRequisition = /* @__PURE__ */ __name(async (c) => {
+  try {
+    const companyId = c.get("companyId");
+    const payload = await c.req.json();
+    if (!payload.title || !payload.department || !payload.location) {
+      return c.json({ error: "title, department and location are required" }, 400);
+    }
+    const requester = await getActor(c);
+    const service = new RequisitionService(c.env.DB);
+    const created = await service.create(companyId, requester, payload);
+    return c.json(created, 201);
+  } catch (err) {
+    return c.json({ error: err.message }, 500);
+  }
+}, "createRequisition");
+var approveRequisition = /* @__PURE__ */ __name(async (c) => {
+  const companyId = c.get("companyId");
+  const id = c.req.param("id");
+  const reviewer = await getActor(c);
+  const service = new RequisitionService(c.env.DB);
+  const updated = await service.approve(companyId, id, reviewer);
+  if (!updated) return c.json({ error: "Requisition not found" }, 404);
+  return c.json(updated);
+}, "approveRequisition");
+var rejectRequisition = /* @__PURE__ */ __name(async (c) => {
+  const companyId = c.get("companyId");
+  const id = c.req.param("id");
+  const payload = await c.req.json().catch(() => ({}));
+  const reviewer = await getActor(c);
+  const service = new RequisitionService(c.env.DB);
+  const updated = await service.reject(companyId, id, reviewer, payload.reason);
+  if (!updated) return c.json({ error: "Requisition not found" }, 404);
+  return c.json(updated);
+}, "rejectRequisition");
+var updateRequisitionStatus = /* @__PURE__ */ __name(async (c) => {
+  const companyId = c.get("companyId");
+  const id = c.req.param("id");
+  const { status } = await c.req.json();
+  if (!VALID_MANUAL_STATUSES.includes(status)) {
+    return c.json({ error: `status must be one of ${VALID_MANUAL_STATUSES.join(", ")}` }, 400);
+  }
+  const service = new RequisitionService(c.env.DB);
+  const updated = await service.updateStatus(companyId, id, status);
+  if (!updated) return c.json({ error: "Requisition not found" }, 404);
+  return c.json(updated);
+}, "updateRequisitionStatus");
+var deleteRequisition = /* @__PURE__ */ __name(async (c) => {
+  const companyId = c.get("companyId");
+  const id = c.req.param("id");
+  const service = new RequisitionService(c.env.DB);
+  const deleted = await service.remove(companyId, id);
+  if (!deleted) return c.json({ error: "Requisition not found" }, 404);
+  return c.json({ success: true });
+}, "deleteRequisition");
+
+// src/routes/requisition.routes.ts
+var requisitionRoutes = new Hono2();
+var viewers = requireRole("SUPER_ADMIN", "HR_ADMIN", "MANAGER", "RECRUITER");
+var requesters = requireRole("SUPER_ADMIN", "HR_ADMIN", "MANAGER");
+var approvers = requireRole("SUPER_ADMIN", "HR_ADMIN");
+requisitionRoutes.get("/", viewers, getAllRequisitions);
+requisitionRoutes.get("/pending", approvers, getPendingRequisitions);
+requisitionRoutes.get("/mine", requesters, getMyRequisitions);
+requisitionRoutes.post("/", requesters, createRequisition);
+requisitionRoutes.patch("/:id/approve", approvers, approveRequisition);
+requisitionRoutes.patch("/:id/reject", approvers, rejectRequisition);
+requisitionRoutes.patch("/:id/status", approvers, updateRequisitionStatus);
+requisitionRoutes.delete("/:id", approvers, deleteRequisition);
+var requisition_routes_default = requisitionRoutes;
 
 // src/services/settings.service.ts
 var SettingsService = class {
@@ -10164,7 +11355,15 @@ var SettingsService = class {
   async getSettings(companyId) {
     const settings = await this.db.select().from(companySettings).where(eq(companySettings.companyId, companyId)).get();
     if (!settings) {
-      return { companyId, require2fa: false, passwordMinLength: 12, sessionTimeoutMins: 60 };
+      return {
+        companyId,
+        require2fa: false,
+        passwordMinLength: 12,
+        sessionTimeoutMins: 60,
+        attendanceStartTime: "09:00",
+        attendanceEndTime: "17:00",
+        attendanceGraceMinutes: 15
+      };
     }
     return settings;
   }
@@ -10545,7 +11744,11 @@ var addEmployeeTraining = /* @__PURE__ */ __name(async (c) => {
 
 // src/routes/admin.routes.ts
 var adminRoutes = new Hono2();
-var adminOnly2 = requireRole("SUPER_ADMIN", "HR_ADMIN");
+var adminOnly3 = requireRole("SUPER_ADMIN", "HR_ADMIN");
+var view2 = /* @__PURE__ */ __name((mod) => requirePermission(mod, "view"), "view");
+var create = /* @__PURE__ */ __name((mod) => requirePermission(mod, "create"), "create");
+var edit = /* @__PURE__ */ __name((mod) => requirePermission(mod, "edit"), "edit");
+var del = /* @__PURE__ */ __name((mod) => requirePermission(mod, "delete"), "del");
 adminRoutes.get("/dev/seed", async (c) => {
   try {
     const db = drizzle(c.env.DB, { schema: schema_exports });
@@ -10598,29 +11801,30 @@ adminRoutes.get("/dev/seed", async (c) => {
   }
 });
 adminRoutes.use("*", authMiddleware);
-adminRoutes.get("/employees", adminOnly2, getEmployees);
-adminRoutes.get("/employees/:id", adminOnly2, getEmployee);
-adminRoutes.get("/employees/:id/direct-reports", adminOnly2, getDirectReports);
-adminRoutes.get("/employees/:id/audit-logs", adminOnly2, getAuditLogs);
-adminRoutes.post("/employees", adminOnly2, createEmployee);
-adminRoutes.put("/employees/:id", adminOnly2, updateEmployee);
-adminRoutes.delete("/employees/:id", adminOnly2, deleteEmployee);
-adminRoutes.post("/employees/:id/emergency-contacts", adminOnly2, addEmergencyContact);
-adminRoutes.delete("/employees/:id/emergency-contacts/:contactId", adminOnly2, deleteEmergencyContact);
-adminRoutes.post("/employees/:id/documents", adminOnly2, addDocument);
-adminRoutes.delete("/employees/:id/documents/:documentId", adminOnly2, deleteDocument);
-adminRoutes.get("/employees/:id/assets", adminOnly2, getAssets);
-adminRoutes.post("/employees/:id/assets", adminOnly2, addAsset);
-adminRoutes.delete("/employees/:id/assets/:assetId", adminOnly2, deleteAsset);
-adminRoutes.get("/performance/employee/:id", adminOnly2, getEmployeeAssessments);
-adminRoutes.post("/performance/employee/:id", adminOnly2, addEmployeeAssessment);
-adminRoutes.get("/benefits/employee/:id", adminOnly2, getEmployeeBenefits);
-adminRoutes.put("/benefits/employee/:id", adminOnly2, updateEmployeeBenefits);
-adminRoutes.get("/training/employee/:id", adminOnly2, getEmployeeTrainings);
-adminRoutes.post("/training/employee/:id", adminOnly2, addEmployeeTraining);
+adminRoutes.get("/employees", adminOnly3, view2("workforce"), getEmployees);
+adminRoutes.get("/employees/:id", adminOnly3, view2("workforce"), getEmployee);
+adminRoutes.get("/employees/:id/direct-reports", adminOnly3, view2("workforce"), getDirectReports);
+adminRoutes.get("/employees/:id/audit-logs", adminOnly3, view2("workforce"), getAuditLogs);
+adminRoutes.post("/employees", adminOnly3, create("workforce"), createEmployee);
+adminRoutes.put("/employees/:id", adminOnly3, edit("workforce"), updateEmployee);
+adminRoutes.delete("/employees/:id", adminOnly3, del("workforce"), deleteEmployee);
+adminRoutes.post("/employees/:id/emergency-contacts", adminOnly3, edit("workforce"), addEmergencyContact);
+adminRoutes.delete("/employees/:id/emergency-contacts/:contactId", adminOnly3, edit("workforce"), deleteEmergencyContact);
+adminRoutes.post("/employees/:id/documents", adminOnly3, edit("workforce"), addDocument);
+adminRoutes.delete("/employees/:id/documents/:documentId", adminOnly3, edit("workforce"), deleteDocument);
+adminRoutes.get("/employees/:id/assets", adminOnly3, view2("workforce"), getAssets);
+adminRoutes.post("/employees/:id/assets", adminOnly3, edit("workforce"), addAsset);
+adminRoutes.delete("/employees/:id/assets/:assetId", adminOnly3, edit("workforce"), deleteAsset);
+adminRoutes.get("/performance/employee/:id", adminOnly3, view2("performance"), getEmployeeAssessments);
+adminRoutes.post("/performance/employee/:id", adminOnly3, create("performance"), addEmployeeAssessment);
+adminRoutes.get("/benefits/employee/:id", adminOnly3, getEmployeeBenefits);
+adminRoutes.put("/benefits/employee/:id", adminOnly3, updateEmployeeBenefits);
+adminRoutes.get("/training/employee/:id", adminOnly3, view2("performance"), getEmployeeTrainings);
+adminRoutes.post("/training/employee/:id", adminOnly3, create("performance"), addEmployeeTraining);
 adminRoutes.route("/payroll", payroll_routes_default);
 adminRoutes.route("/leaves", leave_admin_routes_default);
-adminRoutes.get("/dashboard/stats", adminOnly2, async (c) => {
+adminRoutes.route("/job-requisitions", requisition_routes_default);
+adminRoutes.get("/dashboard/stats", adminOnly3, async (c) => {
   try {
     const companyId = c.get("companyId");
     const dashboardService = new DashboardService(c.env.DB);
@@ -10630,33 +11834,33 @@ adminRoutes.get("/dashboard/stats", adminOnly2, async (c) => {
     return c.json({ error: error.message }, 500);
   }
 });
-adminRoutes.get("/settings", adminOnly2, async (c) => {
+adminRoutes.get("/settings", adminOnly3, view2("settings"), async (c) => {
   const companyId = c.get("companyId");
   const settingsService = new SettingsService(c.env.DB);
   const settings = await settingsService.getSettings(companyId);
   return c.json(settings);
 });
-adminRoutes.put("/settings", adminOnly2, async (c) => {
+adminRoutes.put("/settings", adminOnly3, edit("settings"), async (c) => {
   const companyId = c.get("companyId");
   const payload = await c.req.json();
   const settingsService = new SettingsService(c.env.DB);
   const settings = await settingsService.updateSettings(companyId, payload);
   return c.json(settings);
 });
-adminRoutes.get("/api-keys", adminOnly2, async (c) => {
+adminRoutes.get("/api-keys", adminOnly3, view2("settings"), async (c) => {
   const companyId = c.get("companyId");
   const settingsService = new SettingsService(c.env.DB);
   const keys = await settingsService.getApiKeys(companyId);
   return c.json(keys);
 });
-adminRoutes.post("/api-keys", adminOnly2, async (c) => {
+adminRoutes.post("/api-keys", adminOnly3, edit("settings"), async (c) => {
   const companyId = c.get("companyId");
   const { name } = await c.req.json();
   const settingsService = new SettingsService(c.env.DB);
   const key = await settingsService.createApiKey(companyId, name);
   return c.json(key);
 });
-adminRoutes.delete("/api-keys/:id", adminOnly2, async (c) => {
+adminRoutes.delete("/api-keys/:id", adminOnly3, edit("settings"), async (c) => {
   const companyId = c.get("companyId");
   const id = c.req.param("id");
   const settingsService = new SettingsService(c.env.DB);
@@ -10664,31 +11868,31 @@ adminRoutes.delete("/api-keys/:id", adminOnly2, async (c) => {
   if (!deleted) return c.json({ error: "Not found" }, 404);
   return c.json(deleted);
 });
-adminRoutes.get("/company", adminOnly2, async (c) => {
+adminRoutes.get("/company", adminOnly3, view2("settings"), async (c) => {
   const companyId = c.get("companyId");
   const companyService = new CompanyService(c.env.DB);
   const company = await companyService.getCompany(companyId);
   return c.json(company);
 });
-adminRoutes.put("/company", adminOnly2, async (c) => {
+adminRoutes.put("/company", adminOnly3, edit("settings"), async (c) => {
   const companyId = c.get("companyId");
   const payload = await c.req.json();
   const companyService = new CompanyService(c.env.DB);
   const company = await companyService.updateCompany(companyId, payload);
   return c.json(company);
 });
-adminRoutes.get("/departments", adminOnly2, async (c) => {
+adminRoutes.get("/departments", adminOnly3, view2("workforce"), async (c) => {
   const companyId = c.get("companyId");
   const orgService = new OrgService(c.env.DB);
   return c.json(await orgService.getDepartments(companyId));
 });
-adminRoutes.post("/departments", adminOnly2, async (c) => {
+adminRoutes.post("/departments", adminOnly3, create("workforce"), async (c) => {
   const companyId = c.get("companyId");
   const payload = await c.req.json();
   const orgService = new OrgService(c.env.DB);
   return c.json(await orgService.createDepartment(companyId, payload));
 });
-adminRoutes.put("/departments/:id", adminOnly2, async (c) => {
+adminRoutes.put("/departments/:id", adminOnly3, edit("workforce"), async (c) => {
   const companyId = c.get("companyId");
   const payload = await c.req.json();
   const orgService = new OrgService(c.env.DB);
@@ -10696,19 +11900,19 @@ adminRoutes.put("/departments/:id", adminOnly2, async (c) => {
   if (!updated) return c.json({ error: "Not found" }, 404);
   return c.json(updated);
 });
-adminRoutes.delete("/departments/:id", adminOnly2, async (c) => {
+adminRoutes.delete("/departments/:id", adminOnly3, del("workforce"), async (c) => {
   const companyId = c.get("companyId");
   const orgService = new OrgService(c.env.DB);
   return c.json(
     await orgService.deleteDepartment(companyId, c.req.param("id"))
   );
 });
-adminRoutes.get("/departments/:id/members", adminOnly2, async (c) => {
+adminRoutes.get("/departments/:id/members", adminOnly3, view2("workforce"), async (c) => {
   const companyId = c.get("companyId");
   const orgService = new OrgService(c.env.DB);
   return c.json(await orgService.getDepartmentMembers(companyId, c.req.param("id")));
 });
-adminRoutes.post("/departments/:id/members", adminOnly2, async (c) => {
+adminRoutes.post("/departments/:id/members", adminOnly3, edit("workforce"), async (c) => {
   const companyId = c.get("companyId");
   const { employeeId } = await c.req.json();
   const orgService = new OrgService(c.env.DB);
@@ -10716,41 +11920,41 @@ adminRoutes.post("/departments/:id/members", adminOnly2, async (c) => {
   if (!member) return c.json({ error: "Department or employee not found" }, 404);
   return c.json(member);
 });
-adminRoutes.delete("/departments/:id/members/:employeeId", adminOnly2, async (c) => {
+adminRoutes.delete("/departments/:id/members/:employeeId", adminOnly3, edit("workforce"), async (c) => {
   const companyId = c.get("companyId");
   const orgService = new OrgService(c.env.DB);
   const member = await orgService.removeEmployeeFromDepartment(companyId, c.req.param("id"), c.req.param("employeeId"));
   if (!member) return c.json({ error: "Employee is not a member of this department" }, 404);
   return c.json(member);
 });
-adminRoutes.get("/locations", adminOnly2, async (c) => {
+adminRoutes.get("/locations", adminOnly3, view2("workforce"), async (c) => {
   const companyId = c.get("companyId");
   const orgService = new OrgService(c.env.DB);
   return c.json(await orgService.getLocations(companyId));
 });
-adminRoutes.post("/locations", adminOnly2, async (c) => {
+adminRoutes.post("/locations", adminOnly3, create("workforce"), async (c) => {
   const companyId = c.get("companyId");
   const payload = await c.req.json();
   const orgService = new OrgService(c.env.DB);
   return c.json(await orgService.createLocation(companyId, payload));
 });
-adminRoutes.delete("/locations/:id", adminOnly2, async (c) => {
+adminRoutes.delete("/locations/:id", adminOnly3, del("workforce"), async (c) => {
   const companyId = c.get("companyId");
   const orgService = new OrgService(c.env.DB);
   return c.json(await orgService.deleteLocation(companyId, c.req.param("id")));
 });
-adminRoutes.get("/roles", adminOnly2, async (c) => {
+adminRoutes.get("/roles", adminOnly3, view2("settings"), async (c) => {
   const companyId = c.get("companyId");
   const roleService = new RoleService(c.env.DB);
   return c.json(await roleService.getRoles(companyId));
 });
-adminRoutes.post("/roles", adminOnly2, async (c) => {
+adminRoutes.post("/roles", adminOnly3, edit("settings"), async (c) => {
   const companyId = c.get("companyId");
   const payload = await c.req.json();
   const roleService = new RoleService(c.env.DB);
   return c.json(await roleService.createRole(companyId, payload));
 });
-adminRoutes.put("/roles/:id", adminOnly2, async (c) => {
+adminRoutes.put("/roles/:id", adminOnly3, edit("settings"), async (c) => {
   const companyId = c.get("companyId");
   const payload = await c.req.json();
   const roleService = new RoleService(c.env.DB);
@@ -10758,7 +11962,7 @@ adminRoutes.put("/roles/:id", adminOnly2, async (c) => {
     await roleService.updateRole(companyId, c.req.param("id"), payload)
   );
 });
-adminRoutes.delete("/roles/:id", adminOnly2, async (c) => {
+adminRoutes.delete("/roles/:id", adminOnly3, edit("settings"), async (c) => {
   const companyId = c.get("companyId");
   const roleService = new RoleService(c.env.DB);
   return c.json(await roleService.deleteRole(companyId, c.req.param("id")));
@@ -10888,6 +12092,34 @@ var getTeamLeaves = /* @__PURE__ */ __name(async (c) => {
   const teamLeaves = await leaveService.getTeamLeaves(companyId);
   return c.json(teamLeaves);
 }, "getTeamLeaves");
+var getMyTeamPendingLeaves = /* @__PURE__ */ __name(async (c) => {
+  const companyId = c.get("companyId");
+  const employeeId = c.get("employeeId");
+  if (!employeeId) {
+    return c.json({ error: "Unauthorized: No employee ID found" }, 401);
+  }
+  const leaveService = new LeaveService(c.env.DB);
+  const requests = await leaveService.getPendingTeamLeaveRequests(companyId, employeeId);
+  return c.json(requests);
+}, "getMyTeamPendingLeaves");
+var updateTeamLeaveStatus = /* @__PURE__ */ __name(async (c) => {
+  const companyId = c.get("companyId");
+  const employeeId = c.get("employeeId");
+  const requestId = c.req.param("id");
+  if (!employeeId) {
+    return c.json({ error: "Unauthorized: No employee ID found" }, 401);
+  }
+  const payload = await c.req.json();
+  const leaveService = new LeaveService(c.env.DB);
+  const updated = await leaveService.updateTeamLeaveRequestStatus(companyId, employeeId, requestId, {
+    status: payload.status,
+    managerComment: payload.managerComment
+  });
+  if (!updated) {
+    return c.json({ error: "Leave request not found, or you are not this employee's manager" }, 404);
+  }
+  return c.json(updated);
+}, "updateTeamLeaveStatus");
 var applyForLeave = /* @__PURE__ */ __name(async (c) => {
   const companyId = c.get("companyId");
   const employeeId = c.get("employeeId");
@@ -10909,13 +12141,60 @@ var AttendanceService = class {
   constructor(dbBinding) {
     this.db = drizzle(dbBinding, { schema: schema_exports });
   }
+  // ---------------------------------------------------------------------
+  // Policy helpers — drive the on-time/late tag at clock-in and the
+  // standard shift length used to compute overtime at clock-out.
+  // ---------------------------------------------------------------------
+  timeStringToMinutes(t) {
+    const [h, m] = (t || "09:00").split(":").map((n) => parseInt(n, 10));
+    return (h || 0) * 60 + (m || 0);
+  }
+  computeAttendanceStatus(clockInDate, policy) {
+    const clockInMinutes = clockInDate.getHours() * 60 + clockInDate.getMinutes();
+    const thresholdMinutes = this.timeStringToMinutes(policy.attendanceStartTime) + (policy.attendanceGraceMinutes || 0);
+    return clockInMinutes > thresholdMinutes ? "late" : "present";
+  }
+  shiftHours(policy) {
+    const startMinutes = this.timeStringToMinutes(policy.attendanceStartTime);
+    const endMinutes = this.timeStringToMinutes(policy.attendanceEndTime);
+    const diff = endMinutes - startMinutes;
+    return diff > 0 ? diff / 60 : 8;
+  }
+  async getAttendancePolicy(companyId) {
+    const settings = await this.db.query.companySettings.findFirst({
+      where: eq(companySettings.companyId, companyId)
+    });
+    return {
+      attendanceStartTime: settings?.attendanceStartTime || "09:00",
+      attendanceEndTime: settings?.attendanceEndTime || "17:00",
+      attendanceGraceMinutes: settings?.attendanceGraceMinutes ?? 15
+    };
+  }
+  async updateAttendancePolicy(companyId, data) {
+    const existing = await this.db.query.companySettings.findFirst({
+      where: eq(companySettings.companyId, companyId)
+    });
+    const payload = { updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
+    if (data.attendanceStartTime !== void 0) payload.attendanceStartTime = data.attendanceStartTime;
+    if (data.attendanceEndTime !== void 0) payload.attendanceEndTime = data.attendanceEndTime;
+    if (data.attendanceGraceMinutes !== void 0) payload.attendanceGraceMinutes = data.attendanceGraceMinutes;
+    if (existing) {
+      const result2 = await this.db.update(companySettings).set(payload).where(eq(companySettings.companyId, companyId)).returning();
+      return result2[0];
+    }
+    const result = await this.db.insert(companySettings).values({ companyId, ...payload }).returning();
+    return result[0];
+  }
+  // ---------------------------------------------------------------------
+  // Self-service (existing)
+  // ---------------------------------------------------------------------
   async getEmployeeAttendance(companyId, employeeId) {
     const records = await this.db.query.attendanceRecords.findMany({
       where: and(
         eq(attendanceRecords.companyId, companyId),
         eq(attendanceRecords.employeeId, employeeId)
       ),
-      orderBy: /* @__PURE__ */ __name((attendanceRecords2, { desc: desc4 }) => [desc4(attendanceRecords2.date), desc4(attendanceRecords2.clockIn)], "orderBy")
+      orderBy: /* @__PURE__ */ __name((attendanceRecords2, { desc: desc3 }) => [desc3(attendanceRecords2.date), desc3(attendanceRecords2.clockIn)], "orderBy")
     });
     const grouped = {};
     for (const r of records) {
@@ -10960,7 +12239,7 @@ var AttendanceService = class {
         eq(overtimeRequests.companyId, companyId),
         eq(overtimeRequests.employeeId, employeeId)
       ),
-      orderBy: /* @__PURE__ */ __name((overtimeRequests2, { desc: desc4 }) => [desc4(overtimeRequests2.date), desc4(overtimeRequests2.createdAt)], "orderBy")
+      orderBy: /* @__PURE__ */ __name((overtimeRequests2, { desc: desc3 }) => [desc3(overtimeRequests2.date), desc3(overtimeRequests2.createdAt)], "orderBy")
     });
   }
   async createOvertimeRequest(data) {
@@ -10980,16 +12259,19 @@ var AttendanceService = class {
     return { success: true, id };
   }
   async clockIn(companyId, employeeId, data) {
-    const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
-    const clockInTime = (/* @__PURE__ */ new Date()).toISOString();
+    const clockInDate = /* @__PURE__ */ new Date();
+    const today = clockInDate.toISOString().split("T")[0];
+    const clockInTime = clockInDate.toISOString();
     const id = `ATT-${Math.floor(1e3 + Math.random() * 9e3)}`;
+    const policy = await this.getAttendancePolicy(companyId);
+    const status = this.computeAttendanceStatus(clockInDate, policy);
     const result = await this.db.insert(attendanceRecords).values({
       id,
       companyId,
       employeeId,
       date: today,
       clockIn: clockInTime,
-      status: "present",
+      status,
       locationIn: data.location,
       latitudeIn: data.latitude,
       longitudeIn: data.longitude,
@@ -11007,16 +12289,271 @@ var AttendanceService = class {
     const clockOutDate = new Date(clockOutTime);
     const diffMs = Math.abs(clockOutDate.getTime() - clockInDate.getTime());
     const workHours = +(diffMs / (1e3 * 60 * 60)).toFixed(2);
+    const policy = await this.getAttendancePolicy(companyId);
+    const overtime = +Math.max(0, workHours - this.shiftHours(policy)).toFixed(2);
     const result = await this.db.update(attendanceRecords).set({
       clockOut: clockOutTime,
       locationOut: data.location,
       latitudeOut: data.latitude,
       longitudeOut: data.longitude,
-      workHours
-    }).where(and(
-      eq(attendanceRecords.id, activeSession.id)
-    )).returning();
+      workHours,
+      overtime
+    }).where(eq(attendanceRecords.id, activeSession.id)).returning();
     return result[0];
+  }
+  // ---------------------------------------------------------------------
+  // Manager/company scoping helpers
+  // ---------------------------------------------------------------------
+  async getManagerTeamIds(companyId, managerId) {
+    const reports = await this.db.query.employees.findMany({
+      where: and(eq(employees.companyId, companyId), eq(employees.managerId, managerId)),
+      columns: { id: true }
+    });
+    return reports.map((r) => r.id);
+  }
+  // ---------------------------------------------------------------------
+  // Company-wide / team attendance oversight (Admin & Manager)
+  // ---------------------------------------------------------------------
+  async getCompanyAttendance(companyId, filters = {}) {
+    const conditions = [eq(attendanceRecords.companyId, companyId)];
+    if (filters.managerId) {
+      const teamIds = await this.getManagerTeamIds(companyId, filters.managerId);
+      if (teamIds.length === 0) return [];
+      conditions.push(inArray(attendanceRecords.employeeId, teamIds));
+    }
+    if (filters.employeeId) conditions.push(eq(attendanceRecords.employeeId, filters.employeeId));
+    if (filters.date) {
+      conditions.push(eq(attendanceRecords.date, filters.date));
+    } else {
+      if (filters.from) conditions.push(gte(attendanceRecords.date, filters.from));
+      if (filters.to) conditions.push(lte(attendanceRecords.date, filters.to));
+    }
+    return this.db.select({
+      id: attendanceRecords.id,
+      employeeId: attendanceRecords.employeeId,
+      name: employees.name,
+      lastName: employees.lastName,
+      avatar: employees.avatar,
+      department: employees.department,
+      date: attendanceRecords.date,
+      clockIn: attendanceRecords.clockIn,
+      clockOut: attendanceRecords.clockOut,
+      status: attendanceRecords.status,
+      locationIn: attendanceRecords.locationIn,
+      locationOut: attendanceRecords.locationOut,
+      workHours: attendanceRecords.workHours,
+      overtime: attendanceRecords.overtime,
+      notes: attendanceRecords.notes
+    }).from(attendanceRecords).innerJoin(employees, eq(attendanceRecords.employeeId, employees.id)).where(and(...conditions)).orderBy(desc(attendanceRecords.date), desc(attendanceRecords.clockIn)).all();
+  }
+  async getAttendanceSummary(companyId, date, managerId) {
+    const employeeConditions = [eq(employees.companyId, companyId), eq(employees.status, "active")];
+    if (managerId) employeeConditions.push(eq(employees.managerId, managerId));
+    const scopedEmployees = await this.db.query.employees.findMany({
+      where: and(...employeeConditions),
+      columns: { id: true }
+    });
+    const scopedIds = scopedEmployees.map((e) => e.id);
+    const totalEmployees = scopedIds.length;
+    if (totalEmployees === 0) {
+      return { date, totalEmployees: 0, present: 0, late: 0, absent: 0, onLeave: 0, stillClockedIn: 0, avgWorkHours: 0 };
+    }
+    const records = await this.db.query.attendanceRecords.findMany({
+      where: and(
+        eq(attendanceRecords.companyId, companyId),
+        eq(attendanceRecords.date, date),
+        inArray(attendanceRecords.employeeId, scopedIds)
+      )
+    });
+    const presentIds = new Set(records.map((r) => r.employeeId));
+    const lateIds = new Set(records.filter((r) => r.status === "late").map((r) => r.employeeId));
+    const stillClockedIn = records.filter((r) => !r.clockOut).length;
+    const leaveRows = await this.db.query.leaveRequests.findMany({
+      where: and(
+        eq(leaveRequests.companyId, companyId),
+        eq(leaveRequests.status, "approved"),
+        lte(leaveRequests.startDate, date),
+        gte(leaveRequests.endDate, date),
+        inArray(leaveRequests.employeeId, scopedIds)
+      )
+    });
+    const onLeaveIds = new Set(
+      leaveRows.map((r) => r.employeeId).filter((id) => !presentIds.has(id))
+    );
+    const absent = Math.max(0, totalEmployees - presentIds.size - onLeaveIds.size);
+    const totalHours = records.reduce((sum, r) => sum + (r.workHours || 0), 0);
+    const withHours = records.filter((r) => (r.workHours || 0) > 0).length;
+    return {
+      date,
+      totalEmployees,
+      present: presentIds.size,
+      late: lateIds.size,
+      absent,
+      onLeave: onLeaveIds.size,
+      stillClockedIn,
+      avgWorkHours: withHours > 0 ? +(totalHours / withHours).toFixed(2) : 0
+    };
+  }
+  async getTeamAttendanceToday(companyId, managerId) {
+    const team = await this.db.query.employees.findMany({
+      where: and(eq(employees.companyId, companyId), eq(employees.managerId, managerId)),
+      columns: { id: true, name: true, lastName: true, avatar: true, department: true, role: true }
+    });
+    if (team.length === 0) return [];
+    const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+    const teamIds = team.map((t) => t.id);
+    const records = await this.db.query.attendanceRecords.findMany({
+      where: and(
+        eq(attendanceRecords.companyId, companyId),
+        eq(attendanceRecords.date, today),
+        inArray(attendanceRecords.employeeId, teamIds)
+      )
+    });
+    const byEmployee = {};
+    for (const r of records) {
+      const existing = byEmployee[r.employeeId];
+      if (!existing || new Date(r.clockIn) > new Date(existing.clockIn)) byEmployee[r.employeeId] = r;
+    }
+    return team.map((t) => {
+      const record = byEmployee[t.id];
+      return {
+        employeeId: t.id,
+        name: t.name,
+        lastName: t.lastName,
+        avatar: t.avatar,
+        department: t.department,
+        status: record ? record.clockOut ? "clocked-out" : record.status : "absent",
+        clockIn: record?.clockIn || null,
+        clockOut: record?.clockOut || null
+      };
+    });
+  }
+  async createManualAttendanceRecord(companyId, data) {
+    const id = `ATT-${Math.floor(1e3 + Math.random() * 9e3)}`;
+    const date = data.date || (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+    const clockIn2 = data.clockIn || `${date}T00:00:00.000Z`;
+    let workHours = data.workHours ?? 0;
+    if (data.clockOut && data.workHours === void 0) {
+      workHours = +(Math.abs(new Date(data.clockOut).getTime() - new Date(clockIn2).getTime()) / (1e3 * 60 * 60)).toFixed(2);
+    }
+    const result = await this.db.insert(attendanceRecords).values({
+      id,
+      companyId,
+      employeeId: data.employeeId,
+      date,
+      clockIn: clockIn2,
+      clockOut: data.clockOut || null,
+      status: data.status || "present",
+      locationIn: data.locationIn || "Manual Entry (HR)",
+      workHours,
+      overtime: data.overtime ?? 0,
+      notes: data.notes
+    }).returning();
+    return result[0];
+  }
+  async updateAttendanceRecord(companyId, id, data) {
+    const existing = await this.db.query.attendanceRecords.findFirst({
+      where: and(eq(attendanceRecords.id, id), eq(attendanceRecords.companyId, companyId))
+    });
+    if (!existing) return null;
+    const updateData = {};
+    if (data.clockIn !== void 0) updateData.clockIn = data.clockIn;
+    if (data.clockOut !== void 0) updateData.clockOut = data.clockOut;
+    if (data.status !== void 0) updateData.status = data.status;
+    if (data.notes !== void 0) updateData.notes = data.notes;
+    if (data.locationIn !== void 0) updateData.locationIn = data.locationIn;
+    if (data.locationOut !== void 0) updateData.locationOut = data.locationOut;
+    const effectiveClockIn = updateData.clockIn ?? existing.clockIn;
+    const effectiveClockOut = updateData.clockOut !== void 0 ? updateData.clockOut : existing.clockOut;
+    if (data.workHours !== void 0) {
+      updateData.workHours = data.workHours;
+    } else if (effectiveClockOut) {
+      updateData.workHours = +(Math.abs(new Date(effectiveClockOut).getTime() - new Date(effectiveClockIn).getTime()) / (1e3 * 60 * 60)).toFixed(2);
+    }
+    if (data.overtime !== void 0) updateData.overtime = data.overtime;
+    const result = await this.db.update(attendanceRecords).set(updateData).where(and(eq(attendanceRecords.id, id), eq(attendanceRecords.companyId, companyId))).returning();
+    return result[0];
+  }
+  async deleteAttendanceRecord(companyId, id) {
+    const result = await this.db.delete(attendanceRecords).where(and(eq(attendanceRecords.id, id), eq(attendanceRecords.companyId, companyId))).returning();
+    return result[0] || null;
+  }
+  // ---------------------------------------------------------------------
+  // Overtime oversight (Admin & Manager)
+  // ---------------------------------------------------------------------
+  async getAllOvertimeRequests(companyId, filters = {}) {
+    const conditions = [eq(overtimeRequests.companyId, companyId)];
+    if (filters.status) conditions.push(eq(overtimeRequests.status, filters.status));
+    if (filters.managerId) {
+      const teamIds = await this.getManagerTeamIds(companyId, filters.managerId);
+      if (teamIds.length === 0) return [];
+      conditions.push(inArray(overtimeRequests.employeeId, teamIds));
+    }
+    return this.db.select({
+      id: overtimeRequests.id,
+      employeeId: overtimeRequests.employeeId,
+      name: employees.name,
+      lastName: employees.lastName,
+      avatar: employees.avatar,
+      department: employees.department,
+      date: overtimeRequests.date,
+      startTime: overtimeRequests.startTime,
+      endTime: overtimeRequests.endTime,
+      hours: overtimeRequests.hours,
+      reason: overtimeRequests.reason,
+      deliverable: overtimeRequests.deliverable,
+      status: overtimeRequests.status,
+      managerComment: overtimeRequests.managerComment,
+      createdAt: overtimeRequests.createdAt
+    }).from(overtimeRequests).innerJoin(employees, eq(overtimeRequests.employeeId, employees.id)).where(and(...conditions)).orderBy(desc(overtimeRequests.date), desc(overtimeRequests.createdAt)).all();
+  }
+  async updateOvertimeRequestStatus(companyId, requestId, data) {
+    const updateData = {
+      status: data.status,
+      managerId: data.managerId,
+      managerComment: data.managerComment
+    };
+    if (data.hours !== void 0) updateData.hours = data.hours;
+    const result = await this.db.update(overtimeRequests).set(updateData).where(and(eq(overtimeRequests.companyId, companyId), eq(overtimeRequests.id, requestId))).returning();
+    return result[0];
+  }
+  async getPendingTeamOvertimeRequests(companyId, managerId) {
+    return this.db.select({
+      id: overtimeRequests.id,
+      employeeId: overtimeRequests.employeeId,
+      name: employees.name,
+      lastName: employees.lastName,
+      avatar: employees.avatar,
+      date: overtimeRequests.date,
+      startTime: overtimeRequests.startTime,
+      endTime: overtimeRequests.endTime,
+      hours: overtimeRequests.hours,
+      reason: overtimeRequests.reason,
+      deliverable: overtimeRequests.deliverable,
+      status: overtimeRequests.status
+    }).from(overtimeRequests).innerJoin(employees, eq(overtimeRequests.employeeId, employees.id)).where(
+      and(
+        eq(overtimeRequests.companyId, companyId),
+        eq(overtimeRequests.status, "pending"),
+        eq(employees.managerId, managerId)
+      )
+    ).all();
+  }
+  async updateTeamOvertimeRequestStatus(companyId, managerId, requestId, data) {
+    const request = await this.db.query.overtimeRequests.findFirst({
+      where: and(eq(overtimeRequests.id, requestId), eq(overtimeRequests.companyId, companyId))
+    });
+    if (!request) return null;
+    const employee = await this.db.query.employees.findFirst({
+      where: eq(employees.id, request.employeeId)
+    });
+    if (!employee || employee.managerId !== managerId) return null;
+    return this.updateOvertimeRequestStatus(companyId, requestId, {
+      status: data.status,
+      managerComment: data.managerComment,
+      hours: data.hours,
+      managerId
+    });
   }
 };
 
@@ -11085,6 +12622,45 @@ var submitOvertimeRequest = /* @__PURE__ */ __name(async (c) => {
   });
   return c.json(result);
 }, "submitOvertimeRequest");
+var getMyTeamAttendanceToday = /* @__PURE__ */ __name(async (c) => {
+  const companyId = c.get("companyId");
+  const employeeId = c.get("employeeId");
+  if (!employeeId) {
+    return c.json({ error: "Unauthorized: No employee ID found" }, 401);
+  }
+  const attendanceService = new AttendanceService(c.env.DB);
+  const team = await attendanceService.getTeamAttendanceToday(companyId, employeeId);
+  return c.json(team);
+}, "getMyTeamAttendanceToday");
+var getMyTeamPendingOvertime = /* @__PURE__ */ __name(async (c) => {
+  const companyId = c.get("companyId");
+  const employeeId = c.get("employeeId");
+  if (!employeeId) {
+    return c.json({ error: "Unauthorized: No employee ID found" }, 401);
+  }
+  const attendanceService = new AttendanceService(c.env.DB);
+  const requests = await attendanceService.getPendingTeamOvertimeRequests(companyId, employeeId);
+  return c.json(requests);
+}, "getMyTeamPendingOvertime");
+var updateTeamOvertimeStatus = /* @__PURE__ */ __name(async (c) => {
+  const companyId = c.get("companyId");
+  const employeeId = c.get("employeeId");
+  const requestId = c.req.param("id");
+  if (!employeeId) {
+    return c.json({ error: "Unauthorized: No employee ID found" }, 401);
+  }
+  const payload = await c.req.json();
+  const attendanceService = new AttendanceService(c.env.DB);
+  const updated = await attendanceService.updateTeamOvertimeRequestStatus(companyId, employeeId, requestId, {
+    status: payload.status,
+    managerComment: payload.managerComment,
+    hours: payload.hours
+  });
+  if (!updated) {
+    return c.json({ error: "Overtime request not found, or you are not this employee's manager" }, 404);
+  }
+  return c.json(updated);
+}, "updateTeamOvertimeStatus");
 
 // src/services/benefits.service.ts
 var BenefitsService = class {
@@ -11145,6 +12721,38 @@ var getMyCompensation = /* @__PURE__ */ __name(async (c) => {
     return c.json({ error: error.message }, 500);
   }
 }, "getMyCompensation");
+
+// src/controllers/employee/payslip.controller.ts
+var getMyPayslips = /* @__PURE__ */ __name(async (c) => {
+  try {
+    const employeeId = c.get("employeeId");
+    const companyId = c.get("companyId");
+    if (!employeeId) return c.json({ error: "Unauthorized: No employee ID found" }, 401);
+    const db = drizzle(c.env.DB, { schema: schema_exports });
+    const records = await db.select({
+      id: payslips.id,
+      runId: payslips.runId,
+      basicSalary: payslips.basicSalary,
+      allowances: payslips.allowances,
+      bonuses: payslips.bonuses,
+      grossPay: payslips.grossPay,
+      taxDeductions: payslips.taxDeductions,
+      pensionDeductions: payslips.pensionDeductions,
+      loanDeductions: payslips.loanDeductions,
+      otherDeductions: payslips.otherDeductions,
+      netPay: payslips.netPay,
+      createdAt: payslips.createdAt,
+      periodMonth: payrollRuns.periodMonth,
+      periodYear: payrollRuns.periodYear,
+      status: payrollRuns.status,
+      paidAt: payrollRuns.paidAt
+    }).from(payslips).innerJoin(payrollRuns, eq(payslips.runId, payrollRuns.id)).where(and(eq(payslips.employeeId, employeeId), eq(payrollRuns.companyId, companyId))).orderBy(desc(payrollRuns.periodYear), desc(payrollRuns.periodMonth));
+    return c.json({ data: records });
+  } catch (error) {
+    console.error("Error fetching my payslips:", error);
+    return c.json({ error: error.message }, 500);
+  }
+}, "getMyPayslips");
 
 // src/controllers/employee/feedback.controller.ts
 var sendShoutout = /* @__PURE__ */ __name(async (c) => {
@@ -11406,6 +13014,7 @@ employeeRoutes.use("*", authMiddleware);
 employeeRoutes.get("/directory", getDirectory);
 employeeRoutes.get("/me", getMyProfile);
 employeeRoutes.get("/me/compensation", getMyCompensation);
+employeeRoutes.get("/me/payslips", getMyPayslips);
 employeeRoutes.put("/me", updateMyProfile);
 employeeRoutes.post("/me/emergency-contacts", addEmergencyContact2);
 employeeRoutes.delete("/me/emergency-contacts/:id", deleteEmergencyContact2);
@@ -11415,11 +13024,16 @@ employeeRoutes.get("/me/documents/:id/download", downloadDocument);
 employeeRoutes.get("/leave/me", getMyLeaveData);
 employeeRoutes.post("/leave/apply", applyForLeave);
 employeeRoutes.get("/leave/team", getTeamLeaves);
+employeeRoutes.get("/leave/team-requests", getMyTeamPendingLeaves);
+employeeRoutes.patch("/leave/team-requests/:id/status", updateTeamLeaveStatus);
 employeeRoutes.get("/attendance/me", getAttendanceData);
 employeeRoutes.post("/attendance/clock-in", clockIn);
 employeeRoutes.post("/attendance/clock-out", clockOut);
 employeeRoutes.get("/attendance/overtime", getOvertimeRequests);
 employeeRoutes.post("/attendance/overtime", submitOvertimeRequest);
+employeeRoutes.get("/attendance/team", getMyTeamAttendanceToday);
+employeeRoutes.get("/attendance/team-requests", getMyTeamPendingOvertime);
+employeeRoutes.patch("/attendance/team-requests/:id/status", updateTeamOvertimeStatus);
 employeeRoutes.post("/feedback", sendShoutout);
 employeeRoutes.get("/feedback", getShoutouts);
 employeeRoutes.get("/goals", getMyGoals);

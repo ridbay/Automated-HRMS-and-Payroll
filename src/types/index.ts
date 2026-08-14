@@ -14,13 +14,22 @@ export interface JobRequisition {
   title: string;
   department: string;
   location: string;
+  employmentType?: 'Full-time' | 'Contract' | 'Intern' | 'Consultant';
   hiringManager: string;
   managerAvatar?: string;
   priority: 'High' | 'Medium' | 'Low';
-  status: 'Open' | 'On Hold' | 'Filled' | 'Cancelled';
+  status: 'Pending Approval' | 'Open' | 'On Hold' | 'Filled' | 'Cancelled' | 'Rejected';
   dateOpened: string;
   targetHireDate: string;
   daysOpen: number;
+  justification?: string;
+  budgetRange?: string;
+  requestedById?: string;
+  requestedByName?: string;
+  reviewedById?: string;
+  reviewedByName?: string;
+  reviewedAt?: string;
+  rejectionReason?: string;
   applicantsByStage: {
     applied: number;
     screening: number;

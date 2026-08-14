@@ -16,9 +16,10 @@ import {
   deleteAsset
 } from "../controllers/admin/employee.controller";
 import { authMiddleware } from "../middlewares/auth.middleware";
-import { requireRole } from "../middlewares/role.middleware";
+import { requireRole, requirePermission } from "../middlewares/role.middleware";
 import payrollRoutes from "./payroll.routes";
 import leaveAdminRoutes from "./leave-admin.routes";
+import requisitionRoutes from "./requisition.routes";
 import { SettingsService } from "../services/settings.service";
 import { CompanyService } from "../services/company.service";
 import { OrgService } from "../services/org.service";
@@ -35,7 +36,14 @@ import { eq } from "drizzle-orm";
 
 // Only SUPER_ADMIN and HR_ADMIN reach any admin surface today (see role.middleware
 // plan notes) except payroll, which additionally allows MANAGER/PAYROLL_OFFICER.
+// requirePermission() layers an optional, additive narrowing on top for any
+// employee who's been assigned a custom role in Settings > Roles & Permissions;
+// it's a no-op for everyone else (the common case today).
 const adminOnly = requireRole("SUPER_ADMIN", "HR_ADMIN");
+const view = (mod: "workforce" | "payroll" | "performance" | "settings" | "leave") => requirePermission(mod, "view");
+const create = (mod: "workforce" | "performance") => requirePermission(mod, "create");
+const edit = (mod: "workforce" | "performance" | "settings") => requirePermission(mod, "edit");
+const del = (mod: "workforce") => requirePermission(mod, "delete");
 
 // Development-only seed route to create default users with known passwords
 adminRoutes.get("/dev/seed", async (c: any) => {
@@ -101,43 +109,46 @@ adminRoutes.get("/dev/seed", async (c: any) => {
 
 adminRoutes.use("*", authMiddleware);
 
-adminRoutes.get("/employees", adminOnly, getEmployees);
-adminRoutes.get("/employees/:id", adminOnly, getEmployee);
-adminRoutes.get("/employees/:id/direct-reports", adminOnly, getDirectReports);
-adminRoutes.get("/employees/:id/audit-logs", adminOnly, getAuditLogs);
-adminRoutes.post("/employees", adminOnly, createEmployee);
-adminRoutes.put("/employees/:id", adminOnly, updateEmployee);
-adminRoutes.delete("/employees/:id", adminOnly, deleteEmployee);
+adminRoutes.get("/employees", adminOnly, view("workforce"), getEmployees);
+adminRoutes.get("/employees/:id", adminOnly, view("workforce"), getEmployee);
+adminRoutes.get("/employees/:id/direct-reports", adminOnly, view("workforce"), getDirectReports);
+adminRoutes.get("/employees/:id/audit-logs", adminOnly, view("workforce"), getAuditLogs);
+adminRoutes.post("/employees", adminOnly, create("workforce"), createEmployee);
+adminRoutes.put("/employees/:id", adminOnly, edit("workforce"), updateEmployee);
+adminRoutes.delete("/employees/:id", adminOnly, del("workforce"), deleteEmployee);
 
-adminRoutes.post("/employees/:id/emergency-contacts", adminOnly, addEmergencyContact);
-adminRoutes.delete("/employees/:id/emergency-contacts/:contactId", adminOnly, deleteEmergencyContact);
+adminRoutes.post("/employees/:id/emergency-contacts", adminOnly, edit("workforce"), addEmergencyContact);
+adminRoutes.delete("/employees/:id/emergency-contacts/:contactId", adminOnly, edit("workforce"), deleteEmergencyContact);
 
 import { getEmployeeAssessments, addEmployeeAssessment } from "../controllers/admin/performance.controller";
 import { getEmployeeBenefits, updateEmployeeBenefits } from "../controllers/admin/benefits.controller";
 import { getEmployeeTrainings, addEmployeeTraining } from "../controllers/admin/training.controller";
 
 // Documents
-adminRoutes.post("/employees/:id/documents", adminOnly, addDocument);
-adminRoutes.delete("/employees/:id/documents/:documentId", adminOnly, deleteDocument);
+adminRoutes.post("/employees/:id/documents", adminOnly, edit("workforce"), addDocument);
+adminRoutes.delete("/employees/:id/documents/:documentId", adminOnly, edit("workforce"), deleteDocument);
 
 // Assets
-adminRoutes.get("/employees/:id/assets", adminOnly, getAssets);
-adminRoutes.post("/employees/:id/assets", adminOnly, addAsset);
-adminRoutes.delete("/employees/:id/assets/:assetId", adminOnly, deleteAsset);
+adminRoutes.get("/employees/:id/assets", adminOnly, view("workforce"), getAssets);
+adminRoutes.post("/employees/:id/assets", adminOnly, edit("workforce"), addAsset);
+adminRoutes.delete("/employees/:id/assets/:assetId", adminOnly, edit("workforce"), deleteAsset);
 
-adminRoutes.get("/performance/employee/:id", adminOnly, getEmployeeAssessments);
-adminRoutes.post("/performance/employee/:id", adminOnly, addEmployeeAssessment);
+adminRoutes.get("/performance/employee/:id", adminOnly, view("performance"), getEmployeeAssessments);
+adminRoutes.post("/performance/employee/:id", adminOnly, create("performance"), addEmployeeAssessment);
 
+// Benefits has no matrix module (dropped "Wallet" as decorative, see role.middleware
+// plan notes) — stays gated on the fixed role only.
 adminRoutes.get("/benefits/employee/:id", adminOnly, getEmployeeBenefits);
 adminRoutes.put("/benefits/employee/:id", adminOnly, updateEmployeeBenefits);
 
-adminRoutes.get("/training/employee/:id", adminOnly, getEmployeeTrainings);
-adminRoutes.post("/training/employee/:id", adminOnly, addEmployeeTraining);
+adminRoutes.get("/training/employee/:id", adminOnly, view("performance"), getEmployeeTrainings);
+adminRoutes.post("/training/employee/:id", adminOnly, create("performance"), addEmployeeTraining);
 
-// Further routes can be added here (e.g., requisitions, payroll)
 adminRoutes.route("/payroll", payrollRoutes);
 adminRoutes.route("/leaves", leaveAdminRoutes);
+adminRoutes.route("/job-requisitions", requisitionRoutes);
 
+// No matrix module maps to this today — stays gated on the fixed role only.
 adminRoutes.get("/dashboard/stats", adminOnly, async (c: any) => {
   try {
     const companyId = c.get("companyId");
@@ -149,14 +160,14 @@ adminRoutes.get("/dashboard/stats", adminOnly, async (c: any) => {
   }
 });
 
-adminRoutes.get("/settings", adminOnly, async (c: any) => {
+adminRoutes.get("/settings", adminOnly, view("settings"), async (c: any) => {
   const companyId = c.get("companyId");
   const settingsService = new SettingsService(c.env.DB);
   const settings = await settingsService.getSettings(companyId);
   return c.json(settings);
 });
 
-adminRoutes.put("/settings", adminOnly, async (c: any) => {
+adminRoutes.put("/settings", adminOnly, edit("settings"), async (c: any) => {
   const companyId = c.get("companyId");
   const payload = await c.req.json();
   const settingsService = new SettingsService(c.env.DB);
@@ -164,7 +175,7 @@ adminRoutes.put("/settings", adminOnly, async (c: any) => {
   return c.json(settings);
 });
 
-adminRoutes.get("/api-keys", adminOnly, async (c: any) => {
+adminRoutes.get("/api-keys", adminOnly, view("settings"), async (c: any) => {
   const companyId = c.get("companyId");
   const settingsService = new SettingsService(c.env.DB);
   const keys = await settingsService.getApiKeys(companyId);
@@ -173,7 +184,7 @@ adminRoutes.get("/api-keys", adminOnly, async (c: any) => {
 
 // Seed route moved up
 
-adminRoutes.post("/api-keys", adminOnly, async (c: any) => {
+adminRoutes.post("/api-keys", adminOnly, edit("settings"), async (c: any) => {
   const companyId = c.get("companyId");
   const { name } = await c.req.json();
   const settingsService = new SettingsService(c.env.DB);
@@ -181,7 +192,7 @@ adminRoutes.post("/api-keys", adminOnly, async (c: any) => {
   return c.json(key);
 });
 
-adminRoutes.delete("/api-keys/:id", adminOnly, async (c: any) => {
+adminRoutes.delete("/api-keys/:id", adminOnly, edit("settings"), async (c: any) => {
   const companyId = c.get("companyId");
   const id = c.req.param("id");
   const settingsService = new SettingsService(c.env.DB);
@@ -191,14 +202,14 @@ adminRoutes.delete("/api-keys/:id", adminOnly, async (c: any) => {
 });
 
 // Company Profile Routes
-adminRoutes.get("/company", adminOnly, async (c: any) => {
+adminRoutes.get("/company", adminOnly, view("settings"), async (c: any) => {
   const companyId = c.get("companyId");
   const companyService = new CompanyService(c.env.DB);
   const company = await companyService.getCompany(companyId);
   return c.json(company);
 });
 
-adminRoutes.put("/company", adminOnly, async (c: any) => {
+adminRoutes.put("/company", adminOnly, edit("settings"), async (c: any) => {
   const companyId = c.get("companyId");
   const payload = await c.req.json();
   const companyService = new CompanyService(c.env.DB);
@@ -207,20 +218,20 @@ adminRoutes.put("/company", adminOnly, async (c: any) => {
 });
 
 // Org Routes (Departments & Locations)
-adminRoutes.get("/departments", adminOnly, async (c: any) => {
+adminRoutes.get("/departments", adminOnly, view("workforce"), async (c: any) => {
   const companyId = c.get("companyId");
   const orgService = new OrgService(c.env.DB);
   return c.json(await orgService.getDepartments(companyId));
 });
 
-adminRoutes.post("/departments", adminOnly, async (c: any) => {
+adminRoutes.post("/departments", adminOnly, create("workforce"), async (c: any) => {
   const companyId = c.get("companyId");
   const payload = await c.req.json();
   const orgService = new OrgService(c.env.DB);
   return c.json(await orgService.createDepartment(companyId, payload));
 });
 
-adminRoutes.put("/departments/:id", adminOnly, async (c: any) => {
+adminRoutes.put("/departments/:id", adminOnly, edit("workforce"), async (c: any) => {
   const companyId = c.get("companyId");
   const payload = await c.req.json();
   const orgService = new OrgService(c.env.DB);
@@ -229,7 +240,7 @@ adminRoutes.put("/departments/:id", adminOnly, async (c: any) => {
   return c.json(updated);
 });
 
-adminRoutes.delete("/departments/:id", adminOnly, async (c: any) => {
+adminRoutes.delete("/departments/:id", adminOnly, del("workforce"), async (c: any) => {
   const companyId = c.get("companyId");
   const orgService = new OrgService(c.env.DB);
   return c.json(
@@ -237,13 +248,13 @@ adminRoutes.delete("/departments/:id", adminOnly, async (c: any) => {
   );
 });
 
-adminRoutes.get("/departments/:id/members", adminOnly, async (c: any) => {
+adminRoutes.get("/departments/:id/members", adminOnly, view("workforce"), async (c: any) => {
   const companyId = c.get("companyId");
   const orgService = new OrgService(c.env.DB);
   return c.json(await orgService.getDepartmentMembers(companyId, c.req.param("id")));
 });
 
-adminRoutes.post("/departments/:id/members", adminOnly, async (c: any) => {
+adminRoutes.post("/departments/:id/members", adminOnly, edit("workforce"), async (c: any) => {
   const companyId = c.get("companyId");
   const { employeeId } = await c.req.json();
   const orgService = new OrgService(c.env.DB);
@@ -252,7 +263,7 @@ adminRoutes.post("/departments/:id/members", adminOnly, async (c: any) => {
   return c.json(member);
 });
 
-adminRoutes.delete("/departments/:id/members/:employeeId", adminOnly, async (c: any) => {
+adminRoutes.delete("/departments/:id/members/:employeeId", adminOnly, edit("workforce"), async (c: any) => {
   const companyId = c.get("companyId");
   const orgService = new OrgService(c.env.DB);
   const member = await orgService.removeEmployeeFromDepartment(companyId, c.req.param("id"), c.req.param("employeeId"));
@@ -260,40 +271,40 @@ adminRoutes.delete("/departments/:id/members/:employeeId", adminOnly, async (c: 
   return c.json(member);
 });
 
-adminRoutes.get("/locations", adminOnly, async (c: any) => {
+adminRoutes.get("/locations", adminOnly, view("workforce"), async (c: any) => {
   const companyId = c.get("companyId");
   const orgService = new OrgService(c.env.DB);
   return c.json(await orgService.getLocations(companyId));
 });
 
-adminRoutes.post("/locations", adminOnly, async (c: any) => {
+adminRoutes.post("/locations", adminOnly, create("workforce"), async (c: any) => {
   const companyId = c.get("companyId");
   const payload = await c.req.json();
   const orgService = new OrgService(c.env.DB);
   return c.json(await orgService.createLocation(companyId, payload));
 });
 
-adminRoutes.delete("/locations/:id", adminOnly, async (c: any) => {
+adminRoutes.delete("/locations/:id", adminOnly, del("workforce"), async (c: any) => {
   const companyId = c.get("companyId");
   const orgService = new OrgService(c.env.DB);
   return c.json(await orgService.deleteLocation(companyId, c.req.param("id")));
 });
 
 // Roles Routes
-adminRoutes.get("/roles", adminOnly, async (c: any) => {
+adminRoutes.get("/roles", adminOnly, view("settings"), async (c: any) => {
   const companyId = c.get("companyId");
   const roleService = new RoleService(c.env.DB);
   return c.json(await roleService.getRoles(companyId));
 });
 
-adminRoutes.post("/roles", adminOnly, async (c: any) => {
+adminRoutes.post("/roles", adminOnly, edit("settings"), async (c: any) => {
   const companyId = c.get("companyId");
   const payload = await c.req.json();
   const roleService = new RoleService(c.env.DB);
   return c.json(await roleService.createRole(companyId, payload));
 });
 
-adminRoutes.put("/roles/:id", adminOnly, async (c: any) => {
+adminRoutes.put("/roles/:id", adminOnly, edit("settings"), async (c: any) => {
   const companyId = c.get("companyId");
   const payload = await c.req.json();
   const roleService = new RoleService(c.env.DB);
@@ -302,7 +313,7 @@ adminRoutes.put("/roles/:id", adminOnly, async (c: any) => {
   );
 });
 
-adminRoutes.delete("/roles/:id", adminOnly, async (c: any) => {
+adminRoutes.delete("/roles/:id", adminOnly, edit("settings"), async (c: any) => {
   const companyId = c.get("companyId");
   const roleService = new RoleService(c.env.DB);
   return c.json(await roleService.deleteRole(companyId, c.req.param("id")));

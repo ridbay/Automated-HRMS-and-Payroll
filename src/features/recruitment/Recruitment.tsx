@@ -82,12 +82,21 @@ import {
   Area,
 } from "recharts";
 import {
-  MOCK_REQUISITIONS,
   MOCK_CANDIDATES_DETAILED,
   MOCK_INTERVIEWS,
   MOCK_EMPLOYEES,
 } from "../../data/mocks";
 import { Candidate, JobRequisition, Interview } from "../../types/index";
+import { useAuth } from "../../context/AuthContext";
+import {
+  useJobRequisitions,
+  useCreateJobRequisition,
+  useApproveJobRequisition,
+  useRejectJobRequisition,
+  useDeleteJobRequisition,
+  useDepartments,
+  useLocations,
+} from "../../api/client";
 
 const funnelData = [
   { name: "Applied", value: 450, fill: "#6366f1" },
@@ -113,24 +122,82 @@ const Recruitment: React.FC = () => {
     | "offers"
     | "analytics"
   >("dashboard");
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [viewMode, setViewMode] = useState<"grid" | "list" | "kanban">("grid");
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(
     null,
   );
   const [candidateDetailTab, setCandidateDetailTab] = useState<
     "profile" | "evaluation" | "interviews" | "timeline" | "message"
   >("profile");
-  const [activeJobId, setActiveJobId] = useState<string | null>(
-    MOCK_REQUISITIONS[0].id,
-  );
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [showJobPostingModal, setShowJobPostingModal] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [scheduleStep, setScheduleStep] = useState(1);
   const [showOfferModal, setShowOfferModal] = useState(false);
   const [offerStep, setOfferStep] = useState(1);
 
+  const emptyReqForm = {
+    title: "",
+    department: "",
+    location: "",
+    employmentType: "Full-time",
+    priority: "Medium" as "High" | "Medium" | "Low",
+    targetHireDate: "",
+    salaryMin: "",
+    salaryMax: "",
+    justification: "",
+  };
+  const [reqForm, setReqForm] = useState(emptyReqForm);
+  const [reqFormError, setReqFormError] = useState<string | null>(null);
+
+  const { user } = useAuth();
+  // Only HR Admin / Super Admin can open a requisition directly or review one
+  // sitting in "Pending Approval"; Recruiters get read-only visibility here.
+  const canManageRequisitions = user?.role === "SUPER_ADMIN" || user?.role === "HR_ADMIN";
+
+  const { data: requisitions = [], isLoading: requisitionsLoading } = useJobRequisitions();
+  const { data: departments = [] } = useDepartments();
+  const { data: locations = [] } = useLocations();
+  const createRequisition = useCreateJobRequisition();
+  const approveRequisition = useApproveJobRequisition();
+  const rejectRequisition = useRejectJobRequisition();
+  const deleteRequisitionMutation = useDeleteJobRequisition();
+
+  const handleSubmitRequisition = () => {
+    if (!reqForm.title.trim() || !reqForm.department || !reqForm.location) {
+      setReqFormError("Job title, department and location are required.");
+      return;
+    }
+    setReqFormError(null);
+
+    const budgetRange =
+      reqForm.salaryMin || reqForm.salaryMax
+        ? `₦${Number(reqForm.salaryMin || 0).toLocaleString()} - ₦${Number(reqForm.salaryMax || 0).toLocaleString()}`
+        : undefined;
+
+    createRequisition.mutate(
+      {
+        title: reqForm.title.trim(),
+        department: reqForm.department,
+        location: reqForm.location,
+        employmentType: reqForm.employmentType as JobRequisition["employmentType"],
+        priority: reqForm.priority,
+        targetHireDate: reqForm.targetHireDate || undefined,
+        justification: reqForm.justification.trim() || undefined,
+        budgetRange,
+      },
+      {
+        onSuccess: () => {
+          setShowJobPostingModal(false);
+          setReqForm(emptyReqForm);
+        },
+        onError: (err: any) => setReqFormError(err.message || "Failed to submit requisition."),
+      },
+    );
+  };
+
   const teamMembers = MOCK_EMPLOYEES.slice(0, 3);
-  const currentJob = MOCK_REQUISITIONS.find((r) => r.id === activeJobId);
+  const currentJob = requisitions.find((r) => r.id === activeJobId) || requisitions[0];
 
   const formatCurrency = (val: number | string) => {
     const num =
@@ -333,7 +400,7 @@ const Recruitment: React.FC = () => {
     prio: "All",
   });
 
-  const filteredRequisitions = MOCK_REQUISITIONS.filter((req) => {
+  const filteredRequisitions = requisitions.filter((req) => {
     return (
       (reqFilters.dept === "All" || req.department === reqFilters.dept) &&
       (reqFilters.loc === "All" || req.location === reqFilters.loc) &&
@@ -406,19 +473,27 @@ const Recruitment: React.FC = () => {
             <option value="Low">Low</option>
           </select>
 
-          <button
-            onClick={() => setShowJobPostingModal(true)}
-            className="px-6 py-3.5 bg-indigo-600 text-white rounded-[1.5rem] font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-100 flex items-center gap-2 hover:scale-105 active:scale-95 transition-all"
-          >
-            <FilePlus size={18} />{" "}
-            <span className="hidden sm:inline">New Req</span>
-          </button>
+          {canManageRequisitions && (
+            <button
+              onClick={() => setShowJobPostingModal(true)}
+              className="px-6 py-3.5 bg-indigo-600 text-white rounded-[1.5rem] font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-100 flex items-center gap-2 hover:scale-105 active:scale-95 transition-all"
+            >
+              <FilePlus size={18} />{" "}
+              <span className="hidden sm:inline">New Req</span>
+            </button>
+          )}
         </div>
       </div>
 
-      {viewMode === "kanban" ? (
+      {requisitionsLoading ? (
+        <div className="p-20 text-center bg-white rounded-[3rem] border border-dashed border-slate-200">
+          <p className="text-xs font-black text-slate-400 uppercase tracking-widest">
+            Loading requisitions…
+          </p>
+        </div>
+      ) : viewMode === "kanban" ? (
         <div className="flex gap-6 overflow-x-auto pb-10 scrollbar-hide px-2">
-          {["Open", "On Hold", "Filled", "Cancelled"].map((status) => {
+          {["Pending Approval", "Open", "On Hold", "Filled", "Cancelled", "Rejected"].map((status) => {
             const statusColor =
               status === "Open"
                 ? "emerald"
@@ -426,7 +501,11 @@ const Recruitment: React.FC = () => {
                   ? "amber"
                   : status === "Filled"
                     ? "indigo"
-                    : "slate";
+                    : status === "Pending Approval"
+                      ? "sky"
+                      : status === "Rejected"
+                        ? "rose"
+                        : "slate";
             const items = filteredRequisitions.filter(
               (r) => r.status === status,
             );
@@ -493,7 +572,7 @@ const Recruitment: React.FC = () => {
                       <div className="flex items-center justify-between pt-4 border-t border-slate-50">
                         <div className="flex items-center gap-2">
                           <img
-                            src={req.managerAvatar}
+                            src={req.managerAvatar || `https://i.pravatar.cc/150?u=${req.id}`}
                             className="w-6 h-6 rounded-lg object-cover"
                           />
                           <span className="text-[9px] font-black text-slate-500">
@@ -506,11 +585,49 @@ const Recruitment: React.FC = () => {
                           {req.daysOpen}d
                         </span>
                       </div>
+
+                      {status === "Pending Approval" && canManageRequisitions && (
+                        <div className="flex gap-2 mt-4 pt-4 border-t border-slate-50">
+                          <button
+                            disabled={rejectRequisition.isPending}
+                            onClick={() => {
+                              const reason = window.prompt("Reason for rejecting this requisition? (optional)") || undefined;
+                              rejectRequisition.mutate({ id: req.id, reason });
+                            }}
+                            className="flex-1 py-2.5 bg-white border border-slate-200 text-rose-500 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-rose-50 transition-colors disabled:opacity-50"
+                          >
+                            Reject
+                          </button>
+                          <button
+                            disabled={approveRequisition.isPending}
+                            onClick={() => approveRequisition.mutate(req.id)}
+                            className="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-md hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                          >
+                            Approve
+                          </button>
+                        </div>
+                      )}
+
+                      {req.status === "Rejected" && req.rejectionReason && (
+                        <p className="mt-4 pt-4 border-t border-slate-50 text-[9px] font-bold text-rose-500 italic leading-relaxed">
+                          "{req.rejectionReason}"
+                        </p>
+                      )}
                     </motion.div>
                   ))}
-                  <button className="w-full py-4 border-2 border-dashed border-slate-200 text-slate-300 hover:border-indigo-200 hover:text-indigo-600 rounded-[2rem] font-black text-[10px] uppercase tracking-widest transition-all">
-                    + Add Requisition
-                  </button>
+                  {items.length === 0 && (
+                    <p className="text-center text-[10px] font-black text-slate-300 uppercase tracking-widest py-10">
+                      Nothing here
+                    </p>
+                  )}
+                  {canManageRequisitions && status === "Pending Approval" && (
+                    <button
+                      onClick={() => setShowJobPostingModal(true)}
+                      className="w-full py-4 border-2 border-dashed border-slate-200 text-slate-300 hover:border-indigo-200 hover:text-indigo-600 rounded-[2rem] font-black text-[10px] uppercase tracking-widest transition-all"
+                    >
+                      + Add Requisition
+                    </button>
+                  )}
                 </div>
               </div>
             );
@@ -542,7 +659,15 @@ const Recruitment: React.FC = () => {
                 </span>
                 <div className="flex items-center gap-2">
                   <span
-                    className={`text-[10px] font-black uppercase tracking-widest ${req.status === "Open" ? "text-emerald-500" : "text-amber-500"}`}
+                    className={`text-[10px] font-black uppercase tracking-widest ${
+                      req.status === "Open"
+                        ? "text-emerald-500"
+                        : req.status === "Pending Approval"
+                          ? "text-sky-500"
+                          : req.status === "Rejected"
+                            ? "text-rose-500"
+                            : "text-amber-500"
+                    }`}
                   >
                     {req.status}
                   </span>
@@ -613,8 +738,43 @@ const Recruitment: React.FC = () => {
                   </button>
                 </div>
               </div>
+
+              {req.status === "Pending Approval" && canManageRequisitions && (
+                <div className="flex gap-3 mt-6 pt-6 border-t border-slate-100">
+                  <button
+                    disabled={rejectRequisition.isPending}
+                    onClick={() => {
+                      const reason = window.prompt("Reason for rejecting this requisition? (optional)") || undefined;
+                      rejectRequisition.mutate({ id: req.id, reason });
+                    }}
+                    className="flex-1 py-3 bg-white border border-slate-200 text-rose-500 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-rose-50 transition-colors disabled:opacity-50"
+                  >
+                    Reject
+                  </button>
+                  <button
+                    disabled={approveRequisition.isPending}
+                    onClick={() => approveRequisition.mutate(req.id)}
+                    className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                  >
+                    Approve
+                  </button>
+                </div>
+              )}
+              {req.status === "Rejected" && req.rejectionReason && (
+                <p className="mt-6 pt-6 border-t border-slate-100 text-xs font-bold text-rose-500 italic leading-relaxed">
+                  "{req.rejectionReason}"
+                </p>
+              )}
             </motion.div>
           ))}
+          {filteredRequisitions.length === 0 && (
+            <div className="col-span-full p-16 text-center bg-white rounded-[3rem] border border-dashed border-slate-200">
+              <Briefcase className="mx-auto w-14 h-14 text-slate-300 mb-4" />
+              <h4 className="text-slate-400 font-bold uppercase tracking-widest text-sm">
+                No requisitions yet
+              </h4>
+            </div>
+          )}
         </div>
       ) : (
         <div className="bg-white rounded-[3rem] border border-slate-200 overflow-hidden shadow-sm">
@@ -626,6 +786,7 @@ const Recruitment: React.FC = () => {
                 </th>
                 <th className="px-10 py-6">Requisition Info</th>
                 <th className="px-8 py-6">Manager</th>
+                <th className="px-8 py-6">Status</th>
                 <th className="px-8 py-6 text-center">Pipeline (Total)</th>
                 <th className="px-8 py-6">Priority</th>
                 <th className="px-8 py-6">Time Open</th>
@@ -664,6 +825,21 @@ const Recruitment: React.FC = () => {
                       </span>
                     </div>
                   </td>
+                  <td className="px-8 py-5">
+                    <span
+                      className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase ${
+                        req.status === "Open"
+                          ? "bg-emerald-50 text-emerald-600"
+                          : req.status === "Pending Approval"
+                            ? "bg-sky-50 text-sky-600"
+                            : req.status === "Rejected"
+                              ? "bg-rose-50 text-rose-600"
+                              : "bg-amber-50 text-amber-600"
+                      }`}
+                    >
+                      {req.status}
+                    </span>
+                  </td>
                   <td className="px-8 py-5 text-center">
                     <div className="flex items-center justify-center gap-1">
                       <span className="text-sm font-black text-indigo-600">
@@ -691,9 +867,39 @@ const Recruitment: React.FC = () => {
                   </td>
                   <td className="px-10 py-5 text-right">
                     <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                      <button className="p-3 bg-white border rounded-xl text-slate-400 hover:text-indigo-600 shadow-sm">
-                        <Edit3 size={16} />
-                      </button>
+                      {req.status === "Pending Approval" && canManageRequisitions && (
+                        <>
+                          <button
+                            disabled={rejectRequisition.isPending}
+                            onClick={() => {
+                              const reason = window.prompt("Reason for rejecting this requisition? (optional)") || undefined;
+                              rejectRequisition.mutate({ id: req.id, reason });
+                            }}
+                            className="px-3 py-3 bg-white border rounded-xl text-rose-500 hover:bg-rose-50 shadow-sm text-[10px] font-black uppercase tracking-widest disabled:opacity-50"
+                          >
+                            Reject
+                          </button>
+                          <button
+                            disabled={approveRequisition.isPending}
+                            onClick={() => approveRequisition.mutate(req.id)}
+                            className="px-3 py-3 bg-indigo-600 text-white rounded-xl shadow-sm text-[10px] font-black uppercase tracking-widest disabled:opacity-50"
+                          >
+                            Approve
+                          </button>
+                        </>
+                      )}
+                      {canManageRequisitions && (
+                        <button
+                          onClick={() => {
+                            if (window.confirm(`Delete requisition "${req.title}"? This can't be undone.`)) {
+                              deleteRequisitionMutation.mutate(req.id);
+                            }
+                          }}
+                          className="p-3 bg-white border rounded-xl text-slate-400 hover:text-rose-600 shadow-sm"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      )}
                       <button
                         onClick={() => {
                           setActiveJobId(req.id);
@@ -707,6 +913,13 @@ const Recruitment: React.FC = () => {
                   </td>
                 </tr>
               ))}
+              {filteredRequisitions.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-10 py-16 text-center text-[10px] font-black text-slate-300 uppercase tracking-widest">
+                    No requisitions yet
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -2057,6 +2270,11 @@ const Recruitment: React.FC = () => {
               </div>
 
               <div className="flex-1 overflow-y-auto p-12 space-y-10 scrollbar-hide">
+                {reqFormError && (
+                  <div className="p-4 bg-rose-50 border border-rose-100 text-rose-600 rounded-2xl text-xs font-bold">
+                    {reqFormError}
+                  </div>
+                )}
                 <section className="grid grid-cols-2 gap-8">
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
@@ -2064,6 +2282,8 @@ const Recruitment: React.FC = () => {
                     </label>
                     <input
                       type="text"
+                      value={reqForm.title}
+                      onChange={(e) => setReqForm({ ...reqForm, title: e.target.value })}
                       placeholder="e.g. Senior Frontend Engineer"
                       className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-800"
                     />
@@ -2072,12 +2292,59 @@ const Recruitment: React.FC = () => {
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
                       Department
                     </label>
-                    <select className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-800">
-                      <option>Engineering</option>
-                      <option>Design</option>
-                      <option>Marketing</option>
-                      <option>People Ops</option>
+                    <select
+                      value={reqForm.department}
+                      onChange={(e) => setReqForm({ ...reqForm, department: e.target.value })}
+                      className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-800"
+                    >
+                      <option value="">Select department</option>
+                      {departments.map((d: any) => (
+                        <option key={d.id} value={d.name}>{d.name}</option>
+                      ))}
                     </select>
+                  </div>
+                </section>
+
+                <section className="grid grid-cols-3 gap-8">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                      Location
+                    </label>
+                    <select
+                      value={reqForm.location}
+                      onChange={(e) => setReqForm({ ...reqForm, location: e.target.value })}
+                      className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-800"
+                    >
+                      <option value="">Select location</option>
+                      {locations.map((l: any) => (
+                        <option key={l.id} value={l.name}>{l.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                      Priority
+                    </label>
+                    <select
+                      value={reqForm.priority}
+                      onChange={(e) => setReqForm({ ...reqForm, priority: e.target.value as any })}
+                      className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-800"
+                    >
+                      <option value="High">High</option>
+                      <option value="Medium">Medium</option>
+                      <option value="Low">Low</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                      Target Hire Date
+                    </label>
+                    <input
+                      type="date"
+                      value={reqForm.targetHireDate}
+                      onChange={(e) => setReqForm({ ...reqForm, targetHireDate: e.target.value })}
+                      className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-800"
+                    />
                   </div>
                 </section>
 
@@ -2088,11 +2355,15 @@ const Recruitment: React.FC = () => {
                   <div className="grid grid-cols-2 gap-8">
                     <input
                       type="number"
+                      value={reqForm.salaryMin}
+                      onChange={(e) => setReqForm({ ...reqForm, salaryMin: e.target.value })}
                       placeholder="Min (₦)"
                       className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-800"
                     />
                     <input
                       type="number"
+                      value={reqForm.salaryMax}
+                      onChange={(e) => setReqForm({ ...reqForm, salaryMax: e.target.value })}
                       placeholder="Max (₦)"
                       className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-800"
                     />
@@ -2101,10 +2372,12 @@ const Recruitment: React.FC = () => {
 
                 <section className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                    Job Description
+                    Job Description / Justification
                   </label>
                   <textarea
                     rows={6}
+                    value={reqForm.justification}
+                    onChange={(e) => setReqForm({ ...reqForm, justification: e.target.value })}
                     placeholder="Describe the role responsibilities and requirements..."
                     className="w-full px-6 py-4 bg-slate-50 border-none rounded-3xl outline-none font-medium text-sm resize-none"
                   />
@@ -2141,13 +2414,21 @@ const Recruitment: React.FC = () => {
 
               <div className="p-10 bg-slate-50 border-t border-slate-100 flex justify-end gap-4 shrink-0">
                 <button
-                  onClick={() => setShowJobPostingModal(false)}
+                  onClick={() => {
+                    setShowJobPostingModal(false);
+                    setReqForm(emptyReqForm);
+                    setReqFormError(null);
+                  }}
                   className="px-8 py-4 bg-white border border-slate-200 text-slate-500 rounded-2xl font-black text-xs uppercase tracking-widest"
                 >
-                  Save Draft
+                  Cancel
                 </button>
-                <button className="px-12 py-4 bg-indigo-600 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-xl shadow-indigo-100 hover:scale-105 active:scale-95 transition-all flex items-center gap-2">
-                  <Megaphone size={16} /> Publish Requisition
+                <button
+                  disabled={createRequisition.isPending}
+                  onClick={handleSubmitRequisition}
+                  className="px-12 py-4 bg-indigo-600 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-xl shadow-indigo-100 hover:scale-105 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-50 disabled:hover:scale-100"
+                >
+                  <Megaphone size={16} /> {createRequisition.isPending ? "Publishing…" : "Publish Requisition"}
                 </button>
               </div>
             </motion.div>

@@ -20,13 +20,25 @@ export const jobRequisitions = sqliteTable('job_requisitions', {
   title: text('title').notNull(),
   department: text('department').notNull(),
   location: text('location').notNull(),
+  employmentType: text('employment_type'), // 'Full-time' | 'Contract' | 'Intern' | 'Consultant'
   hiringManager: text('hiring_manager').notNull(),
   managerAvatar: text('manager_avatar'),
   priority: text('priority').notNull(),
+  // 'Pending Approval' | 'Open' | 'On Hold' | 'Filled' | 'Cancelled' | 'Rejected'
   status: text('status').notNull(),
   dateOpened: text('date_opened').notNull(),
   targetHireDate: text('target_hire_date').notNull(),
   daysOpen: integer('days_open').notNull(),
+  justification: text('justification'),
+  budgetRange: text('budget_range'),
+  // Who requested this requisition (audit trail for the approval workflow)
+  requestedById: text('requested_by_id'),
+  requestedByName: text('requested_by_name'),
+  // Who reviewed it (approved or rejected) and when
+  reviewedById: text('reviewed_by_id'),
+  reviewedByName: text('reviewed_by_name'),
+  reviewedAt: text('reviewed_at'),
+  rejectionReason: text('rejection_reason'),
   createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text('updated_at').$onUpdate(() => new Date().toISOString()),
 });

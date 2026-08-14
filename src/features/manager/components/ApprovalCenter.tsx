@@ -17,11 +17,15 @@ import {
 interface ApprovalCenterProps {
   approvals: any;
   formatCurrency: (val: number) => string;
+  onLeaveAction?: (id: string, status: "approved" | "rejected") => void;
+  isLeaveActionPending?: boolean;
 }
 
 const ApprovalCenter: React.FC<ApprovalCenterProps> = ({
   approvals,
   formatCurrency,
+  onLeaveAction,
+  isLeaveActionPending,
 }) => {
   const [activeTab, setActiveTab] = useState<"pending" | "history">("pending");
   const [filterType, setFilterType] = useState<"all" | "leave" | "expenses">(
@@ -69,10 +73,18 @@ const ApprovalCenter: React.FC<ApprovalCenterProps> = ({
       </div>
 
       <div className="flex gap-3">
-        <button className="flex-1 py-3 bg-white border border-slate-200 text-rose-500 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-rose-50 transition-colors">
+        <button
+          onClick={() => onLeaveAction?.(req.id, "rejected")}
+          disabled={isLeaveActionPending}
+          className="flex-1 py-3 bg-white border border-slate-200 text-rose-500 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-rose-50 transition-colors disabled:opacity-50"
+        >
           Reject
         </button>
-        <button className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg hover:bg-indigo-700 transition-colors">
+        <button
+          onClick={() => onLeaveAction?.(req.id, "approved")}
+          disabled={isLeaveActionPending}
+          className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
+        >
           Approve
         </button>
         <button className="p-3 bg-slate-100 text-slate-500 rounded-xl hover:text-indigo-600 transition-colors">
@@ -152,7 +164,7 @@ const ApprovalCenter: React.FC<ApprovalCenterProps> = ({
             onClick={() => setActiveTab("pending")}
             className={`px-6 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${activeTab === "pending" ? "bg-indigo-600 text-white shadow-md" : "text-slate-400 hover:text-indigo-600"}`}
           >
-            Pending (4)
+            Pending ({(approvals.leave?.length || 0) + (approvals.expenses?.length || 0)})
           </button>
           <button
             onClick={() => setActiveTab("history")}

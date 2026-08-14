@@ -76,6 +76,14 @@ import {
   MOCK_LEAVE_BALANCES,
 } from "../../data/mocks";
 import { useNavigation } from "../../context/NavigationContext";
+import {
+  useTeamPendingLeaves,
+  useUpdateTeamLeaveStatus,
+  useMyJobRequisitions,
+  useCreateJobRequisition,
+  useDepartments,
+  useLocations,
+} from "../../api/client";
 import EmployeeDetailModal from "./components/EmployeeDetailModal";
 import ApprovalCenter from "./components/ApprovalCenter";
 
@@ -103,6 +111,9 @@ const ManagerDashboard: React.FC = () => {
 
   const teamMembers = MOCK_EMPLOYEES;
 
+  const { data: teamPendingLeaves = [] } = useTeamPendingLeaves();
+  const updateLeaveStatus = useUpdateTeamLeaveStatus();
+
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat("en-NG", {
       style: "currency",
@@ -110,30 +121,17 @@ const ManagerDashboard: React.FC = () => {
     }).format(val);
 
   const approvalsData = {
-    leave: [
-      {
-        id: "l1",
-        name: "Emma Davis",
-        type: "Annual Leave",
-        range: "Jun 12 - Jun 15",
-        days: 4,
-        reason: "Family vacation to the coast.",
-        balance: 16,
-        impact: "High: 2 others on leave",
-        avatar: teamMembers[2].avatar,
-      },
-      {
-        id: "l2",
-        name: "Michael Chen",
-        type: "Sick Leave",
-        range: "May 24 - May 25",
-        days: 2,
-        reason: "Severe flu symptoms.",
-        balance: 8,
-        impact: "Low",
-        avatar: teamMembers[1].avatar,
-      },
-    ],
+    // Real, manager-scoped pending leave requests (see LeaveService.getPendingTeamLeaveRequests).
+    // `balance`/`impact` have no backing data yet — the cards already fall back gracefully.
+    leave: (teamPendingLeaves || []).map((r: any) => ({
+      id: r.id,
+      name: `${r.name} ${r.lastName || ""}`.trim(),
+      type: r.type,
+      range: `${r.startDate} - ${r.endDate}`,
+      days: r.days,
+      reason: r.reason,
+      avatar: r.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(r.name || "Employee")}&background=random`,
+    })),
     expenses: [
       {
         id: "e1",
@@ -325,10 +323,18 @@ const ManagerDashboard: React.FC = () => {
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <button className="p-3 bg-white border border-slate-200 text-rose-500 hover:bg-rose-50 rounded-xl transition-all shadow-sm">
+                    <button
+                      onClick={() => updateLeaveStatus.mutate({ id: req.id, status: "rejected" })}
+                      disabled={updateLeaveStatus.isPending}
+                      className="p-3 bg-white border border-slate-200 text-rose-500 hover:bg-rose-50 rounded-xl transition-all shadow-sm disabled:opacity-50"
+                    >
                       <X size={18} />
                     </button>
-                    <button className="p-3 bg-indigo-600 text-white hover:bg-indigo-700 rounded-xl transition-all shadow-lg">
+                    <button
+                      onClick={() => updateLeaveStatus.mutate({ id: req.id, status: "approved" })}
+                      disabled={updateLeaveStatus.isPending}
+                      className="p-3 bg-indigo-600 text-white hover:bg-indigo-700 rounded-xl transition-all shadow-lg disabled:opacity-50"
+                    >
                       <Check size={18} />
                     </button>
                   </div>
@@ -682,6 +688,8 @@ const ManagerDashboard: React.FC = () => {
             <ApprovalCenter
               approvals={approvalsData}
               formatCurrency={formatCurrency}
+              onLeaveAction={(id, status) => updateLeaveStatus.mutate({ id, status })}
+              isLeaveActionPending={updateLeaveStatus.isPending}
             />
           )}
           {activeSection === "performance" && renderPerformance()}

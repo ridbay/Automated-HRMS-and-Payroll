@@ -24,6 +24,42 @@ export const getTeamLeaves = async (c: Context<AppEnv>) => {
   return c.json(teamLeaves);
 };
 
+export const getMyTeamPendingLeaves = async (c: Context<AppEnv>) => {
+  const companyId = c.get('companyId');
+  const employeeId = c.get('employeeId');
+
+  if (!employeeId) {
+    return c.json({ error: 'Unauthorized: No employee ID found' }, 401);
+  }
+
+  const leaveService = new LeaveService(c.env.DB);
+  // Scoped entirely by the caller's own id: a non-manager simply has no direct reports.
+  const requests = await leaveService.getPendingTeamLeaveRequests(companyId, employeeId);
+  return c.json(requests);
+};
+
+export const updateTeamLeaveStatus = async (c: Context<AppEnv>) => {
+  const companyId = c.get('companyId');
+  const employeeId = c.get('employeeId');
+  const requestId = c.req.param('id') as string;
+
+  if (!employeeId) {
+    return c.json({ error: 'Unauthorized: No employee ID found' }, 401);
+  }
+
+  const payload = await c.req.json();
+  const leaveService = new LeaveService(c.env.DB);
+  const updated = await leaveService.updateTeamLeaveRequestStatus(companyId, employeeId, requestId, {
+    status: payload.status,
+    managerComment: payload.managerComment,
+  });
+
+  if (!updated) {
+    return c.json({ error: 'Leave request not found, or you are not this employee\'s manager' }, 404);
+  }
+  return c.json(updated);
+};
+
 export const applyForLeave = async (c: Context<AppEnv>) => {
   const companyId = c.get('companyId');
   const employeeId = c.get('employeeId');

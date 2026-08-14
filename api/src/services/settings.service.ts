@@ -14,7 +14,15 @@ export class SettingsService {
     const settings = await this.db.select().from(schema.companySettings).where(eq(schema.companySettings.companyId, companyId)).get();
     if (!settings) {
       // Return defaults if not set yet
-      return { companyId, require2fa: false, passwordMinLength: 12, sessionTimeoutMins: 60 };
+      return {
+        companyId,
+        require2fa: false,
+        passwordMinLength: 12,
+        sessionTimeoutMins: 60,
+        attendanceStartTime: '09:00',
+        attendanceEndTime: '17:00',
+        attendanceGraceMinutes: 15,
+      };
     }
     return settings;
   }

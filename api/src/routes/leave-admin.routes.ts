@@ -1,23 +1,25 @@
 import { Hono } from 'hono';
-import { 
-  getAllLeaves, 
+import {
+  getAllLeaves,
   updateLeaveStatus,
   getEmployeeLeaveBalances,
   updateEmployeeLeaveBalances,
   getEmployeeLeaveRequests
 } from '../controllers/admin/leave.controller';
-import { requireRole } from '../middlewares/role.middleware';
+import { requireRole, requirePermission } from '../middlewares/role.middleware';
 
 export const leaveAdminRoutes = new Hono();
 
 const adminOnly = requireRole('SUPER_ADMIN', 'HR_ADMIN');
+const view = requirePermission('leave', 'view');
+const approve = requirePermission('leave', 'approve');
 
-leaveAdminRoutes.get('/', adminOnly, getAllLeaves);
-leaveAdminRoutes.put('/:id/status', adminOnly, updateLeaveStatus);
+leaveAdminRoutes.get('/', adminOnly, view, getAllLeaves);
+leaveAdminRoutes.put('/:id/status', adminOnly, approve, updateLeaveStatus);
 
 // Employee-specific admin overrides
-leaveAdminRoutes.get('/employee/:id/balances', adminOnly, getEmployeeLeaveBalances);
-leaveAdminRoutes.put('/employee/:id/balances', adminOnly, updateEmployeeLeaveBalances);
-leaveAdminRoutes.get('/employee/:id/requests', adminOnly, getEmployeeLeaveRequests);
+leaveAdminRoutes.get('/employee/:id/balances', adminOnly, view, getEmployeeLeaveBalances);
+leaveAdminRoutes.put('/employee/:id/balances', adminOnly, approve, updateEmployeeLeaveBalances);
+leaveAdminRoutes.get('/employee/:id/requests', adminOnly, view, getEmployeeLeaveRequests);
 
 export default leaveAdminRoutes;

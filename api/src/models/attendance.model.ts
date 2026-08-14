@@ -46,6 +46,9 @@ export const overtimeRequests = sqliteTable("overtime_requests", {
   reason: text("reason").notNull(),
   deliverable: text("deliverable"),
   status: text("status").notNull().default("pending"),
+  // Set when a manager/admin approves or rejects the request — mirrors leaveRequests.
+  managerId: text("manager_id"),
+  managerComment: text("manager_comment"),
   createdAt: text("created_at")
     .notNull()
     .default(sql`CURRENT_TIMESTAMP`),

@@ -9,10 +9,20 @@ import {
   downloadDocument,
   getDirectory
 } from '../controllers/employee/profile.controller';
-import { getMyLeaveData, applyForLeave, getTeamLeaves } from '../controllers/employee/leave.controller';
-import { getAttendanceData, clockIn, clockOut, getOvertimeRequests, submitOvertimeRequest } from '../controllers/employee/attendance.controller';
+import { getMyLeaveData, applyForLeave, getTeamLeaves, getMyTeamPendingLeaves, updateTeamLeaveStatus } from '../controllers/employee/leave.controller';
+import {
+  getAttendanceData,
+  clockIn,
+  clockOut,
+  getOvertimeRequests,
+  submitOvertimeRequest,
+  getMyTeamAttendanceToday,
+  getMyTeamPendingOvertime,
+  updateTeamOvertimeStatus
+} from '../controllers/employee/attendance.controller';
 import { authMiddleware } from '../middlewares/auth.middleware';
 import { getMyCompensation } from '../controllers/employee/compensation.controller';
+import { getMyPayslips } from '../controllers/employee/payslip.controller';
 import { sendShoutout, getShoutouts } from '../controllers/employee/feedback.controller';
 import { getMyGoals, createGoal, updateGoalProgress } from '../controllers/employee/goal.controller';
 import {
@@ -34,6 +44,7 @@ employeeRoutes.get('/directory', getDirectory);
 // Self-Service Profile Routes
 employeeRoutes.get('/me', getMyProfile);
 employeeRoutes.get('/me/compensation', getMyCompensation);
+employeeRoutes.get('/me/payslips', getMyPayslips);
 employeeRoutes.put('/me', updateMyProfile);
 employeeRoutes.post('/me/emergency-contacts', addEmergencyContact);
 employeeRoutes.delete('/me/emergency-contacts/:id', deleteEmergencyContact);
@@ -48,12 +59,23 @@ employeeRoutes.get('/leave/me', getMyLeaveData);
 employeeRoutes.post('/leave/apply', applyForLeave);
 employeeRoutes.get('/leave/team', getTeamLeaves);
 
+// Manager-scoped: pending leave requests for the caller's direct reports.
+// Naturally self-scoped by employeeId — no separate role gate needed here.
+employeeRoutes.get('/leave/team-requests', getMyTeamPendingLeaves);
+employeeRoutes.patch('/leave/team-requests/:id/status', updateTeamLeaveStatus);
+
 // Self-Service Attendance Routes
 employeeRoutes.get('/attendance/me', getAttendanceData);
 employeeRoutes.post('/attendance/clock-in', clockIn);
 employeeRoutes.post('/attendance/clock-out', clockOut);
 employeeRoutes.get('/attendance/overtime', getOvertimeRequests);
 employeeRoutes.post('/attendance/overtime', submitOvertimeRequest);
+
+// Manager-scoped: team presence & overtime approvals for the caller's direct reports.
+// Naturally self-scoped by employeeId — no separate role gate needed here.
+employeeRoutes.get('/attendance/team', getMyTeamAttendanceToday);
+employeeRoutes.get('/attendance/team-requests', getMyTeamPendingOvertime);
+employeeRoutes.patch('/attendance/team-requests/:id/status', updateTeamOvertimeStatus);
 
 // Feedback / Shoutouts
 employeeRoutes.post('/feedback', sendShoutout);

@@ -77,9 +77,12 @@ const Settings: React.FC = () => {
   const deleteLoc = useDeleteLocation();
   const { data: roles, isLoading: isRolesLoading } = useRoles(isAdmin);
   const createRole = useCreateRole();
+  const updateRole = useUpdateRole();
 
   const [expandedDeptId, setExpandedDeptId] = useState<string | null>(null);
   const [newMemberByDept, setNewMemberByDept] = useState<Record<string, string>>({});
+  const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null);
+  const [permissionsDraft, setPermissionsDraft] = useState<Record<string, Record<string, boolean>>>({});
   const { data: deptMembers, isLoading: isDeptMembersLoading } = useDepartmentMembers(expandedDeptId || undefined);
 
   const handleSaveProfile = (e: React.FormEvent<HTMLFormElement>) => {
@@ -393,18 +396,50 @@ const Settings: React.FC = () => {
     );
   };
 
+  // Mirrors the module/action shape enforced server-side (requirePermission in
+  // api/src/middlewares/role.middleware.ts). A blank cell means that action
+  // has no real route behind it for this module — kept off rather than faked.
+  const PERMISSION_MODULES: { key: string; label: string; actions: string[] }[] = [
+    { key: 'workforce', label: 'Workforce', actions: ['view', 'create', 'edit', 'delete'] },
+    { key: 'payroll', label: 'Payroll', actions: ['view', 'approve'] },
+    { key: 'performance', label: 'Performance', actions: ['view', 'create', 'edit'] },
+    { key: 'leave', label: 'Leave & Time Off', actions: ['view', 'approve'] },
+    { key: 'settings', label: 'Settings', actions: ['view', 'edit'] },
+  ];
+  const PERMISSION_COLUMNS: { key: string; label: string }[] = [
+    { key: 'view', label: 'View' },
+    { key: 'create', label: 'Create' },
+    { key: 'edit', label: 'Edit' },
+    { key: 'delete', label: 'Delete' },
+    { key: 'approve', label: 'Approve' },
+  ];
+
+  const selectedRole = roles?.find((r: any) => r.id === selectedRoleId) || null;
+
+  const selectRole = (role: any) => {
+    setSelectedRoleId(role.id);
+    setPermissionsDraft(role.permissions && typeof role.permissions === 'object' ? role.permissions : {});
+  };
+
+  const togglePermission = (moduleKey: string, action: string) => {
+    setPermissionsDraft((prev) => ({
+      ...prev,
+      [moduleKey]: { ...(prev[moduleKey] || {}), [action]: !prev[moduleKey]?.[action] },
+    }));
+  };
+
   const renderRoles = () => {
     return (
       <div className="space-y-10">
         <div className="flex justify-between items-center">
             <div>
               <h2 className="text-2xl font-black text-slate-800">RBAC Controls</h2>
-              <p className="text-sm text-slate-500 font-medium">Define access layers and administrative permissions.</p>
+              <p className="text-sm text-slate-500 font-medium">Define access layers and administrative permissions. Custom roles narrow what an employee's base role already allows — they can't grant more.</p>
             </div>
-            <button 
+            <button
               onClick={async () => {
                 const name = await prompt("Enter role name:");
-                if (name) createRole.mutate({ name, permissions: { all: false }, color: 'indigo', description: 'Custom role' });
+                if (name) createRole.mutate({ name, permissions: {}, color: 'indigo', description: 'Custom role' });
               }}
               disabled={createRole.isPending}
               className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-100 flex items-center gap-2"
@@ -416,65 +451,97 @@ const Settings: React.FC = () => {
         {isRolesLoading ? <Loader2 className="animate-spin text-indigo-500 mx-auto" /> : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {roles?.map((role: any) => (
-              <motion.div 
-                key={role.id} 
+              <motion.div
+                key={role.id}
                 whileHover={{ y: -5 }}
-                className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm relative group"
+                onClick={() => selectRole(role)}
+                className={`bg-white p-8 rounded-[2.5rem] border shadow-sm relative group cursor-pointer transition-all ${selectedRoleId === role.id ? 'border-indigo-600 ring-4 ring-indigo-500/10' : 'border-slate-200'}`}
               >
                   <div className={`absolute top-0 right-0 w-16 h-16 bg-${role.color || 'slate'}-50 rounded-full -mr-8 -mt-8`} />
                   <h3 className="text-lg font-black text-slate-800 mb-2">{role.name}</h3>
                   <p className="text-xs text-slate-400 font-medium leading-relaxed mb-6">{role.description || 'No description'}</p>
                   <div className="flex items-center justify-between mt-auto">
                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{role.usersCount || 0} Users</span>
-                    <button className="p-2 text-slate-300 hover:text-indigo-600 transition-all opacity-0 group-hover:opacity-100">
+                    <button className={`p-2 transition-all ${selectedRoleId === role.id ? 'text-indigo-600' : 'text-slate-300 group-hover:text-indigo-600'}`}>
                         <ChevronRight size={20} />
                     </button>
                   </div>
               </motion.div>
             ))}
+            {roles && roles.length === 0 && (
+              <p className="col-span-full text-center text-sm text-slate-400 font-medium py-10">No custom roles yet — every employee is governed by their base role only.</p>
+            )}
           </div>
         )}
 
         <div className="bg-white rounded-[3rem] border border-slate-200 shadow-sm overflow-hidden">
             <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-              <h3 className="font-black text-slate-800 uppercase text-xs tracking-[0.2em]">Permission Matrix (HR Manager)</h3>
-              <button className="text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:underline">Restore Defaults</button>
+              <h3 className="font-black text-slate-800 uppercase text-xs tracking-[0.2em]">
+                Permission Matrix {selectedRole ? `(${selectedRole.name})` : ''}
+              </h3>
+              {selectedRole && (
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={() => setPermissionsDraft(selectedRole.permissions || {})}
+                    className="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:underline"
+                  >
+                    Discard Changes
+                  </button>
+                  <button
+                    onClick={() => updateRole.mutate({ id: selectedRole.id, data: { permissions: permissionsDraft } })}
+                    disabled={updateRole.isPending}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-indigo-700 disabled:opacity-50"
+                  >
+                    <Save size={14} /> {updateRole.isPending ? 'Saving...' : 'Save Permissions'}
+                  </button>
+                </div>
+              )}
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                  <thead className="bg-slate-50/50 text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
-                    <tr>
-                        <th className="px-10 py-5">Module</th>
-                        <th className="px-8 py-5 text-center">View</th>
-                        <th className="px-8 py-5 text-center">Create</th>
-                        <th className="px-8 py-5 text-center">Edit</th>
-                        <th className="px-8 py-5 text-center">Delete</th>
-                        <th className="px-8 py-5 text-center">Approve</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50">
-                    {['Workforce', 'Payroll', 'Wallet', 'Recruitment', 'Performance', 'Settings'].map((mod, i) => (
-                        <tr key={i} className="hover:bg-slate-50/50 transition-all">
-                          <td className="px-10 py-5">
-                              <span className="text-xs font-black text-slate-700 uppercase">{mod}</span>
-                          </td>
-                          {[1, 2, 3, 4, 5].map((cell) => (
-                            <td key={cell} className="px-8 py-5 text-center">
-                                <div className="flex justify-center">
-                                  <input 
-                                    type="checkbox" 
-                                    defaultChecked={cell < 4 || (mod === 'Workforce' && cell === 5)} 
-                                    disabled={mod === 'Settings' && cell > 1}
-                                    className="w-5 h-5 rounded-lg border-2 border-slate-200 text-indigo-600 focus:ring-indigo-500/20 transition-all cursor-pointer accent-indigo-600" 
-                                  />
-                                </div>
-                            </td>
+
+            {!selectedRole ? (
+              <div className="p-16 text-center">
+                <ShieldCheck className="mx-auto text-slate-200 mb-4" size={48} />
+                <p className="text-sm font-bold text-slate-400">Select a role above to view and edit its permissions.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                    <thead className="bg-slate-50/50 text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
+                      <tr>
+                          <th className="px-10 py-5">Module</th>
+                          {PERMISSION_COLUMNS.map((col) => (
+                            <th key={col.key} className="px-8 py-5 text-center">{col.label}</th>
                           ))}
-                        </tr>
-                    ))}
-                  </tbody>
-              </table>
-            </div>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {PERMISSION_MODULES.map((mod) => (
+                          <tr key={mod.key} className="hover:bg-slate-50/50 transition-all">
+                            <td className="px-10 py-5">
+                                <span className="text-xs font-black text-slate-700 uppercase">{mod.label}</span>
+                            </td>
+                            {PERMISSION_COLUMNS.map((col) => (
+                              <td key={col.key} className="px-8 py-5 text-center">
+                                  <div className="flex justify-center">
+                                    {mod.actions.includes(col.key) ? (
+                                      <input
+                                        type="checkbox"
+                                        checked={!!permissionsDraft[mod.key]?.[col.key]}
+                                        onChange={() => togglePermission(mod.key, col.key)}
+                                        className="w-5 h-5 rounded-lg border-2 border-slate-200 text-indigo-600 focus:ring-indigo-500/20 transition-all cursor-pointer accent-indigo-600"
+                                      />
+                                    ) : (
+                                      <span className="text-slate-200">—</span>
+                                    )}
+                                  </div>
+                              </td>
+                            ))}
+                          </tr>
+                      ))}
+                    </tbody>
+                </table>
+              </div>
+            )}
         </div>
       </div>
     );

@@ -58,13 +58,14 @@ import {
 } from "lucide-react";
 import { usePopup } from "../../components/PopupProvider";
 import { Employee } from "../../types/index";
-import { useEmployees, useCreateEmployee, useDeleteAdminEmployee, useUpdateAdminEmployee, useDepartments } from "../../api/client";
+import { useEmployees, useCreateEmployee, useDeleteAdminEmployee, useUpdateAdminEmployee, useDepartments, useRoles } from "../../api/client";
 import Celebration from "../../components/Celebration";
 import EmployeeDetail from "./EmployeeDetail";
 
 const Workforce: React.FC = () => {
   const { data: employees = [] } = useEmployees();
   const { data: departments = [] } = useDepartments();
+  const { data: customRoles = [] } = useRoles();
   const createEmployeeMutation = useCreateEmployee();
   const deleteEmployeeMutation = useDeleteAdminEmployee();
   const updateEmployeeMutation = useUpdateAdminEmployee();
@@ -330,6 +331,21 @@ const Workforce: React.FC = () => {
                   <option value="">Select department...</option>
                   {departments.map((d: any) => (
                     <option key={d.id} value={d.id}>{d.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  Custom Role (optional)
+                </label>
+                <select
+                  value={formData.customRoleId || ""}
+                  onChange={(e) => setFormData({ ...formData, customRoleId: e.target.value || null })}
+                  className="w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-bold appearance-none"
+                >
+                  <option value="">None — base role only</option>
+                  {customRoles.map((r: any) => (
+                    <option key={r.id} value={r.id}>{r.name}</option>
                   ))}
                 </select>
               </div>

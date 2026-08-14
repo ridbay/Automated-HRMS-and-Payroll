@@ -46,6 +46,56 @@ export class LeaveService {
     return requests;
   }
 
+  async getPendingTeamLeaveRequests(companyId: string, managerId: string) {
+    // Pending requests from employees who report directly to this manager
+    return this.db
+      .select({
+        id: schema.leaveRequests.id,
+        employeeId: schema.leaveRequests.employeeId,
+        name: schema.employees.name,
+        lastName: schema.employees.lastName,
+        avatar: schema.employees.avatar,
+        type: schema.leaveRequests.type,
+        startDate: schema.leaveRequests.startDate,
+        endDate: schema.leaveRequests.endDate,
+        days: schema.leaveRequests.days,
+        reason: schema.leaveRequests.reason,
+        status: schema.leaveRequests.status,
+      })
+      .from(schema.leaveRequests)
+      .innerJoin(schema.employees, eq(schema.leaveRequests.employeeId, schema.employees.id))
+      .where(
+        and(
+          eq(schema.leaveRequests.companyId, companyId),
+          eq(schema.leaveRequests.status, 'pending'),
+          eq(schema.employees.managerId, managerId)
+        )
+      )
+      .all();
+  }
+
+  async updateTeamLeaveRequestStatus(companyId: string, managerId: string, requestId: string, data: { status: string; managerComment?: string }) {
+    const request = await this.db.query.leaveRequests.findFirst({
+      where: and(eq(schema.leaveRequests.id, requestId), eq(schema.leaveRequests.companyId, companyId)),
+    });
+    if (!request) return null;
+
+    const employee = await this.db.query.employees.findFirst({
+      where: eq(schema.employees.id, request.employeeId),
+    });
+
+    // Only the requester's own manager may act on it — not just anyone with a MANAGER role
+    if (!employee || employee.managerId !== managerId) {
+      return null;
+    }
+
+    return this.updateLeaveRequestStatus(companyId, requestId, {
+      status: data.status,
+      managerComment: data.managerComment,
+      managerId,
+    });
+  }
+
   async getEmployeeLeaveRequests(companyId: string, employeeId: string) {
     return this.db.query.leaveRequests.findMany({
       where: and(
