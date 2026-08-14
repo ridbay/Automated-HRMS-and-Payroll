@@ -57,13 +57,16 @@ import {
   FileCheck,
 } from "lucide-react";
 import { Employee } from "../../types/index";
-import { useEmployees, useCreateEmployee } from "../../api/client";
+import { useEmployees, useCreateEmployee, useDeleteAdminEmployee, useUpdateAdminEmployee, useDepartments } from "../../api/client";
 import Celebration from "../../components/Celebration";
 import EmployeeDetail from "./EmployeeDetail";
 
 const Workforce: React.FC = () => {
   const { data: employees = [] } = useEmployees();
+  const { data: departments = [] } = useDepartments();
   const createEmployeeMutation = useCreateEmployee();
+  const deleteEmployeeMutation = useDeleteAdminEmployee();
+  const updateEmployeeMutation = useUpdateAdminEmployee();
 
   const [formData, setFormData] = useState<any>({
     role: "Software Engineer",
@@ -310,16 +313,22 @@ const Workforce: React.FC = () => {
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
                   Department
                 </label>
-                <select 
-                  value={formData.department || "Engineering"}
-                  onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                <select
+                  value={formData.departmentId || ""}
+                  onChange={(e) => {
+                    const dept = departments.find((d: any) => d.id === e.target.value);
+                    setFormData({
+                      ...formData,
+                      departmentId: e.target.value || undefined,
+                      department: dept ? dept.name : formData.department,
+                    });
+                  }}
                   className="w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-bold appearance-none"
                 >
-                  <option>Engineering</option>
-                  <option>Design</option>
-                  <option>People</option>
-                  <option>Sales</option>
-                  <option>Marketing</option>
+                  <option value="">Select department...</option>
+                  {departments.map((d: any) => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
+                  ))}
                 </select>
               </div>
               <div className="space-y-2">
@@ -1169,7 +1178,15 @@ const Workforce: React.FC = () => {
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3 pt-6 border-t border-slate-50">
-                  <button className="flex-1 py-3 bg-slate-50 text-slate-600 rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-slate-100 flex items-center justify-center gap-2">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setFormData(emp);
+                      setIsWizardOpen(true);
+                      setWizardStep(1);
+                    }}
+                    className="flex-1 py-3 bg-slate-50 text-slate-600 rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-slate-100 flex items-center justify-center gap-2"
+                  >
                     <Settings2 size={12} /> Edit
                   </button>
                   <button
@@ -1287,12 +1304,34 @@ const Workforce: React.FC = () => {
                     <td className="px-8 py-5 text-right">
                       <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
                         <button
-                          onClick={() => setSelectedEmployeeId(emp.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setFormData(emp);
+                            setIsWizardOpen(true);
+                            setWizardStep(1);
+                          }}
+                          className="p-3 bg-white border rounded-xl text-slate-400 hover:text-indigo-600 shadow-sm"
+                        >
+                          <Settings2 size={16} />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedEmployeeId(emp.id);
+                          }}
                           className="p-3 bg-white border rounded-xl text-slate-400 hover:text-indigo-600 shadow-sm"
                         >
                           <Eye size={16} />
                         </button>
-                        <button className="p-3 bg-white border rounded-xl text-slate-400 hover:text-rose-600 shadow-sm">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (window.confirm("Are you sure you want to delete this employee?")) {
+                              deleteEmployeeMutation.mutate(emp.id);
+                            }
+                          }}
+                          className="p-3 bg-white border rounded-xl text-slate-400 hover:text-rose-600 shadow-sm"
+                        >
                           <Trash size={16} />
                         </button>
                       </div>
@@ -1390,8 +1429,18 @@ const Workforce: React.FC = () => {
                 <Send size={16} /> Send Email
               </button>
               <button
+                onClick={() => {
+                  if (window.confirm(`Are you sure you want to delete ${selectedEmployees.length} employees?`)) {
+                    Promise.all(selectedEmployees.map(id => deleteEmployeeMutation.mutateAsync(id))).then(() => setSelectedEmployees([]));
+                  }
+                }}
+                className="flex items-center gap-2 px-6 py-3 bg-rose-500/20 text-rose-500 hover:bg-rose-500/30 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all"
+              >
+                <Trash size={16} /> Delete
+              </button>
+              <button
                 onClick={() => setSelectedEmployees([])}
-                className="p-3 bg-rose-500/20 text-rose-500 rounded-2xl hover:bg-rose-500/30 transition-all"
+                className="p-3 bg-white/10 text-white rounded-2xl hover:bg-white/20 transition-all"
               >
                 <X size={20} />
               </button>
@@ -1627,31 +1676,45 @@ const Workforce: React.FC = () => {
                     onClick={() => {
                       if (wizardStep < 8) setWizardStep((prev) => prev + 1);
                       else {
-                        createEmployeeMutation.mutate(
-                          {
-                            ...formData,
-                            hireDate: formData.hireDate || new Date().toISOString().split("T")[0],
-                          },
-                          {
-                            onSuccess: (data: any) => {
-                              setIsWizardOpen(false);
-                              setWizardStep(1);
-                              triggerCelebration();
-                              if (data && data.temporaryPassword) {
-                                setCreatedEmployeePassword({
-                                  name: `${formData.name || ''} ${formData.lastName || ''}`.trim(),
-                                  pass: data.temporaryPassword
-                                });
-                              }
-                            },
-                          },
-                        );
+                        const payload = {
+                          ...formData,
+                          hireDate: formData.hireDate || new Date().toISOString().split("T")[0],
+                        };
+                        const handleSuccess = (data: any) => {
+                          setIsWizardOpen(false);
+                          setWizardStep(1);
+                          triggerCelebration();
+                          if (!formData.id && data && data.temporaryPassword) {
+                            setCreatedEmployeePassword({
+                              name: `${formData.name || ''} ${formData.lastName || ''}`.trim(),
+                              pass: data.temporaryPassword
+                            });
+                          }
+                          setFormData({
+                            role: "Software Engineer",
+                            department: "Engineering",
+                            employmentType: "Full-time",
+                            status: "active",
+                            salary: 120000,
+                            emergencyContacts: [{ name: "", relationship: "Spouse", phone: "", email: "", isPrimary: true }],
+                          });
+                        };
+
+                        const handleError = (error: any) => {
+                          alert(error.message || "An error occurred");
+                        };
+
+                        if (formData.id) {
+                          updateEmployeeMutation.mutate({ id: formData.id, data: payload }, { onSuccess: handleSuccess, onError: handleError });
+                        } else {
+                          createEmployeeMutation.mutate(payload, { onSuccess: handleSuccess, onError: handleError });
+                        }
                       }
                     }}
                     className="px-12 py-4 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-100 hover:scale-105 active:scale-95 transition-all flex items-center gap-3"
                   >
                     {wizardStep === 8
-                      ? "Confirm & Create Employee"
+                      ? (formData.id ? "Confirm & Update Employee" : "Confirm & Create Employee")
                       : "Next: " +
                         (wizardStep === 7 ? "Finalize" : "Continue")}{" "}
                     <ArrowRight size={18} />

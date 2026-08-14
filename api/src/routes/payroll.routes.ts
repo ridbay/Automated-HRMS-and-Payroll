@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { previewPayroll, lockPayroll } from '../controllers/admin/payroll.controller';
+import { previewPayroll, lockPayroll, getEmployeePayslips } from '../controllers/admin/payroll.controller';
 import { tenantMiddleware } from '../middlewares/tenant.middleware';
 
 const payrollRoutes = new Hono();
@@ -9,5 +9,6 @@ payrollRoutes.use('*', tenantMiddleware);
 
 payrollRoutes.get('/preview', previewPayroll);
 payrollRoutes.post('/lock', lockPayroll);
+payrollRoutes.get('/employee/:id/payslips', getEmployeePayslips);
 
 export default payrollRoutes;

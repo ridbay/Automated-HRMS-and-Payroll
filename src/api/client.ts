@@ -36,6 +36,19 @@ export const loginUser = async (credentials: any) => {
   return res.json();
 };
 
+export const registerCompany = async (data: any) => {
+  const res = await fetch(`${API_URL}/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || 'Registration failed');
+  }
+  return res.json();
+};
+
 export const changeUserPassword = async (data: any) => {
   const res = await fetchWithTenant(`${API_URL}/auth/change-password`, {
     method: 'POST',
@@ -63,7 +76,14 @@ export const createEmployee = async (newEmployee: Partial<Employee>): Promise<Em
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(newEmployee),
   });
-  if (!res.ok) throw new Error('Failed to create employee');
+  if (!res.ok) {
+    let errorMsg = 'Failed to create employee';
+    try {
+      const errData = await res.json();
+      if (errData.error) errorMsg = errData.error;
+    } catch (e) {}
+    throw new Error(errorMsg);
+  }
   return res.json();
 };
 
@@ -119,6 +139,141 @@ export const useCreateEmployee = () => {
   });
 };
 
+export const useUpdateAdminEmployee = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: any }) => {
+      const response = await fetchWithTenant(`${API_URL}/admin/employees/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) throw new Error('Failed to update employee');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+    },
+  });
+};
+
+export const useDeleteAdminEmployee = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const response = await fetchWithTenant(`${API_URL}/admin/employees/${id}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) throw new Error('Failed to delete employee');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+    },
+  });
+};
+
+export const useEmployeeProfile = (id: string) => {
+  return useQuery({
+    queryKey: ['employee', id],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/admin/employees/${id}`);
+      if (!res.ok) throw new Error('Failed to fetch employee profile');
+      return res.json();
+    },
+    enabled: !!id,
+  });
+};
+
+export const useEmployeeDirectReports = (id: string) => {
+  return useQuery({
+    queryKey: ['employee', id, 'direct-reports'],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/admin/employees/${id}/direct-reports`);
+      if (!res.ok) throw new Error('Failed to fetch direct reports');
+      return res.json();
+    },
+    enabled: !!id,
+  });
+};
+
+export const useAddAdminEmergencyContact = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ employeeId, data }: { employeeId: string; data: any }) => {
+      const res = await fetchWithTenant(`${API_URL}/admin/employees/${employeeId}/emergency-contacts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('Failed to add emergency contact');
+      return res.json();
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['employee', variables.employeeId] });
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+    },
+  });
+};
+
+export const useDeleteAdminEmergencyContact = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ employeeId, contactId }: { employeeId: string; contactId: string }) => {
+      const res = await fetchWithTenant(`${API_URL}/admin/employees/${employeeId}/emergency-contacts/${contactId}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) throw new Error('Failed to delete emergency contact');
+      return res.json();
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['employee', variables.employeeId] });
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+    },
+  });
+};
+
+export const useUploadEmployeeDocument = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ employeeId, file, name, type }: { employeeId: string; file: File; name: string; type: string }) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('name', name);
+      formData.append('type', type);
+
+      const res = await fetchWithTenant(`${API_URL}/admin/employees/${employeeId}/documents`, {
+        method: 'POST',
+        body: formData, // fetch automatically sets the correct multipart/form-data boundary
+      });
+      if (!res.ok) throw new Error('Failed to upload document');
+      return res.json();
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['employee', variables.employeeId] });
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+    },
+  });
+};
+
+export const useDeleteEmployeeDocument = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ employeeId, documentId }: { employeeId: string; documentId: string }) => {
+      const res = await fetchWithTenant(`${API_URL}/admin/employees/${employeeId}/documents/${documentId}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) throw new Error('Failed to delete document');
+      return res.json();
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['employee', variables.employeeId] });
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+    },
+  });
+};
+
+
 export const useDeleteJobRequisition = () => {
   const queryClient = useQueryClient();
   return useMutation({
@@ -137,6 +292,17 @@ export const useDeleteJobRequisition = () => {
 };
 
 // --- Settings & API Keys API ---
+
+export const useDashboardStats = () => {
+  return useQuery({
+    queryKey: ['dashboardStats'],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/admin/dashboard/stats`);
+      if (!res.ok) throw new Error('Failed to fetch dashboard stats');
+      return res.json();
+    },
+  });
+};
 
 export const useSettings = () => {
   return useQuery({
@@ -314,6 +480,74 @@ export const useDeleteDepartment = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['departments'] });
+    },
+  });
+};
+
+export const useUpdateDepartment = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: any }) => {
+      const res = await fetchWithTenant(`${API_URL}/admin/departments/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('Failed to update department');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['departments'] });
+    },
+  });
+};
+
+export const useDepartmentMembers = (departmentId?: string) => {
+  return useQuery({
+    queryKey: ['departments', departmentId, 'members'],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/admin/departments/${departmentId}/members`);
+      if (!res.ok) throw new Error('Failed to fetch department members');
+      return res.json();
+    },
+    enabled: !!departmentId,
+  });
+};
+
+export const useAssignDepartmentMember = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ departmentId, employeeId }: { departmentId: string; employeeId: string }) => {
+      const res = await fetchWithTenant(`${API_URL}/admin/departments/${departmentId}/members`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employeeId }),
+      });
+      if (!res.ok) throw new Error('Failed to add employee to department');
+      return res.json();
+    },
+    onSuccess: (_data, { departmentId }) => {
+      queryClient.invalidateQueries({ queryKey: ['departments'] });
+      queryClient.invalidateQueries({ queryKey: ['departments', departmentId, 'members'] });
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+    },
+  });
+};
+
+export const useRemoveDepartmentMember = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ departmentId, employeeId }: { departmentId: string; employeeId: string }) => {
+      const res = await fetchWithTenant(`${API_URL}/admin/departments/${departmentId}/members/${employeeId}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) throw new Error('Failed to remove employee from department');
+      return res.json();
+    },
+    onSuccess: (_data, { departmentId }) => {
+      queryClient.invalidateQueries({ queryKey: ['departments'] });
+      queryClient.invalidateQueries({ queryKey: ['departments', departmentId, 'members'] });
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
     },
   });
 };
@@ -805,4 +1039,105 @@ export const submitAssessment = async (id: string) => {
   });
   if (!res.ok) throw new Error('Failed to submit assessment');
   return res.json();
+};
+export const useEmployeePayslips = (employeeId: string) => {
+  return useQuery({
+    queryKey: ['employeePayslips', employeeId],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/payroll/employee/${employeeId}/payslips`);
+      if (!res.ok) throw new Error('Failed to fetch payslips');
+      return res.json();
+    },
+    enabled: !!employeeId,
+  });
+};
+
+export const useEmployeeBenefits = (employeeId: string) => {
+  return useQuery({
+    queryKey: ['employeeBenefits', employeeId],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/benefits/employee/${employeeId}`);
+      if (!res.ok) throw new Error('Failed to fetch benefits');
+      return res.json();
+    },
+    enabled: !!employeeId,
+  });
+};
+
+export const useUpdateEmployeeBenefits = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ employeeId, data }: { employeeId: string; data: any }) => {
+      const res = await fetchWithTenant(`${API_URL}/benefits/employee/${employeeId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('Failed to update benefits');
+      return res.json();
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['employeeBenefits', variables.employeeId] });
+    },
+  });
+};
+
+export const useEmployeeTrainings = (employeeId: string) => {
+  return useQuery({
+    queryKey: ['employeeTrainings', employeeId],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/training/employee/${employeeId}`);
+      if (!res.ok) throw new Error('Failed to fetch trainings');
+      return res.json();
+    },
+    enabled: !!employeeId,
+  });
+};
+
+export const useAddEmployeeTraining = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ employeeId, data }: { employeeId: string; data: any }) => {
+      const res = await fetchWithTenant(`${API_URL}/training/employee/${employeeId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('Failed to add training');
+      return res.json();
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['employeeTrainings', variables.employeeId] });
+    },
+  });
+};
+
+export const useEmployeeAssessments = (employeeId: string) => {
+  return useQuery({
+    queryKey: ['employeeAssessments', employeeId],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/performance/employee/${employeeId}`);
+      if (!res.ok) throw new Error('Failed to fetch assessments');
+      return res.json();
+    },
+    enabled: !!employeeId,
+  });
+};
+
+export const useCreateAssessment = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ employeeId, data }: { employeeId: string; data: any }) => {
+      const res = await fetchWithTenant(`${API_URL}/performance/employee/${employeeId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('Failed to create assessment');
+      return res.json();
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['employeeAssessments', variables.employeeId] });
+    },
+  });
 };

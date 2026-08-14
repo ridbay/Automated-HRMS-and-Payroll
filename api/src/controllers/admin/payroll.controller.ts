@@ -33,3 +33,39 @@ export const lockPayroll = async (c: Context) => {
     return c.json({ error: error.message || 'Internal Server Error' }, 500);
   }
 };
+
+import { eq, and, desc } from 'drizzle-orm';
+import { payslips, payrollRuns } from '../../db/schema';
+import { getDb } from '../../db/client';
+
+export const getEmployeePayslips = async (c: Context) => {
+  try {
+    const employeeId = c.req.param('id');
+    const companyId = c.get('companyId');
+    const db = getDb(c.env.DB);
+
+    const records = await db
+      .select({
+        id: payslips.id,
+        runId: payslips.runId,
+        basicSalary: payslips.basicSalary,
+        allowances: payslips.allowances,
+        grossPay: payslips.grossPay,
+        taxDeductions: payslips.taxDeductions,
+        pensionDeductions: payslips.pensionDeductions,
+        netPay: payslips.netPay,
+        createdAt: payslips.createdAt,
+        periodMonth: payrollRuns.periodMonth,
+        periodYear: payrollRuns.periodYear,
+        status: payrollRuns.status
+      })
+      .from(payslips)
+      .innerJoin(payrollRuns, eq(payslips.runId, payrollRuns.id))
+      .where(and(eq(payslips.employeeId, employeeId), eq(payrollRuns.companyId, companyId)))
+      .orderBy(desc(payrollRuns.periodYear), desc(payrollRuns.periodMonth));
+
+    return c.json(records);
+  } catch (error: any) {
+    return c.json({ error: error.message }, 500);
+  }
+};

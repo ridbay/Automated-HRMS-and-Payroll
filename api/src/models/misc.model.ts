@@ -30,3 +30,15 @@ export const jobRequisitions = sqliteTable('job_requisitions', {
   createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text('updated_at').$onUpdate(() => new Date().toISOString()),
 });
+
+export const employeeTrainings = sqliteTable('employee_trainings', {
+  id: text('id').primaryKey(),
+  companyId: text('company_id').notNull().references(() => companies.id),
+  employeeId: text('employee_id').notNull(),
+  courseName: text('course_name').notNull(),
+  provider: text('provider').notNull(),
+  status: text('status').notNull().default('in_progress'), // 'in_progress' | 'completed' | 'assigned'
+  date: text('date').notNull(), // Started/Completed date
+  createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text('updated_at').$onUpdate(() => new Date().toISOString()),
+});

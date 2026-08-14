@@ -1,4 +1,5 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
+const RegisterPage = React.lazy(() => import('./features/core/RegisterPage'));
 import Sidebar from "./layouts/Sidebar";
 import Header from "./layouts/Header";
 import Dashboard from "./features/core/Dashboard";
@@ -96,8 +97,20 @@ const AppContent: React.FC = () => {
     }
   };
 
+  const [isRegistering, setIsRegistering] = useState(false);
+
   if (!isAuthenticated) {
-    return <LoginPage onLogin={login} />;
+    if (isRegistering) {
+      return (
+        <React.Suspense fallback={<div>Loading...</div>}>
+          <RegisterPage 
+            onLogin={login} 
+            onNavigateLogin={() => setIsRegistering(false)} 
+          />
+        </React.Suspense>
+      );
+    }
+    return <LoginPage onLogin={login} onNavigateRegister={() => setIsRegistering(true)} />;
   }
 
   // Ensure user is not null here for Header and Sidebar

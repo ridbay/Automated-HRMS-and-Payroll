@@ -1,10 +1,11 @@
 import { Hono } from 'hono';
 import { AppEnv } from '../types';
-import { login, changePassword } from '../controllers/auth.controller';
+import { login, changePassword, registerCompany } from '../controllers/auth.controller';
 
 const router = new Hono<AppEnv>();
 
 router.post('/login', login);
+router.post('/register', registerCompany);
 router.post('/change-password', changePassword);
 
 export default router;

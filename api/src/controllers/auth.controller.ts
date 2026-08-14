@@ -40,3 +40,22 @@ export const changePassword = async (c: Context<AppEnv>) => {
     return c.json({ error: error.message }, 400);
   }
 };
+
+export const registerCompany = async (c: Context<AppEnv>) => {
+  try {
+    const payload = await c.req.json();
+    const { companyName, adminFirstName, adminLastName, adminEmail, adminPassword } = payload;
+    
+    if (!companyName || !adminFirstName || !adminLastName || !adminEmail || !adminPassword) {
+      return c.json({ error: 'All fields are required' }, 400);
+    }
+
+    const authService = new AuthService(c.env.DB);
+    const jwtSecret = c.env.JWT_SECRET || 'fallback_secret_for_local_dev';
+    
+    const result = await authService.registerCompany(payload, jwtSecret);
+    return c.json(result);
+  } catch (error: any) {
+    return c.json({ error: error.message }, 400);
+  }
+};

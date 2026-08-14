@@ -103,6 +103,7 @@ export interface Employee {
   maritalStatus?: string;
   role: string;
   department: string;
+  departmentId?: string;
   location?: string;
   employmentType: 'Full-time' | 'Contract' | 'Intern' | 'Consultant';
   status: 'active' | 'onboarding' | 'on_leave' | 'terminated' | 'probation' | 'notice';
@@ -121,6 +122,27 @@ export interface Employee {
   salaryHistory?: SalaryHistoryRecord[];
   performanceRating?: number;
   bankDetails?: BankDetails;
+}
+
+export interface DepartmentMember {
+  id: string;
+  name: string;
+  avatar?: string | null;
+}
+
+export interface Department {
+  id: string;
+  companyId: string;
+  name: string;
+  description?: string | null;
+  headCount?: number;
+  memberCount: number;
+  managerId?: string | null;
+  teamLeadId?: string | null;
+  manager: DepartmentMember | null;
+  teamLead: DepartmentMember | null;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface BankDetails {

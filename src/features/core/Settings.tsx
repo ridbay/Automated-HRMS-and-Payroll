@@ -10,14 +10,17 @@ import {
   Calendar, MapPin, Sliders, Smartphone,
   Info, ArrowRight, UserPlus, MoreHorizontal,
   LayoutGrid, Share2, Terminal, Code,
-  Copy, KeyRound, Loader2, PlaySquare, Workflow
+  Copy, KeyRound, Loader2, PlaySquare, Workflow,
+  X, ChevronDown, Crown, Star
 } from 'lucide-react';
-import { 
+import {
   useSettings, useUpdateSettings, useApiKeys, useCreateApiKey, useDeleteApiKey,
   useCompany, useUpdateCompany,
-  useDepartments, useCreateDepartment, useDeleteDepartment,
+  useDepartments, useCreateDepartment, useDeleteDepartment, useUpdateDepartment,
+  useDepartmentMembers, useAssignDepartmentMember, useRemoveDepartmentMember,
   useLocations, useCreateLocation, useDeleteLocation,
-  useRoles, useCreateRole, useUpdateRole, useDeleteRole
+  useRoles, useCreateRole, useUpdateRole, useDeleteRole,
+  useEmployees
 } from '../../api/client';
 
 const Settings: React.FC = () => {
@@ -54,12 +57,20 @@ const Settings: React.FC = () => {
   const updateCompanyMutation = useUpdateCompany();
   const { data: departments, isLoading: isDeptsLoading } = useDepartments();
   const { data: locations, isLoading: isLocsLoading } = useLocations();
+  const { data: employees = [] } = useEmployees();
   const createDept = useCreateDepartment();
   const deleteDept = useDeleteDepartment();
+  const updateDept = useUpdateDepartment();
+  const assignDeptMember = useAssignDepartmentMember();
+  const removeDeptMember = useRemoveDepartmentMember();
   const createLoc = useCreateLocation();
   const deleteLoc = useDeleteLocation();
   const { data: roles, isLoading: isRolesLoading } = useRoles();
   const createRole = useCreateRole();
+
+  const [expandedDeptId, setExpandedDeptId] = useState<string | null>(null);
+  const [newMemberByDept, setNewMemberByDept] = useState<Record<string, string>>({});
+  const { data: deptMembers, isLoading: isDeptMembersLoading } = useDepartmentMembers(expandedDeptId || undefined);
 
   const handleSaveProfile = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -182,67 +193,190 @@ const Settings: React.FC = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-          <div className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm space-y-6">
-            <h3 className="font-black text-slate-800 text-lg flex items-center gap-2"><Globe className="text-indigo-500" /> Departments</h3>
-            <form 
-              onSubmit={(e) => {
-                e.preventDefault();
-                const fd = new FormData(e.currentTarget);
-                if (fd.get('name')) createDept.mutate({ name: fd.get('name') as string, description: fd.get('description') as string });
-                e.currentTarget.reset();
-              }}
-              className="flex gap-4 mb-6"
-            >
-              <input name="name" placeholder="Name (e.g. Engineering)" className="w-1/2 px-4 py-3 bg-slate-50 border-none rounded-xl font-bold text-xs outline-none" required />
-              <input name="description" placeholder="Description" className="w-1/2 px-4 py-3 bg-slate-50 border-none rounded-xl font-bold text-xs outline-none" />
-              <button type="submit" disabled={createDept.isPending} className="px-4 py-3 bg-indigo-600 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700">Add</button>
-            </form>
-            <div className="space-y-3">
-              {isDeptsLoading ? <Loader2 className="animate-spin text-indigo-500 mx-auto" /> : departments?.map((d: any) => (
-                <div key={d.id} className="flex justify-between items-center p-4 bg-slate-50 rounded-2xl border border-slate-200">
-                  <div>
-                    <h4 className="font-bold text-slate-800">{d.name}</h4>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{d.description || 'No description'}</p>
-                  </div>
-                  <button onClick={() => deleteDept.mutate(d.id)} className="text-rose-400 hover:text-rose-600"><Trash2 size={16} /></button>
-                </div>
-              ))}
+        <div className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm space-y-6">
+          <h3 className="font-black text-slate-800 text-lg flex items-center gap-2"><Globe className="text-indigo-500" /> Departments</h3>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const fd = new FormData(e.currentTarget);
+              if (fd.get('name')) {
+                createDept.mutate({
+                  name: fd.get('name') as string,
+                  description: fd.get('description') as string,
+                  managerId: (fd.get('managerId') as string) || undefined,
+                  teamLeadId: (fd.get('teamLeadId') as string) || undefined,
+                });
+              }
+              e.currentTarget.reset();
+            }}
+            className="space-y-3 mb-6 p-6 bg-slate-50 rounded-2xl border border-slate-100"
+          >
+            <div className="flex gap-4">
+              <input name="name" placeholder="Name (e.g. Engineering)" className="w-1/2 px-4 py-3 bg-white border border-slate-200 rounded-xl font-bold text-xs outline-none" required />
+              <input name="description" placeholder="Description" className="w-1/2 px-4 py-3 bg-white border border-slate-200 rounded-xl font-bold text-xs outline-none" />
             </div>
-          </div>
+            <div className="flex gap-4">
+              <select name="managerId" defaultValue="" className="w-1/2 px-4 py-3 bg-white border border-slate-200 rounded-xl font-bold text-xs outline-none">
+                <option value="">Manager (optional)</option>
+                {employees.map((e: any) => <option key={e.id} value={e.id}>{e.name} {e.lastName}</option>)}
+              </select>
+              <select name="teamLeadId" defaultValue="" className="w-1/2 px-4 py-3 bg-white border border-slate-200 rounded-xl font-bold text-xs outline-none">
+                <option value="">Team Lead (optional)</option>
+                {employees.map((e: any) => <option key={e.id} value={e.id}>{e.name} {e.lastName}</option>)}
+              </select>
+            </div>
+            <button type="submit" disabled={createDept.isPending} className="w-full py-3 bg-indigo-600 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700">+ Add Department</button>
+          </form>
 
-          <div className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm space-y-6">
-            <h3 className="font-black text-slate-800 text-lg flex items-center gap-2"><MapPin className="text-indigo-500" /> Locations</h3>
-            <form 
-              onSubmit={(e) => {
-                e.preventDefault();
-                const fd = new FormData(e.currentTarget);
-                if (fd.get('name')) createLoc.mutate({ name: fd.get('name') as string, address: fd.get('address') as string, city: fd.get('city') as string, country: fd.get('country') as string });
-                e.currentTarget.reset();
-              }}
-              className="space-y-3 mb-6"
-            >
-              <div className="flex gap-4">
-                <input name="name" placeholder="Name (e.g. HQ)" className="w-1/2 px-4 py-3 bg-slate-50 border-none rounded-xl font-bold text-xs outline-none" required />
-                <input name="city" placeholder="City" className="w-1/2 px-4 py-3 bg-slate-50 border-none rounded-xl font-bold text-xs outline-none" />
-              </div>
-              <div className="flex gap-4">
-                <input name="country" placeholder="Country" className="w-1/2 px-4 py-3 bg-slate-50 border-none rounded-xl font-bold text-xs outline-none" />
-                <input name="address" placeholder="Full Address" className="w-1/2 px-4 py-3 bg-slate-50 border-none rounded-xl font-bold text-xs outline-none" required />
-              </div>
-              <button type="submit" disabled={createLoc.isPending} className="w-full py-3 bg-indigo-600 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700">Add Location</button>
-            </form>
-            <div className="space-y-3">
-              {isLocsLoading ? <Loader2 className="animate-spin text-indigo-500 mx-auto" /> : locations?.map((l: any) => (
-                <div key={l.id} className="flex justify-between items-center p-4 bg-slate-50 rounded-2xl border border-slate-200">
-                  <div>
-                    <h4 className="font-bold text-slate-800">{l.name}</h4>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{l.city}, {l.country}</p>
+          <div className="space-y-3">
+            {isDeptsLoading ? <Loader2 className="animate-spin text-indigo-500 mx-auto" /> : departments?.map((d: any) => {
+              const isExpanded = expandedDeptId === d.id;
+              return (
+                <div key={d.id} className="bg-slate-50 rounded-2xl border border-slate-200 overflow-hidden">
+                  <div className="flex justify-between items-start p-4 gap-4">
+                    <div className="min-w-0">
+                      <h4 className="font-bold text-slate-800 truncate">{d.name}</h4>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest truncate">{d.description || 'No description'}</p>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span className="px-3 py-1 bg-white border border-slate-200 rounded-lg text-[9px] font-black text-slate-500 uppercase tracking-widest">
+                        {d.memberCount || 0} {d.memberCount === 1 ? 'member' : 'members'}
+                      </span>
+                      <button onClick={() => deleteDept.mutate(d.id)} className="text-rose-400 hover:text-rose-600"><Trash2 size={16} /></button>
+                    </div>
                   </div>
-                  <button onClick={() => deleteLoc.mutate(l.id)} className="text-rose-400 hover:text-rose-600"><Trash2 size={16} /></button>
+
+                  <div className="px-4 pb-4 grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1"><Crown size={10} /> Manager</label>
+                      <select
+                        value={d.managerId || ''}
+                        onChange={(e) => updateDept.mutate({ id: d.id, data: { managerId: e.target.value || null } })}
+                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-bold text-xs outline-none"
+                      >
+                        <option value="">Unassigned</option>
+                        {employees.map((e: any) => <option key={e.id} value={e.id}>{e.name} {e.lastName}</option>)}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1"><Star size={10} /> Team Lead</label>
+                      <select
+                        value={d.teamLeadId || ''}
+                        onChange={(e) => updateDept.mutate({ id: d.id, data: { teamLeadId: e.target.value || null } })}
+                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-bold text-xs outline-none"
+                      >
+                        <option value="">Unassigned</option>
+                        {employees.map((e: any) => <option key={e.id} value={e.id}>{e.name} {e.lastName}</option>)}
+                      </select>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => setExpandedDeptId(isExpanded ? null : d.id)}
+                    className="w-full flex items-center justify-center gap-2 py-3 bg-white border-t border-slate-200 text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:bg-indigo-50/50 transition-colors"
+                  >
+                    {isExpanded ? 'Hide Members' : 'Manage Members'}
+                    <ChevronDown size={14} className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  <AnimatePresence>
+                    {isExpanded && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="overflow-hidden border-t border-slate-200 bg-white"
+                      >
+                        <div className="p-4 space-y-3">
+                          <div className="flex gap-2">
+                            <select
+                              value={newMemberByDept[d.id] || ''}
+                              onChange={(e) => setNewMemberByDept((prev) => ({ ...prev, [d.id]: e.target.value }))}
+                              className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs outline-none"
+                            >
+                              <option value="">Add existing employee...</option>
+                              {employees.filter((e: any) => e.departmentId !== d.id).map((e: any) => (
+                                <option key={e.id} value={e.id}>{e.name} {e.lastName}</option>
+                              ))}
+                            </select>
+                            <button
+                              onClick={() => {
+                                const employeeId = newMemberByDept[d.id];
+                                if (!employeeId) return;
+                                assignDeptMember.mutate({ departmentId: d.id, employeeId });
+                                setNewMemberByDept((prev) => ({ ...prev, [d.id]: '' }));
+                              }}
+                              disabled={!newMemberByDept[d.id] || assignDeptMember.isPending}
+                              className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 disabled:opacity-40"
+                            >
+                              Add
+                            </button>
+                          </div>
+
+                          <div className="space-y-2">
+                            {isDeptMembersLoading ? (
+                              <Loader2 className="animate-spin text-indigo-500 mx-auto" size={18} />
+                            ) : deptMembers?.length ? (
+                              deptMembers.map((m: any) => (
+                                <div key={m.id} className="flex justify-between items-center px-3 py-2 bg-slate-50 rounded-xl border border-slate-100">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <span className="text-xs font-bold text-slate-700 truncate">{m.name} {m.lastName}</span>
+                                    {m.id === d.managerId && <span className="px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-md text-[8px] font-black uppercase">Manager</span>}
+                                    {m.id === d.teamLeadId && <span className="px-2 py-0.5 bg-amber-50 text-amber-600 rounded-md text-[8px] font-black uppercase">Lead</span>}
+                                  </div>
+                                  <button
+                                    onClick={() => removeDeptMember.mutate({ departmentId: d.id, employeeId: m.id })}
+                                    className="text-slate-300 hover:text-rose-500 shrink-0"
+                                  >
+                                    <X size={14} />
+                                  </button>
+                                </div>
+                              ))
+                            ) : (
+                              <p className="text-[10px] text-slate-400 font-bold uppercase text-center py-3">No members yet</p>
+                            )}
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
-              ))}
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm space-y-6">
+          <h3 className="font-black text-slate-800 text-lg flex items-center gap-2"><MapPin className="text-indigo-500" /> Locations</h3>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const fd = new FormData(e.currentTarget);
+              if (fd.get('name')) createLoc.mutate({ name: fd.get('name') as string, address: fd.get('address') as string, city: fd.get('city') as string, country: fd.get('country') as string });
+              e.currentTarget.reset();
+            }}
+            className="space-y-3 mb-6"
+          >
+            <div className="flex gap-4">
+              <input name="name" placeholder="Name (e.g. HQ)" className="w-1/2 px-4 py-3 bg-slate-50 border-none rounded-xl font-bold text-xs outline-none" required />
+              <input name="city" placeholder="City" className="w-1/2 px-4 py-3 bg-slate-50 border-none rounded-xl font-bold text-xs outline-none" />
             </div>
+            <div className="flex gap-4">
+              <input name="country" placeholder="Country" className="w-1/2 px-4 py-3 bg-slate-50 border-none rounded-xl font-bold text-xs outline-none" />
+              <input name="address" placeholder="Full Address" className="w-1/2 px-4 py-3 bg-slate-50 border-none rounded-xl font-bold text-xs outline-none" required />
+            </div>
+            <button type="submit" disabled={createLoc.isPending} className="w-full py-3 bg-indigo-600 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700">Add Location</button>
+          </form>
+          <div className="space-y-3">
+            {isLocsLoading ? <Loader2 className="animate-spin text-indigo-500 mx-auto" /> : locations?.map((l: any) => (
+              <div key={l.id} className="flex justify-between items-center p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                <div>
+                  <h4 className="font-bold text-slate-800">{l.name}</h4>
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{l.city}, {l.country}</p>
+                </div>
+                <button onClick={() => deleteLoc.mutate(l.id)} className="text-rose-400 hover:text-rose-600"><Trash2 size={16} /></button>
+              </div>
+            ))}
           </div>
         </div>
       </div>

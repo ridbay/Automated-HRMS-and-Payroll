@@ -114,4 +114,70 @@ export class AuthService {
 
     return { success: true };
   }
+
+  async registerCompany(payload: any, jwtSecret: string) {
+    const { companyName, industry, adminFirstName, adminLastName, adminEmail, adminPassword } = payload;
+
+    // Check if email already exists
+    const existingEmployee = await this.db.query.employees.findFirst({
+      where: eq(schema.employees.email, adminEmail),
+    });
+
+    if (existingEmployee) {
+      throw new Error('Email is already in use');
+    }
+
+    const companyId = `comp-${crypto.randomUUID().split("-")[0].toUpperCase()}`;
+    const employeeId = `EMP-${crypto.randomUUID().split("-")[0].toUpperCase()}`;
+
+    // Create Company
+    await this.db.insert(schema.companies).values({
+      id: companyId,
+      name: companyName,
+      industry: industry || 'Software',
+    });
+
+    // Hash Password
+    const salt = generateSalt();
+    const hash = await hashPassword(adminPassword, salt);
+
+    // Create Employee
+    await this.db.insert(schema.employees).values({
+      id: employeeId,
+      companyId: companyId,
+      name: adminFirstName,
+      lastName: adminLastName,
+      email: adminEmail,
+      role: 'SUPER_ADMIN',
+      status: 'active',
+      department: 'Administration',
+      employmentType: 'Full-time',
+      passwordHash: hash,
+      passwordSalt: salt,
+      isPasswordChanged: true,
+    });
+
+    // Issue JWT
+    const tokenPayload = {
+      sub: employeeId,
+      companyId: companyId,
+      role: 'SUPER_ADMIN',
+      exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7, // 1 week
+    };
+
+    const token = await sign(tokenPayload, jwtSecret);
+
+    return {
+      token,
+      employee: {
+        id: employeeId,
+        name: adminFirstName,
+        lastName: adminLastName,
+        email: adminEmail,
+        role: 'SUPER_ADMIN',
+        avatar: null,
+        isPasswordChanged: true,
+      }
+    };
+  }
 }

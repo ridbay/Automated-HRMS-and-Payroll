@@ -59,12 +59,31 @@ export class EmployeeService {
     return directory;
   }
 
+  // Keeps the legacy free-text `department` label in sync with `departmentId`
+  // whenever a department is (re)assigned, regardless of entry point.
+  private async resolveDepartment(companyId: string, departmentId: string) {
+    return this.db.query.departments.findFirst({
+      where: and(eq(schema.departments.id, departmentId), eq(schema.departments.companyId, companyId)),
+    });
+  }
+
   async createForCompany(companyId: string, payload: any) {
-    const { emergencyContacts, ...employeeData } = payload;
+    const { emergencyContacts, ...rawEmployeeData } = payload;
+
+    // Convert empty strings to null to avoid constraint errors and normalize data
+    const employeeData: any = Object.fromEntries(
+      Object.entries(rawEmployeeData).map(([k, v]) => [k, v === '' ? null : v])
+    );
 
     // Auto generate ID if not provided
     if (!employeeData.id) {
       employeeData.id = `EMP-${crypto.randomUUID().split('-')[0].toUpperCase()}`;
+    }
+
+    if (employeeData.departmentId) {
+      const department = await this.resolveDepartment(companyId, employeeData.departmentId);
+      employeeData.department = department ? department.name : employeeData.department;
+      if (!department) employeeData.departmentId = null;
     }
 
     // Generate temporary password
@@ -92,13 +111,16 @@ export class EmployeeService {
 
     // Insert emergency contacts if any exist
     if (emergencyContacts && emergencyContacts.length > 0) {
-      const contactsToInsert = emergencyContacts.map((c: any) => ({
-        ...c,
-        id: `EC-${Math.floor(1000 + Math.random() * 9000)}`,
-        companyId,
-        employeeId: newEmployee.id,
-      }));
-      await this.db.insert(schema.emergencyContacts).values(contactsToInsert);
+      const validContacts = emergencyContacts.filter((c: any) => c.name && c.name.trim() !== '');
+      if (validContacts.length > 0) {
+        const contactsToInsert = validContacts.map((c: any) => ({
+          ...c,
+          id: `EC-${Math.floor(1000 + Math.random() * 9000)}`,
+          companyId,
+          employeeId: newEmployee.id,
+        }));
+        await this.db.insert(schema.emergencyContacts).values(contactsToInsert);
+      }
     }
 
     return safeEmployee;
@@ -164,6 +186,48 @@ export class EmployeeService {
     }
 
     return this.getEmployeeProfile(companyId, employeeId);
+  }
+
+  async updateEmployeeByAdmin(companyId: string, employeeId: string, data: Partial<typeof schema.employees.$inferInsert>) {
+    // Admin can update almost anything except id and companyId
+    const { id, companyId: cid, passwordHash, passwordSalt, ...rawUpdateData } = data as any;
+
+    // Convert empty strings to null
+    const updateData: any = Object.fromEntries(
+      Object.entries(rawUpdateData).map(([k, v]) => [k, v === '' ? null : v])
+    );
+
+    if ('departmentId' in updateData) {
+      if (updateData.departmentId) {
+        const department = await this.resolveDepartment(companyId, updateData.departmentId);
+        updateData.department = department ? department.name : null;
+        if (!department) updateData.departmentId = null;
+      } else {
+        // Explicitly unassigning the employee from any department
+        updateData.department = null;
+      }
+    }
+
+    if (Object.keys(updateData).length > 0) {
+      await this.db
+        .update(schema.employees)
+        .set({ ...updateData, updatedAt: new Date().toISOString() })
+        .where(and(eq(schema.employees.id, employeeId), eq(schema.employees.companyId, companyId)));
+    }
+
+    return this.getEmployeeProfile(companyId, employeeId);
+  }
+
+  async deleteEmployee(companyId: string, employeeId: string) {
+    // Note: In a real system, you might do a soft delete or reassign dependencies.
+    // Also delete references (emergency contacts, docs, etc.)
+    await this.db.delete(schema.emergencyContacts).where(eq(schema.emergencyContacts.employeeId, employeeId));
+    await this.db.delete(schema.employeeDocuments).where(eq(schema.employeeDocuments.employeeId, employeeId));
+
+    await this.db
+      .delete(schema.employees)
+      .where(and(eq(schema.employees.id, employeeId), eq(schema.employees.companyId, companyId)));
+    return { success: true };
   }
 
   async addEmergencyContact(companyId: string, employeeId: string, data: any) {

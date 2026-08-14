@@ -11,9 +11,10 @@ import { UserRole, User as UserType } from '../../types/index';
 
 interface LoginPageProps {
   onLogin: (user: UserType, token: string) => void;
+  onNavigateRegister?: () => void;
 }
 
-const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
+const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onNavigateRegister }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [email, setEmail] = useState('');
@@ -240,7 +241,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
 
           <div className="mt-12 text-center">
             <p className="text-sm font-medium text-slate-400">
-              New organization? <button className="text-indigo-600 font-bold hover:underline">Start your free trial</button>
+              New organization? <button type="button" onClick={onNavigateRegister} className="text-indigo-600 font-bold hover:underline">Start your free trial</button>
             </p>
           </div>
         </div>

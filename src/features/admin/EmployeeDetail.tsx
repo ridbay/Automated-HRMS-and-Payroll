@@ -41,8 +41,8 @@ import {
   Save,
   XCircle,
 } from "lucide-react";
-// import { formatCurrency } from "../../utils/format";
-import { getDocumentDownloadUrl, useEmployeeLeaveBalances, useUpdateLeaveBalances } from "../../api/client";
+import { formatCurrency } from "../../utils/format";
+import { getDocumentDownloadUrl, useEmployeeLeaveBalances, useUpdateLeaveBalances, useEmployeeProfile, useEmployeeDirectReports, useAddAdminEmergencyContact, useDeleteAdminEmergencyContact, useUploadEmployeeDocument, useDeleteEmployeeDocument, useUpdateAdminEmployee, useEmployeeAssessments, useCreateAssessment, useEmployeePayslips, useEmployeeBenefits, useUpdateEmployeeBenefits, useEmployeeTrainings, useAddEmployeeTraining } from "../../api/client";
 import { Employee } from "../../types/index";
 import { MOCK_ASSETS } from "../../data/mocks";
 import {
@@ -57,7 +57,31 @@ interface Props {
   onBack: () => void;
 }
 
-const EmployeeDetail: React.FC<Props> = ({ employee, onBack }) => {
+const EmployeeDetail: React.FC<Props> = ({ employee: initialEmployee, onBack }) => {
+  const { data: profile, isLoading: isProfileLoading } = useEmployeeProfile(initialEmployee.id);
+  const { data: directReports } = useEmployeeDirectReports(initialEmployee.id);
+  
+  const addContactMutation = useAddAdminEmergencyContact();
+  const deleteContactMutation = useDeleteAdminEmergencyContact();
+  const uploadDocMutation = useUploadEmployeeDocument();
+  const deleteDocMutation = useDeleteEmployeeDocument();
+  const updateEmployeeMutation = useUpdateAdminEmployee();
+  
+  const { data: leaveBalancesData } = useEmployeeLeaveBalances(initialEmployee.id);
+  const updateLeaveBalancesMutation = useUpdateLeaveBalances();
+  
+  const { data: assessmentsData } = useEmployeeAssessments(initialEmployee.id);
+  const createAssessmentMutation = useCreateAssessment();
+  
+  const { data: payslipsData } = useEmployeePayslips(initialEmployee.id);
+  
+  const { data: benefitsData } = useEmployeeBenefits(initialEmployee.id);
+  const updateBenefitsMutation = useUpdateEmployeeBenefits();
+
+  const { data: trainingsData } = useEmployeeTrainings(initialEmployee.id);
+  const addTrainingMutation = useAddEmployeeTraining();
+
+  const employee = profile || initialEmployee;
   const [activeTab, setActiveTab] = useState("personal");
   const [isLoading, setIsLoading] = useState(false);
 
@@ -407,13 +431,16 @@ const EmployeeDetail: React.FC<Props> = ({ employee, onBack }) => {
                       <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] mb-8">
                         Home Address
                       </h3>
-                      <div className="flex items-start gap-4 p-6 bg-slate-50 rounded-2xl border border-slate-100">
-                        <MapPin className="text-indigo-600 mt-1" size={20} />
-                        <p className="text-sm font-bold text-slate-700 leading-relaxed">
-                          Plot 12, Admiralty Way, Phase 1,
-                          <br />
-                          Lekki, Lagos, Nigeria
+                      <div>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                          Address
                         </p>
+                        <div className="flex items-start gap-4 p-6 bg-slate-50 rounded-[2rem]">
+                          <MapPin className="text-indigo-600 mt-1" size={20} />
+                          <p className="text-sm font-bold text-slate-700 leading-relaxed">
+                            {employee.location || "No address provided"}
+                          </p>
+                        </div>
                       </div>
                     </section>
                   </div>
@@ -425,17 +452,29 @@ const EmployeeDetail: React.FC<Props> = ({ employee, onBack }) => {
                       </h3>
                       <div className="space-y-4">
                         {(employee.emergencyContacts || []).length > 0 ? (
-                          employee.emergencyContacts?.map((contact, i) => (
+                          employee.emergencyContacts?.map((contact: any, i: number) => (
                             <div
                               key={i}
-                              className="p-4 bg-slate-50 rounded-2xl border border-slate-100"
+                              className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex justify-between items-center group"
                             >
-                              <p className="text-xs font-black text-slate-800">
-                                {contact.name}
-                              </p>
-                              <p className="text-[10px] font-bold text-slate-400 uppercase">
-                                {contact.relationship} • {contact.phone}
-                              </p>
+                              <div>
+                                <p className="text-xs font-black text-slate-800">
+                                  {contact.name}
+                                </p>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase">
+                                  {contact.relationship} • {contact.phone}
+                                </p>
+                              </div>
+                              <button
+                                onClick={() => {
+                                  if (window.confirm("Delete this contact?")) {
+                                    deleteContactMutation.mutate({ employeeId: employee.id, contactId: contact.id });
+                                  }
+                                }}
+                                className="p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+                              >
+                                <Trash2 size={16} />
+                              </button>
                             </div>
                           ))
                         ) : (
@@ -443,8 +482,22 @@ const EmployeeDetail: React.FC<Props> = ({ employee, onBack }) => {
                             No contacts added
                           </div>
                         )}
-                        <button className="w-full py-3 bg-indigo-50 text-indigo-600 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-100 transition-all">
-                          + Add New Contact
+                        <button 
+                          onClick={() => {
+                            const name = window.prompt("Contact Name:");
+                            if (!name) return;
+                            const phone = window.prompt("Contact Phone:");
+                            if (!phone) return;
+                            const relationship = window.prompt("Relationship:");
+                            addContactMutation.mutate({
+                              employeeId: employee.id,
+                              data: { name, phone, relationship: relationship || "Family", isPrimary: employee.emergencyContacts?.length === 0 }
+                            });
+                          }}
+                          className="w-full py-3 bg-indigo-50 text-indigo-600 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-100 transition-all disabled:opacity-50"
+                          disabled={addContactMutation.isPending}
+                        >
+                          {addContactMutation.isPending ? "Adding..." : "+ Add New Contact"}
                         </button>
                       </div>
                     </section>
@@ -454,41 +507,55 @@ const EmployeeDetail: React.FC<Props> = ({ employee, onBack }) => {
 
               {activeTab === "performance" && (
                 <div className="space-y-10">
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-                    <section className="bg-white p-10 rounded-[3rem] border border-slate-200 shadow-sm">
-                      <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-10 flex items-center gap-2">
-                        <TrendingUp className="text-indigo-600" /> Performance
-                        Trend
+                  <div className="flex justify-between items-center bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm">
+                    <div>
+                      <h3 className="text-xl font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                        <TrendingUp className="text-indigo-600" /> Performance Reviews
                       </h3>
-                      <ChartSkeleton />
-                    </section>
-                    <section className="bg-white p-10 rounded-[3rem] border border-slate-200 shadow-sm">
-                      <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-10 flex items-center gap-2">
-                        <Star className="text-amber-500" /> Key Competencies
-                      </h3>
-                      <div className="space-y-6">
-                        {[
-                          "Technical Accuracy",
-                          "Leadership",
-                          "Collaboration",
-                          "Problem Solving",
-                        ].map((c) => (
-                          <div key={c} className="space-y-2">
-                            <div className="flex justify-between text-[10px] font-black uppercase text-slate-400">
-                              <span>{c}</span>
-                              <span className="text-indigo-600">4.5 / 5.0</span>
-                            </div>
-                            <div className="w-full h-1.5 bg-slate-50 rounded-full overflow-hidden">
-                              <motion.div
-                                initial={{ width: 0 }}
-                                animate={{ width: "90%" }}
-                                className="h-full bg-indigo-500"
-                              />
-                            </div>
-                          </div>
-                        ))}
+                      <p className="text-xs text-slate-400 font-bold mt-1">Manage employee assessments and ratings</p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        const cycleName = window.prompt("Cycle Name (e.g. Q1 2024, H1 2024):");
+                        if (!cycleName) return;
+                        const managerRating = window.prompt("Rating (e.g. Exceeds Expectations, Meets Expectations):");
+                        if (!managerRating) return;
+                        const managerComment = window.prompt("Manager Comment:");
+                        if (!managerComment) return;
+                        
+                        createAssessmentMutation.mutate({ employeeId: employee.id, data: { cycleName, managerRating, managerComment } });
+                      }}
+                      className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg hover:shadow-indigo-600/20"
+                    >
+                      {createAssessmentMutation.isPending ? "Logging..." : "+ Log Review"}
+                    </button>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 gap-6">
+                    {(!assessmentsData || assessmentsData.length === 0) ? (
+                      <div className="text-center py-12 bg-white rounded-3xl border border-slate-100 shadow-sm">
+                        <Star className="mx-auto text-slate-300 mb-4" size={48} />
+                        <p className="text-slate-500 font-medium">No performance reviews logged yet.</p>
                       </div>
-                    </section>
+                    ) : (
+                      assessmentsData.map((a: any, i: number) => (
+                        <div key={i} className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm relative overflow-hidden group">
+                          <div className="flex justify-between items-start mb-6">
+                            <div>
+                              <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">{a.cycleName}</p>
+                              <h4 className="text-lg font-black text-slate-800">{a.managerRating}</h4>
+                            </div>
+                            <span className="px-3 py-1 bg-emerald-50 text-emerald-600 text-[10px] font-black uppercase rounded-lg border border-emerald-100">
+                              {a.status}
+                            </span>
+                          </div>
+                          <p className="text-sm font-medium text-slate-600 mb-6 bg-slate-50 p-4 rounded-2xl">{a.managerComment}</p>
+                          <div className="flex justify-between items-center text-xs font-bold text-slate-400 uppercase">
+                            <span>Reviewed on {new Date(a.reviewedAt || a.createdAt).toLocaleDateString()}</span>
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
               )}
@@ -499,6 +566,28 @@ const EmployeeDetail: React.FC<Props> = ({ employee, onBack }) => {
                     <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">
                       Digital Document Vault
                     </h3>
+                    <div className="relative">
+                      <input 
+                        type="file" 
+                        id="document-upload" 
+                        className="hidden" 
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          const name = window.prompt("Document Name (e.g. ID Card, Resume):", file.name);
+                          if (!name) return;
+                          const type = window.prompt("Document Type (e.g. Identity, Tax, Contract):", "Identity");
+                          if (!type) return;
+                          uploadDocMutation.mutate({ employeeId: employee.id, file, name, type });
+                        }}
+                      />
+                      <label 
+                        htmlFor="document-upload"
+                        className="px-6 py-3 bg-indigo-50 text-indigo-600 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-100 transition-all cursor-pointer flex items-center gap-2"
+                      >
+                        {uploadDocMutation.isPending ? "Uploading..." : "+ Upload Document"}
+                      </label>
+                    </div>
                   </div>
                   {employee?.employeeDocuments?.length === 0 ||
                   !employee?.employeeDocuments ? (
@@ -536,6 +625,16 @@ const EmployeeDetail: React.FC<Props> = ({ employee, onBack }) => {
                             {new Date(doc.createdAt).toLocaleDateString()}
                           </p>
                           <div className="absolute bottom-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                            <button
+                              onClick={() => {
+                                if (window.confirm("Delete this document?")) {
+                                  deleteDocMutation.mutate({ employeeId: employee.id, documentId: doc.id });
+                                }
+                              }}
+                              className="p-2 bg-rose-50 text-rose-500 rounded-xl shadow-lg hover:scale-110 transition-all inline-block"
+                            >
+                              <Trash2 size={16} />
+                            </button>
                             <a
                               href={getDocumentDownloadUrl(
                                 doc.id,
@@ -563,60 +662,66 @@ const EmployeeDetail: React.FC<Props> = ({ employee, onBack }) => {
                       <Briefcase className="text-indigo-600" /> Career Timeline
                     </h3>
                     <div className="space-y-8 relative pl-8 border-l-2 border-slate-100">
-                      {[
-                        {
-                          title: "Senior Backend Engineer",
-                          date: "Jan 2024 - Present",
-                          desc: "Promoted to lead the core payments infrastructure team.",
-                        },
-                        {
-                          title: "Backend Engineer",
-                          date: "Jun 2022 - Dec 2023",
-                          desc: "Joined to build out the initial payroll engine.",
-                        },
-                      ].map((role, i) => (
-                        <div key={i} className="relative">
-                          <div className="absolute -left-[41px] w-5 h-5 bg-indigo-600 rounded-full border-4 border-white shadow-md"></div>
-                          <h4 className="text-lg font-black text-slate-800">
-                            {role.title}
-                          </h4>
-                          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
-                            {role.date}
-                          </p>
-                          <p className="text-sm font-medium text-slate-600 max-w-xl">
-                            {role.desc}
-                          </p>
-                        </div>
-                      ))}
+                      <div className="relative">
+                        <div className="absolute -left-[41px] w-5 h-5 bg-indigo-600 rounded-full border-4 border-white shadow-md"></div>
+                        <h4 className="text-lg font-black text-slate-800">
+                          {employee.role || "Employee"}
+                        </h4>
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
+                          {employee.hireDate ? new Date(employee.hireDate).toLocaleDateString() : 'Date Unknown'} - Present
+                        </p>
+                        <p className="text-sm font-medium text-slate-600 max-w-xl">
+                          Current position at the company.
+                        </p>
+                      </div>
                     </div>
                   </section>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <section className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm">
-                      <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">
-                        Contract Status
-                      </h4>
+                      <div className="flex justify-between items-center mb-6">
+                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                          Contract Status
+                        </h4>
+                        <button
+                          onClick={() => {
+                            const employmentType = window.prompt("Employment Type (e.g. Permanent, Contract):", employee.employmentType || "");
+                            if (employmentType === null) return;
+                            const status = window.prompt("Status (e.g. Active, Terminated, On Leave):", employee.status || "");
+                            if (status === null) return;
+                            const probationEnd = window.prompt("Probation End Date (YYYY-MM-DD):", employee.probationEnd || "");
+                            if (probationEnd === null) return;
+                            
+                            // useUpdateAdminEmployee is available? wait, I need to make sure useUpdateAdminEmployee is imported and initialized.
+                            // I will initialize it at the top of the component.
+                            updateEmployeeMutation.mutate({ id: employee.id, data: { employmentType, status, probationEnd: probationEnd || null } });
+                          }}
+                          className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-indigo-100 transition-colors"
+                        >
+                          Edit
+                        </button>
+                      </div>
                       <div className="flex items-center gap-4 mb-6">
                         <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
                           <CheckCircle2 size={24} />
                         </div>
                         <div>
                           <p className="text-sm font-black text-slate-800">
-                            Permanent
+                            {employee.employmentType || "Permanent"}
                           </p>
                           <p className="text-[10px] text-slate-400 font-bold uppercase">
-                            Confirmed (Oct 2022)
+                            {employee.status || "Active"}
                           </p>
                         </div>
                       </div>
                       <div className="space-y-3">
                         <div className="flex justify-between text-xs font-bold border-b border-slate-50 pb-2">
                           <span className="text-slate-500">Notice Period</span>
-                          <span className="text-slate-800">3 Months</span>
+                          <span className="text-slate-800">Standard</span>
                         </div>
                         <div className="flex justify-between text-xs font-bold border-b border-slate-50 pb-2">
                           <span className="text-slate-500">Probation Ends</span>
-                          <span className="text-slate-800">Completed</span>
+                          <span className="text-slate-800">{employee.probationEnd ? new Date(employee.probationEnd).toLocaleDateString() : "N/A"}</span>
                         </div>
                       </div>
                     </section>
@@ -628,62 +733,75 @@ const EmployeeDetail: React.FC<Props> = ({ employee, onBack }) => {
                         Direct Reports
                       </h4>
                       <p className="text-3xl font-black text-indigo-600 tracking-tighter mb-4">
-                        4
+                        {directReports?.length || 0}
                       </p>
-                      <button className="px-6 py-2 bg-white text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-sm hover:text-indigo-600">
-                        View Team
-                      </button>
+                      {directReports && directReports.length > 0 && (
+                        <div className="flex -space-x-2">
+                          {directReports.slice(0, 5).map((r: any, i: number) => (
+                            <img
+                              key={i}
+                              src={r.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(r.name)}&background=random`}
+                              className="w-8 h-8 rounded-full border-2 border-white shadow-sm"
+                            />
+                          ))}
+                        </div>
+                      )}
                     </section>
                   </div>
                 </div>
               )}
 
-              {activeTab === "attendance" && (
+            {activeTab === "attendance" && (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                   <section className="lg:col-span-2 bg-white p-10 rounded-[3rem] border border-slate-200 shadow-sm">
-                    <h3 className="text-xl font-black text-slate-800 uppercase tracking-widest mb-8 flex items-center gap-2">
-                      <Clock className="text-amber-500" /> Leave Balances
-                    </h3>
+                    <div className="flex justify-between items-center mb-8">
+                      <h3 className="text-xl font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                        <Clock className="text-amber-500" /> Leave Balances
+                      </h3>
+                      <button
+                        onClick={() => {
+                          const type = window.prompt("Leave Type to Edit (e.g. Annual, Sick, Casual):");
+                          if (!type) return;
+                          const totalStr = window.prompt("New Total Days:");
+                          if (!totalStr || isNaN(parseInt(totalStr))) return;
+                          
+                          // Convert existing to map, update the specific one, then send the full array as required by the endpoint
+                          const currentBalances = leaveBalancesData || [];
+                          const existingIndex = currentBalances.findIndex((b: any) => b.type.toLowerCase() === type.toLowerCase());
+                          let newBalances = [...currentBalances];
+                          if (existingIndex >= 0) {
+                            newBalances[existingIndex] = { ...newBalances[existingIndex], total: parseInt(totalStr) };
+                          } else {
+                            newBalances.push({ type, total: parseInt(totalStr), color: "indigo" });
+                          }
+                          
+                          updateLeaveBalancesMutation.mutate({ employeeId: employee.id, balances: newBalances });
+                        }}
+                        className="px-4 py-2 bg-slate-50 text-slate-600 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-100 transition-colors"
+                      >
+                        Edit Balances
+                      </button>
+                    </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      {[
-                        {
-                          type: "Annual Leave",
-                          bal: 14,
-                          tot: 20,
-                          color: "text-indigo-600",
-                          bg: "bg-indigo-600",
-                        },
-                        {
-                          type: "Sick Leave",
-                          bal: 8,
-                          tot: 10,
-                          color: "text-emerald-600",
-                          bg: "bg-emerald-600",
-                        },
-                        {
-                          type: "Casual",
-                          bal: 2,
-                          tot: 5,
-                          color: "text-amber-600",
-                          bg: "bg-amber-600",
-                        },
-                      ].map((l, i) => (
+                      {(!leaveBalancesData || leaveBalancesData.length === 0) ? (
+                        <div className="col-span-3 py-8 text-center text-slate-400 text-sm font-bold uppercase">No leave balances set</div>
+                      ) : leaveBalancesData.map((l: any, i: number) => (
                         <div
                           key={i}
                           className="p-6 bg-slate-50 rounded-[2rem] border border-slate-100 relative overflow-hidden"
                         >
                           <div
-                            className={`absolute top-0 left-0 h-1 w-full ${l.bg}`}
+                            className={`absolute top-0 left-0 h-1 w-full bg-${l.color}-600`}
                           />
                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">
                             {l.type}
                           </p>
                           <div className="flex items-end gap-2">
                             <span className="text-4xl font-black text-slate-800">
-                              {l.bal}
+                              {l.total}
                             </span>
                             <span className="text-xs font-bold text-slate-400 mb-1.5">
-                              / {l.tot} Days
+                              Days Total
                             </span>
                           </div>
                         </div>
@@ -756,37 +874,26 @@ const EmployeeDetail: React.FC<Props> = ({ employee, onBack }) => {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
-                        {[
-                          {
-                            p: "May 2024",
-                            b: "₦850,000",
-                            a: "₦120,000",
-                            d: "-₦45,000",
-                            n: "₦925,000",
-                          },
-                          {
-                            p: "Apr 2024",
-                            b: "₦850,000",
-                            a: "₦120,000",
-                            d: "-₦45,000",
-                            n: "₦925,000",
-                          },
-                        ].map((row, i) => (
-                          <tr key={i} className="group hover:bg-slate-50/50">
+                        {(!payslipsData || payslipsData.length === 0) ? (
+                          <tr>
+                            <td colSpan={6} className="py-8 text-center text-slate-400 font-bold uppercase text-xs">No payslips found</td>
+                          </tr>
+                        ) : payslipsData.map((row: any) => (
+                          <tr key={row.id} className="group hover:bg-slate-50/50">
                             <td className="py-4 pl-4 font-bold text-slate-800">
-                              {row.p}
+                              {new Date(row.periodYear, row.periodMonth - 1).toLocaleString('default', { month: 'short', year: 'numeric' })}
                             </td>
                             <td className="py-4 font-medium text-slate-600">
-                              {row.b}
+                              {formatCurrency(row.basicSalary)}
                             </td>
                             <td className="py-4 font-medium text-emerald-600">
-                              {row.a}
+                              {formatCurrency(row.allowances)}
                             </td>
                             <td className="py-4 font-medium text-rose-500">
-                              {row.d}
+                              -{formatCurrency(row.taxDeductions + row.pensionDeductions)}
                             </td>
                             <td className="py-4 font-black text-slate-800">
-                              {row.n}
+                              {formatCurrency(row.netPay)}
                             </td>
                             <td className="py-4 text-right pr-4">
                               <button className="p-2 bg-white border border-slate-200 text-indigo-600 rounded-lg hover:bg-indigo-50">
@@ -806,24 +913,24 @@ const EmployeeDetail: React.FC<Props> = ({ employee, onBack }) => {
                   {[
                     {
                       name: "Health Insurance",
-                      prov: "AXA Mansard",
-                      plan: "Gold Plan",
-                      status: "Active",
+                      prov: benefitsData?.healthProvider || "N/A",
+                      plan: benefitsData?.healthPlan || "N/A",
+                      status: benefitsData?.healthProvider ? "Active" : "Pending",
                       icon: <Heart size={20} />,
                       color: "rose",
                     },
                     {
                       name: "Pension",
-                      prov: "Stanbic IBTC",
-                      plan: "RSA Fund II",
+                      prov: "RSA Setup",
+                      plan: "Standard",
                       status: "Active",
                       icon: <Shield size={20} />,
                       color: "indigo",
                     },
                     {
                       name: "Life Assurance",
-                      prov: "Leadway",
-                      plan: "Group Life",
+                      prov: "Company Group Life",
+                      plan: "Standard",
                       status: "Active",
                       icon: <Umbrella size={20} />,
                       color: "emerald",
@@ -845,59 +952,71 @@ const EmployeeDetail: React.FC<Props> = ({ employee, onBack }) => {
                         {b.prov} • {b.plan}
                       </p>
                       <div className="flex justify-between items-center">
-                        <span className="px-3 py-1 bg-emerald-50 text-emerald-600 text-[10px] font-black uppercase rounded-lg">
-                          Active
+                        <span className={`px-3 py-1 text-[10px] font-black uppercase rounded-lg ${b.status === 'Active' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-500'}`}>
+                          {b.status}
                         </span>
-                        <button className="text-[10px] font-black text-indigo-600 uppercase hover:underline">
-                          View Details
-                        </button>
                       </div>
                     </div>
                   ))}
-                  <button className="h-full min-h-[200px] border-4 border-dashed border-slate-100 rounded-[2.5rem] flex flex-col items-center justify-center text-slate-300 hover:border-indigo-200 hover:text-indigo-400 transition-all font-black uppercase tracking-widest gap-2">
-                    <Plus size={32} /> Encode Benefit
+                  <button 
+                    onClick={() => {
+                      const healthProvider = window.prompt("Health Provider (e.g. AXA Mansard):", benefitsData?.healthProvider || "");
+                      if (healthProvider === null) return;
+                      const healthPlan = window.prompt("Health Plan (e.g. Gold Plan):", benefitsData?.healthPlan || "");
+                      if (healthPlan === null) return;
+                      updateBenefitsMutation.mutate({ employeeId: employee.id, data: { healthProvider, healthPlan } });
+                    }}
+                    className="h-full min-h-[200px] border-4 border-dashed border-slate-100 rounded-[2.5rem] flex flex-col items-center justify-center text-slate-300 hover:border-indigo-200 hover:text-indigo-400 transition-all font-black uppercase tracking-widest gap-2"
+                  >
+                    <Plus size={32} /> {updateBenefitsMutation.isPending ? "Encoding..." : "Encode Benefit"}
                   </button>
                 </div>
               )}
 
               {activeTab === "training" && (
                 <div className="space-y-10">
+                  <div className="flex justify-between items-center bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm">
+                    <div>
+                      <h3 className="text-xl font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                        <BookOpen className="text-indigo-600" /> Learning Journey
+                      </h3>
+                      <p className="text-xs text-slate-400 font-bold mt-1">Track assigned courses and development</p>
+                    </div>
+                    <button 
+                      onClick={() => {
+                        const courseName = window.prompt("Course Name:");
+                        if (!courseName) return;
+                        const provider = window.prompt("Provider (e.g. Frontend Masters):");
+                        if (!provider) return;
+                        addTrainingMutation.mutate({ employeeId: employee.id, data: { courseName, provider, status: 'in_progress', date: new Date().toISOString().split('T')[0] } });
+                      }}
+                      className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg hover:shadow-indigo-600/20"
+                    >
+                      {addTrainingMutation.isPending ? "Assigning..." : "+ Assign Course"}
+                    </button>
+                  </div>
                   <section className="bg-white p-10 rounded-[3rem] border border-slate-200 shadow-sm">
-                    <h3 className="text-xl font-black text-slate-800 uppercase tracking-widest mb-8 flex items-center gap-2">
-                      <BookOpen className="text-indigo-600" /> Learning Journey
-                    </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      {[
-                        {
-                          course: "Advanced React Patterns",
-                          prov: "Frontend Masters",
-                          date: "Mar 2024",
-                          status: "Completed",
-                        },
-                        {
-                          course: "Engineering Leadership",
-                          prov: "Internal Academy",
-                          date: "In Progress",
-                          status: "In Progress",
-                        },
-                      ].map((c, i) => (
+                      {(!trainingsData || trainingsData.length === 0) ? (
+                        <div className="col-span-2 py-12 text-center text-slate-400 font-bold uppercase text-xs">No training records found.</div>
+                      ) : trainingsData.map((c: any, i: number) => (
                         <div
                           key={i}
                           className="flex gap-5 p-6 bg-slate-50 rounded-[2rem] border border-slate-100 items-center"
                         >
-                          <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-indigo-600 shadow-sm font-black text-xl">
-                            {c.course.charAt(0)}
+                          <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-indigo-600 shadow-sm font-black text-xl uppercase">
+                            {c.courseName.charAt(0)}
                           </div>
-                          <div>
+                          <div className="flex-1">
                             <h4 className="text-sm font-black text-slate-800">
-                              {c.course}
+                              {c.courseName}
                             </h4>
                             <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">
-                              {c.prov}
+                              {c.provider} • {c.date}
                             </p>
-                            <div className="w-full h-1.5 bg-slate-200 rounded-full w-24 overflow-hidden">
+                            <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
                               <div
-                                className={`h-full ${c.status === "Completed" ? "bg-emerald-500 w-full" : "bg-amber-500 w-1/2"}`}
+                                className={`h-full ${c.status === "completed" ? "bg-emerald-500 w-full" : "bg-amber-500 w-1/2"}`}
                               />
                             </div>
                           </div>

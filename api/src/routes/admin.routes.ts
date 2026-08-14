@@ -1,7 +1,15 @@
 import { Hono } from "hono";
 import {
   getEmployees,
+  getEmployee,
+  getDirectReports,
   createEmployee,
+  updateEmployee,
+  deleteEmployee,
+  addEmergencyContact,
+  deleteEmergencyContact,
+  addDocument,
+  deleteDocument
 } from "../controllers/admin/employee.controller";
 import { authMiddleware } from "../middlewares/auth.middleware";
 import payrollRoutes from "./payroll.routes";
@@ -10,6 +18,7 @@ import { SettingsService } from "../services/settings.service";
 import { CompanyService } from "../services/company.service";
 import { OrgService } from "../services/org.service";
 import { RoleService } from "../services/role.service";
+import { DashboardService } from "../services/dashboard.service";
 
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../db/schema";
@@ -84,11 +93,45 @@ adminRoutes.get("/dev/seed", async (c: any) => {
 adminRoutes.use("*", authMiddleware);
 
 adminRoutes.get("/employees", getEmployees);
+adminRoutes.get("/employees/:id", getEmployee);
+adminRoutes.get("/employees/:id/direct-reports", getDirectReports);
 adminRoutes.post("/employees", createEmployee);
+adminRoutes.put("/employees/:id", updateEmployee);
+adminRoutes.delete("/employees/:id", deleteEmployee);
+
+adminRoutes.post("/employees/:id/emergency-contacts", addEmergencyContact);
+adminRoutes.delete("/employees/:id/emergency-contacts/:contactId", deleteEmergencyContact);
+
+import { getEmployeeAssessments, addEmployeeAssessment } from "../controllers/admin/performance.controller";
+import { getEmployeeBenefits, updateEmployeeBenefits } from "../controllers/admin/benefits.controller";
+import { getEmployeeTrainings, addEmployeeTraining } from "../controllers/admin/training.controller";
+
+adminRoutes.post("/employees/:id/documents", addDocument);
+adminRoutes.delete("/employees/:id/documents/:documentId", deleteDocument);
+
+adminRoutes.get("/performance/employee/:id", getEmployeeAssessments);
+adminRoutes.post("/performance/employee/:id", addEmployeeAssessment);
+
+adminRoutes.get("/benefits/employee/:id", getEmployeeBenefits);
+adminRoutes.put("/benefits/employee/:id", updateEmployeeBenefits);
+
+adminRoutes.get("/training/employee/:id", getEmployeeTrainings);
+adminRoutes.post("/training/employee/:id", addEmployeeTraining);
 
 // Further routes can be added here (e.g., requisitions, payroll)
 adminRoutes.route("/payroll", payrollRoutes);
 adminRoutes.route("/leaves", leaveAdminRoutes);
+
+adminRoutes.get("/dashboard/stats", async (c: any) => {
+  try {
+    const companyId = c.get("companyId");
+    const dashboardService = new DashboardService(c.env.DB);
+    const stats = await dashboardService.getDashboardStats(companyId);
+    return c.json(stats);
+  } catch (error: any) {
+    return c.json({ error: error.message }, 500);
+  }
+});
 
 adminRoutes.get("/settings", async (c: any) => {
   const companyId = c.get("companyId");
@@ -161,12 +204,44 @@ adminRoutes.post("/departments", async (c: any) => {
   return c.json(await orgService.createDepartment(companyId, payload));
 });
 
+adminRoutes.put("/departments/:id", async (c: any) => {
+  const companyId = c.get("companyId");
+  const payload = await c.req.json();
+  const orgService = new OrgService(c.env.DB);
+  const updated = await orgService.updateDepartment(companyId, c.req.param("id"), payload);
+  if (!updated) return c.json({ error: "Not found" }, 404);
+  return c.json(updated);
+});
+
 adminRoutes.delete("/departments/:id", async (c: any) => {
   const companyId = c.get("companyId");
   const orgService = new OrgService(c.env.DB);
   return c.json(
     await orgService.deleteDepartment(companyId, c.req.param("id")),
   );
+});
+
+adminRoutes.get("/departments/:id/members", async (c: any) => {
+  const companyId = c.get("companyId");
+  const orgService = new OrgService(c.env.DB);
+  return c.json(await orgService.getDepartmentMembers(companyId, c.req.param("id")));
+});
+
+adminRoutes.post("/departments/:id/members", async (c: any) => {
+  const companyId = c.get("companyId");
+  const { employeeId } = await c.req.json();
+  const orgService = new OrgService(c.env.DB);
+  const member = await orgService.assignEmployeeToDepartment(companyId, c.req.param("id"), employeeId);
+  if (!member) return c.json({ error: "Department or employee not found" }, 404);
+  return c.json(member);
+});
+
+adminRoutes.delete("/departments/:id/members/:employeeId", async (c: any) => {
+  const companyId = c.get("companyId");
+  const orgService = new OrgService(c.env.DB);
+  const member = await orgService.removeEmployeeFromDepartment(companyId, c.req.param("id"), c.req.param("employeeId"));
+  if (!member) return c.json({ error: "Employee is not a member of this department" }, 404);
+  return c.json(member);
 });
 
 adminRoutes.get("/locations", async (c: any) => {

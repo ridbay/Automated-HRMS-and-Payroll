@@ -58,97 +58,90 @@ import {
   Bar,
   Legend,
 } from "recharts";
-import { MOCK_EMPLOYEES } from "../../data/mocks";
 import { useAuth } from "../../context/AuthContext";
-
-const deptData = [
-  { name: "Engineering", value: 45, fill: "#6366f1" },
-  { name: "Sales", value: 30, fill: "#10b981" },
-  { name: "Marketing", value: 20, fill: "#f59e0b" },
-  { name: "People", value: 15, fill: "#8b5cf6" },
-  { name: "Ops", value: 28, fill: "#3b82f6" },
-];
-
-const headcountTrend = [
-  { month: "Jan", total: 110, hires: 5, exits: 2 },
-  { month: "Feb", total: 115, hires: 8, exits: 3 },
-  { month: "Mar", total: 122, hires: 10, exits: 3 },
-  { month: "Apr", total: 128, hires: 12, exits: 6 },
-  { month: "May", total: 138, hires: 15, exits: 5 },
-];
-
-const diversityData = [
-  { name: "Male", value: 55, fill: "#3b82f6" },
-  { name: "Female", value: 45, fill: "#ec4899" },
-];
-
-const attritionReasons = [
-  { reason: "Career Growth", count: 12 },
-  { reason: "Compensation", count: 8 },
-  { reason: "Relocation", count: 5 },
-  { reason: "Personal", count: 3 },
-];
+import { useDashboardStats } from "../../api/client";
+import { Loader2 } from "lucide-react";
 
 const HRDashboard: React.FC = () => {
   const { user } = useAuth();
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const { data: dashboardData, isLoading } = useDashboardStats();
+
+  if (isLoading) {
+    return (
+      <div className="flex h-[60vh] items-center justify-center">
+        <Loader2 className="animate-spin text-indigo-600" size={48} />
+      </div>
+    );
+  }
+
+  const {
+    totalHeadcount = 0,
+    newHires = 0,
+    attritionRate = "0%",
+    openPositions = 0,
+    totalPayroll = 0,
+    deptData = [],
+    diversityData = [],
+    headcountTrend = [],
+  } = dashboardData || {};
 
   const stats = [
     {
       label: "Total Headcount",
-      value: "138",
-      sub: "+12% from last month",
+      value: totalHeadcount.toString(),
+      sub: "Active & Onboarding",
       trend: "up",
-      breakdown: "124 Active, 6 On Leave",
+      breakdown: "Current total workforce",
       icon: <Users className="text-indigo-600" />,
       bg: "bg-indigo-50",
       action: "View All",
     },
     {
       label: "New Hires",
-      value: "15",
-      sub: "85% Onboarded",
+      value: newHires.toString(),
+      sub: "This Month",
       trend: "up",
-      breakdown: "May 2024 cohort",
+      breakdown: "Joined recently",
       icon: <UserPlus className="text-emerald-600" />,
       bg: "bg-emerald-50",
       action: "Onboarding",
     },
     {
       label: "Attrition Rate",
-      value: "4.2%",
-      sub: "-0.8% vs industry",
+      value: attritionRate,
+      sub: "Trailing 30 days",
       trend: "down",
-      breakdown: "5 exits this month",
+      breakdown: "Estimated turnover",
       icon: <TrendingUp className="text-rose-600" />,
       bg: "bg-rose-50",
       action: "Analysis",
     },
     {
       label: "Open Positions",
-      value: "24",
-      sub: "128 Candidates",
+      value: openPositions.toString(),
+      sub: "Actively Sourcing",
       trend: "up",
-      breakdown: "8 High priority",
+      breakdown: "Pending hires",
       icon: <Briefcase className="text-amber-600" />,
       bg: "bg-amber-50",
       action: "Recruitment",
     },
     {
-      label: "Payroll (May)",
-      value: "₦420M",
-      sub: "Processed",
+      label: "Payroll (Current)",
+      value: `₦${(totalPayroll / 1000000).toFixed(1)}M`,
+      sub: "Estimated run",
       trend: "stable",
-      breakdown: "Payday: May 25",
+      breakdown: "Base salaries sum",
       icon: <Wallet className="text-violet-600" />,
       bg: "bg-violet-50",
       action: "Reports",
     },
     {
       label: "Pending Actions",
-      value: "18",
-      sub: "4 Critical Alerts",
-      trend: "up",
+      value: "0",
+      sub: "All clear",
+      trend: "stable",
       breakdown: "Requires HR attention",
       icon: <AlertTriangle className="text-orange-600" />,
       bg: "bg-orange-50",
@@ -400,27 +393,16 @@ const HRDashboard: React.FC = () => {
               </div>
             </section>
 
-            {/* Attrition Analysis */}
+            {/* Attrition Analysis (Placeholder) */}
             <section className="col-span-1 bg-white p-8 rounded-[3.5rem] border border-slate-200 shadow-sm">
               <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest mb-8 flex items-center gap-2">
-                <ArrowUpRight className="text-rose-600" size={16} /> Attrition
-                Reasons
+                <ArrowUpRight className="text-rose-600" size={16} /> Attrition Reasons
               </h3>
               <div className="space-y-4">
-                {attritionReasons.map((r, i) => (
-                  <div key={i}>
-                    <div className="flex justify-between text-[10px] font-bold mb-1">
-                      <span className="text-slate-600">{r.reason}</span>
-                      <span className="text-slate-800">{r.count}</span>
-                    </div>
-                    <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-rose-400"
-                        style={{ width: `${(r.count / 28) * 100}%` }}
-                      />
-                    </div>
-                  </div>
-                ))}
+                <div className="flex justify-between text-[10px] font-bold mb-1">
+                  <span className="text-slate-600">No sufficient data for attrition</span>
+                  <span className="text-slate-800"></span>
+                </div>
               </div>
               <button className="w-full mt-6 py-3 bg-slate-50 text-slate-500 rounded-xl text-[10px] font-black uppercase tracking-widest hover:text-rose-600">
                 Full Exit Report

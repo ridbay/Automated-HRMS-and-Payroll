@@ -8,6 +8,9 @@ export const departments = sqliteTable('departments', {
   name: text('name').notNull(),
   description: text('description'),
   headCount: integer('head_count').default(0),
+  // Plain reference (no FK constraint), same convention as employees.managerId
+  managerId: text('manager_id'),
+  teamLeadId: text('team_lead_id'),
   createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text('updated_at').$onUpdate(() => new Date().toISOString()),
 });

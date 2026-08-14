@@ -4,7 +4,10 @@ import { tenantMiddleware } from './tenant.middleware';
 describe('Tenant Middleware', () => {
   it('should return 401 if x-company-id header is missing', async () => {
     const mockContext = {
-      req: { header: vi.fn().mockReturnValue(null) },
+      req: { 
+        header: vi.fn().mockReturnValue(null),
+        query: vi.fn().mockReturnValue(null)
+      },
       json: vi.fn().mockReturnValue('json-response'),
     };
     const mockNext = vi.fn();
@@ -19,7 +22,10 @@ describe('Tenant Middleware', () => {
 
   it('should inject companyId into context and call next if header is present', async () => {
     const mockContext = {
-      req: { header: vi.fn().mockReturnValue('comp-123') },
+      req: { 
+        header: vi.fn().mockReturnValue('comp-123'),
+        query: vi.fn().mockReturnValue(null)
+      },
       set: vi.fn(),
     };
     const mockNext = vi.fn();

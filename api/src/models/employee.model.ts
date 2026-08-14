@@ -1,6 +1,7 @@
 import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core';
 import { relations, sql } from 'drizzle-orm';
 import { companies } from './company.model';
+import { departments } from './org.model';
 
 export const employees = sqliteTable('employees', {
   id: text('id').primaryKey(),
@@ -16,6 +17,7 @@ export const employees = sqliteTable('employees', {
   maritalStatus: text('marital_status'),
   role: text('role'),
   department: text('department'),
+  departmentId: text('department_id').references(() => departments.id),
   location: text('location'),
   employmentType: text('employment_type'), // 'Full-time' | 'Contract' | etc.
   status: text('status').notNull().default('onboarding'), // 'active' | 'onboarding' | etc.

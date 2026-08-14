@@ -141,6 +141,20 @@
       "when": 1784012072456,
       "tag": "0019_freezing_midnight",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1786737280638,
+      "tag": "0020_bizarre_skullbuster",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1786740574051,
+      "tag": "0021_thick_moon_knight",
+      "breakpoints": true
     }
   ]
 }
