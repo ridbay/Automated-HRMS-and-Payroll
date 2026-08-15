@@ -239,6 +239,13 @@
       "when": 1786773386392,
       "tag": "0033_colossal_silver_surfer",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "6",
+      "when": 1786832280472,
+      "tag": "0034_spicy_shotgun",
+      "breakpoints": true
     }
   ]
 }
