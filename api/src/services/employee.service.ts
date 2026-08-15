@@ -1,6 +1,6 @@
 import { D1Database, R2Bucket } from '@cloudflare/workers-types';
 import { drizzle } from 'drizzle-orm/d1';
-import { eq, and, or, like } from 'drizzle-orm';
+import { eq, and, or, like, inArray } from 'drizzle-orm';
 import * as schema from '../db/schema';
 import { emergencyContacts, employeeDocuments } from '../models/employee.model';
 import { hashPassword, generateSalt } from './auth.service';
@@ -220,9 +220,25 @@ export class EmployeeService {
 
   async deleteEmployee(companyId: string, employeeId: string) {
     // Note: In a real system, you might do a soft delete or reassign dependencies.
-    // Also delete references (emergency contacts, docs, etc.)
+    // Every table with a `references(() => employees.id)` FK must be cleared
+    // first, or the final delete below fails with a FOREIGN KEY constraint error.
     await this.db.delete(schema.emergencyContacts).where(eq(schema.emergencyContacts.employeeId, employeeId));
     await this.db.delete(schema.employeeDocuments).where(eq(schema.employeeDocuments.employeeId, employeeId));
+    await this.db.delete(schema.employeeAssets).where(eq(schema.employeeAssets.employeeId, employeeId));
+    await this.db.delete(schema.attendanceRecords).where(eq(schema.attendanceRecords.employeeId, employeeId));
+    await this.db.delete(schema.overtimeRequests).where(eq(schema.overtimeRequests.employeeId, employeeId));
+    await this.db.delete(schema.leaveRequests).where(eq(schema.leaveRequests.employeeId, employeeId));
+    await this.db.delete(schema.leaveBalances).where(eq(schema.leaveBalances.employeeId, employeeId));
+    await this.db.delete(schema.employeeBenefits).where(eq(schema.employeeBenefits.employeeId, employeeId));
+    await this.db.delete(schema.payslips).where(eq(schema.payslips.employeeId, employeeId));
+
+    // Loans have their own dependents (repayments), so those need clearing first too.
+    const employeeLoans = await this.db.select({ id: schema.loans.id }).from(schema.loans).where(eq(schema.loans.employeeId, employeeId)).all();
+    const loanIds = employeeLoans.map((l: any) => l.id);
+    if (loanIds.length > 0) {
+      await this.db.delete(schema.loanRepayments).where(inArray(schema.loanRepayments.loanId, loanIds));
+    }
+    await this.db.delete(schema.loans).where(eq(schema.loans.employeeId, employeeId));
 
     await this.db
       .delete(schema.employees)

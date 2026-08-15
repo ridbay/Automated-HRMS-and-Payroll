@@ -12,6 +12,9 @@ export const goals = sqliteTable('goals', {
   progress: integer('progress').notNull().default(0),     // 0-100
   dueDate: text('due_date'),
   keyResults: text('key_results'),                        // JSON string
+  scope: text('scope').notNull().default('individual'),   // 'individual' | 'team' | 'department' | 'company'
+  assignedById: text('assigned_by_id'),                    // set when a manager/admin creates it for someone else
+  parentGoalId: text('parent_goal_id'),                     // links to a broader goal for alignment rollups
   createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`),
 });

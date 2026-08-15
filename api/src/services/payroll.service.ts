@@ -426,32 +426,41 @@ export class PayrollService {
     });
 
     if (preview.payslips.length > 0) {
-      await this.db.insert(schema.payslips).values(
-        preview.payslips.map((ps: any) => ({
-          id: ps.id,
-          runId,
-          employeeId: ps.employeeId,
-          employeeName: ps.employeeName,
-          department: ps.department,
-          bankName: ps.bankName,
-          accountNumber: ps.accountNumber,
-          accountName: ps.accountName,
-          basicSalary: ps.basicSalary,
-          allowances: ps.allowances,
-          bonuses: ps.bonuses,
-          grossPay: ps.grossPay,
-          taxDeductions: ps.taxDeductions,
-          pensionDeductions: ps.pensionDeductions,
-          loanDeductions: ps.loanDeductions,
-          otherDeductions: ps.otherDeductions,
-          netPay: ps.netPay,
-          isProrated: ps.isProrated,
-          workingDays: ps.workingDays,
-          presentDays: ps.presentDays,
-          absentDays: ps.absentDays,
-          overtimeHours: ps.overtimeHours,
-        }))
-      );
+      const rows = preview.payslips.map((ps: any) => ({
+        id: ps.id,
+        runId,
+        employeeId: ps.employeeId,
+        employeeName: ps.employeeName,
+        department: ps.department,
+        bankName: ps.bankName,
+        accountNumber: ps.accountNumber,
+        accountName: ps.accountName,
+        basicSalary: ps.basicSalary,
+        allowances: ps.allowances,
+        bonuses: ps.bonuses,
+        grossPay: ps.grossPay,
+        taxDeductions: ps.taxDeductions,
+        pensionDeductions: ps.pensionDeductions,
+        loanDeductions: ps.loanDeductions,
+        otherDeductions: ps.otherDeductions,
+        netPay: ps.netPay,
+        isProrated: ps.isProrated,
+        workingDays: ps.workingDays,
+        presentDays: ps.presentDays,
+        absentDays: ps.absentDays,
+        overtimeHours: ps.overtimeHours,
+      }));
+
+      // D1 caps bound parameters at 100 per statement. Each payslip row binds
+      // ~21 params, so a single multi-row VALUES insert breaks past ~4-5
+      // employees. Chunk into a batch of smaller inserts (still one atomic
+      // D1 round trip) instead.
+      const CHUNK_SIZE = 4;
+      const chunks: (typeof rows)[] = [];
+      for (let i = 0; i < rows.length; i += CHUNK_SIZE) chunks.push(rows.slice(i, i + CHUNK_SIZE));
+
+      const statements = chunks.map((chunk) => this.db.insert(schema.payslips).values(chunk));
+      await this.db.batch(statements as [any, ...any[]]);
     }
 
     return this.getRun(companyId, runId);

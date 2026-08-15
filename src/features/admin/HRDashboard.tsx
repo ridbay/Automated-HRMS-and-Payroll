@@ -84,6 +84,9 @@ const HRDashboard: React.FC = () => {
     deptData = [],
     diversityData = [],
     headcountTrend = [],
+    alerts = [],
+    recentActivity = [],
+    events = { birthdays: [], anniversaries: [] }
   } = dashboardData || {};
 
   const stats = [
@@ -139,15 +142,26 @@ const HRDashboard: React.FC = () => {
     },
     {
       label: "Pending Actions",
-      value: "0",
-      sub: "All clear",
+      value: alerts.length.toString(),
+      sub: alerts.length > 0 ? "Requires attention" : "All clear",
       trend: "stable",
-      breakdown: "Requires HR attention",
-      icon: <AlertTriangle className="text-orange-600" />,
-      bg: "bg-orange-50",
+      breakdown: "Active alerts",
+      icon: <AlertTriangle className={alerts.length > 0 ? "text-orange-600" : "text-emerald-600"} />,
+      bg: alerts.length > 0 ? "bg-orange-50" : "bg-emerald-50",
       action: "Tasks",
     },
   ];
+
+  const getIconForType = (type: string) => {
+    switch (type) {
+      case "UserCheck": return <UserCheck size={16} />;
+      case "FileText": return <FileText size={16} />;
+      case "Wallet": return <Wallet size={16} />;
+      case "Calendar": return <Calendar size={16} />;
+      case "Briefcase": return <Briefcase size={16} />;
+      default: return <AlertTriangle size={16} />;
+    }
+  };
 
   return (
     <div className="space-y-10 pb-20">
@@ -338,7 +352,7 @@ const HRDashboard: React.FC = () => {
                       paddingAngle={5}
                       dataKey="value"
                     >
-                      {deptData.map((entry, index) => (
+                      {deptData.map((entry: any, index: number) => (
                         <Cell
                           key={`cell-${index}`}
                           fill={entry.fill}
@@ -373,7 +387,7 @@ const HRDashboard: React.FC = () => {
                       paddingAngle={5}
                       dataKey="value"
                     >
-                      {diversityData.map((entry, index) => (
+                      {diversityData.map((entry: any, index: number) => (
                         <Cell
                           key={`cell-${index}`}
                           fill={entry.fill}
@@ -459,64 +473,51 @@ const HRDashboard: React.FC = () => {
               <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">
                 Priority Alerts
               </h3>
-              <span className="w-6 h-6 bg-rose-500 text-white text-[10px] font-black rounded-lg flex items-center justify-center animate-pulse">
-                4
-              </span>
+              {alerts.length > 0 && (
+                <span className="w-6 h-6 bg-rose-500 text-white text-[10px] font-black rounded-lg flex items-center justify-center animate-pulse">
+                  {alerts.length}
+                </span>
+              )}
             </div>
-            <div className="space-y-4">
-              {[
-                {
-                  title: "Probation Ending",
-                  sub: "5 Employees (Jun 1)",
-                  type: "red",
-                  icon: <UserCheck size={16} />,
-                },
-                {
-                  title: "Document Expiry",
-                  sub: "Passport: Sarah J. (14d)",
-                  type: "red",
-                  icon: <FileText size={16} />,
-                },
-                {
-                  title: "Payroll Variance",
-                  sub: "12% higher than forecast",
-                  type: "orange",
-                  icon: <Wallet size={16} />,
-                },
-                {
-                  title: "New Leave Flood",
-                  sub: "12 pending approvals",
-                  type: "orange",
-                  icon: <Calendar size={16} />,
-                },
-              ].map((alert, i) => (
-                <div
-                  key={i}
-                  className={`p-5 rounded-3xl border-2 flex items-start gap-4 transition-all hover:scale-[1.02] cursor-pointer ${
-                    alert.type === "red"
-                      ? "bg-rose-50/50 border-rose-100 text-rose-800"
-                      : "bg-amber-50/50 border-amber-100 text-amber-800"
-                  }`}
-                >
+            {alerts.length > 0 ? (
+              <div className="space-y-4">
+                {alerts.map((alert: any, i: number) => (
                   <div
-                    className={`p-2 rounded-xl ${alert.type === "red" ? "bg-rose-500 text-white" : "bg-amber-500 text-white"} shadow-lg`}
+                    key={i}
+                    className={`p-5 rounded-3xl border-2 flex items-start gap-4 transition-all hover:scale-[1.02] cursor-pointer ${
+                      alert.type === "red"
+                        ? "bg-rose-50/50 border-rose-100 text-rose-800"
+                        : "bg-amber-50/50 border-amber-100 text-amber-800"
+                    }`}
                   >
-                    {alert.icon}
+                    <div
+                      className={`p-2 rounded-xl ${alert.type === "red" ? "bg-rose-500 text-white" : "bg-amber-500 text-white"} shadow-lg`}
+                    >
+                      {getIconForType(alert.iconType)}
+                    </div>
+                    <div>
+                      <p className="text-sm font-black tracking-tight leading-none mb-1">
+                        {alert.title}
+                      </p>
+                      <p className="text-[10px] font-bold uppercase opacity-60">
+                        {alert.sub}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm font-black tracking-tight leading-none mb-1">
-                      {alert.title}
-                    </p>
-                    <p className="text-[10px] font-bold uppercase opacity-60">
-                      {alert.sub}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <button className="w-full mt-6 py-4 bg-slate-50 text-slate-500 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-50 hover:text-indigo-600 transition-all">
-              View All Alerts
-            </button>
+                ))}
+              </div>
+            ) : (
+              <div className="p-8 text-center text-slate-400 border-2 border-dashed border-slate-200 rounded-3xl">
+                <CheckCircle2 size={32} className="mx-auto mb-2 text-emerald-400 opacity-50" />
+                <p className="text-xs font-bold">All clear!</p>
+                <p className="text-[10px]">No pending items.</p>
+              </div>
+            )}
+            {alerts.length > 0 && (
+              <button className="w-full mt-6 py-4 bg-slate-50 text-slate-500 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-50 hover:text-indigo-600 transition-all">
+                View All Alerts
+              </button>
+            )}
           </section>
 
           {/* Activity Timeline */}
@@ -528,28 +529,7 @@ const HRDashboard: React.FC = () => {
               Operations Log
             </h3>
             <div className="space-y-8 relative z-10">
-              {[
-                {
-                  ev: "Sarah J. promoted to Lead",
-                  t: "2h ago",
-                  color: "bg-emerald-500",
-                },
-                {
-                  ev: "Payroll Batch #28 approved",
-                  t: "5h ago",
-                  color: "bg-indigo-500",
-                },
-                {
-                  ev: "New hire: Marcus L.",
-                  t: "Yesterday",
-                  color: "bg-emerald-500",
-                },
-                {
-                  ev: "Exit processed: Linda P.",
-                  t: "Yesterday",
-                  color: "bg-rose-500",
-                },
-              ].map((ev, i) => (
+              {recentActivity.map((ev: any, i: number) => (
                 <div key={i} className="flex gap-4 items-start group">
                   <div
                     className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${ev.color}`}
@@ -577,24 +557,24 @@ const HRDashboard: React.FC = () => {
             </h3>
             <div className="space-y-6">
               <div className="flex items-center gap-4">
-                <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center text-rose-400">
+                <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center text-rose-400 shrink-0">
                   <Heart size={20} fill="currentColor" />
                 </div>
-                <div>
-                  <p className="text-xs font-bold">Birthdays This Week</p>
-                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
-                    James W, Emma D.
+                <div className="min-w-0">
+                  <p className="text-xs font-bold">Birthdays This Month</p>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest truncate">
+                    {events?.birthdays?.length > 0 ? events.birthdays.join(", ") : "No birthdays"}
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-4">
-                <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center text-amber-400">
+                <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center text-amber-400 shrink-0">
                   <Award size={20} />
                 </div>
-                <div>
-                  <p className="text-xs font-bold">1-Year Anniversary</p>
-                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
-                    Michael Chen
+                <div className="min-w-0">
+                  <p className="text-xs font-bold">Anniversaries</p>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest truncate">
+                    {events?.anniversaries?.length > 0 ? events.anniversaries.join(", ") : "No anniversaries"}
                   </p>
                 </div>
               </div>

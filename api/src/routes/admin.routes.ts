@@ -15,6 +15,14 @@ import {
   addAsset,
   deleteAsset
 } from "../controllers/admin/employee.controller";
+import {
+  getTransitions,
+  getTransition,
+  createTransition,
+  addTransitionTask,
+  updateTransitionTaskStatus,
+  cancelTransition,
+} from "../controllers/admin/transition.controller";
 import { authMiddleware } from "../middlewares/auth.middleware";
 import { requireRole, requirePermission } from "../middlewares/role.middleware";
 import payrollRoutes from "./payroll.routes";
@@ -65,11 +73,12 @@ adminRoutes.get("/dev/seed", async (c: any) => {
     }
 
     const users = [
-      { email: "admin@zenhr.com", role: "SUPER_ADMIN", name: "Super Admin" },
-      { email: "hr@zenhr.com", role: "HR_ADMIN", name: "HR Admin" },
-      { email: "manager@zenhr.com", role: "MANAGER", name: "Manager" },
-      { email: "recruiter@zenhr.com", role: "RECRUITER", name: "Recruiter" },
-      { email: "employee@zenhr.com", role: "EMPLOYEE", name: "Employee" },
+      { email: "admin@zenhr.com", role: "SUPER_ADMIN", name: "Super Admin", salary: 12000000 },
+      { email: "hr@zenhr.com", role: "HR_ADMIN", name: "HR Admin", salary: 9600000 },
+      { email: "manager@zenhr.com", role: "MANAGER", name: "Manager", salary: 8400000 },
+      { email: "recruiter@zenhr.com", role: "RECRUITER", name: "Recruiter", salary: 6000000 },
+      { email: "employee@zenhr.com", role: "EMPLOYEE", name: "Employee", salary: 4800000 },
+      { email: "payroll@zenhr.com", role: "PAYROLL_OFFICER", name: "Payroll Officer", salary: 7200000 },
     ];
 
     for (const u of users) {
@@ -99,6 +108,17 @@ adminRoutes.get("/dev/seed", async (c: any) => {
             department: "Engineering",
             employmentType: "Full-time",
             status: "active",
+            // Seeded so the Payroll module has something real to compute on
+            // demo data instead of showing ₦0 for every employee.
+            salary: u.salary,
+            baseSalary: u.salary,
+            bankName: "GTBank",
+            accountNumber: `00${Math.floor(1000000 + Math.random() * 8999999)}`,
+            accountName: `${firstName} ${lastName}`.trim(),
+            pfa: "ARM Pension Managers",
+            pensionId: `PEN${Math.floor(100000 + Math.random() * 899999)}`,
+            tin: `TIN${Math.floor(1000000 + Math.random() * 8999999)}`,
+            hireDate: "2023-01-15",
           });
       }
     }
@@ -133,6 +153,16 @@ adminRoutes.delete("/employees/:id/documents/:documentId", adminOnly, edit("work
 adminRoutes.get("/employees/:id/assets", adminOnly, view("workforce"), getAssets);
 adminRoutes.post("/employees/:id/assets", adminOnly, edit("workforce"), addAsset);
 adminRoutes.delete("/employees/:id/assets/:assetId", adminOnly, edit("workforce"), deleteAsset);
+
+// Transitions (Onboarding / Offboarding journeys) — lives under the same
+// "workforce" permission module as Employees/Assets since it's the same
+// lifecycle surface.
+adminRoutes.get("/transitions", adminOnly, view("workforce"), getTransitions);
+adminRoutes.get("/transitions/:id", adminOnly, view("workforce"), getTransition);
+adminRoutes.post("/transitions", adminOnly, create("workforce"), createTransition);
+adminRoutes.post("/transitions/:id/tasks", adminOnly, edit("workforce"), addTransitionTask);
+adminRoutes.patch("/transitions/:id/tasks/:taskId", adminOnly, edit("workforce"), updateTransitionTaskStatus);
+adminRoutes.patch("/transitions/:id/cancel", adminOnly, del("workforce"), cancelTransition);
 
 adminRoutes.get("/performance/employee/:id", adminOnly, view("performance"), getEmployeeAssessments);
 adminRoutes.post("/performance/employee/:id", adminOnly, create("performance"), addEmployeeAssessment);

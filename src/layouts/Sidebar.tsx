@@ -53,9 +53,10 @@ const Sidebar: React.FC = () => {
       path: "attendance",
     },
     { name: "My Leaves", icon: <Calendar size={20} />, path: "leave" },
+    { name: "My Payroll", icon: <Wallet size={20} />, path: "my-payroll" },
     {
-      name: "Payroll & Benefits",
-      icon: <Wallet size={20} />,
+      name: "Benefits",
+      icon: <Heart size={20} />,
       path: "benefits",
     },
     { name: "My Performance", icon: <Trophy size={20} />, path: "performance" },

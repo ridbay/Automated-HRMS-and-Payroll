@@ -204,6 +204,34 @@
       "when": 1786744435601,
       "tag": "0028_patch_attendance_created_at",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "6",
+      "when": 1786744500000,
+      "tag": "0029_patch_leave_requests_created_at",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "6",
+      "when": 1786744600000,
+      "tag": "0030_add_transitions",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "6",
+      "when": 1786744700000,
+      "tag": "0031_patch_payslips_created_at",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "6",
+      "when": 1786771625611,
+      "tag": "0032_nifty_bloodscream",
+      "breakpoints": true
     }
   ]
 }

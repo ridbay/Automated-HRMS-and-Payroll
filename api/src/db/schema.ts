@@ -19,4 +19,6 @@ export * from '../models/benefits.model';
 export * from '../models/feedback.model';
 export * from '../models/goal.model';
 export * from '../models/assessment.model';
+export * from '../models/reviewCycle.model';
+export * from '../models/transition.model';
 

@@ -330,3 +330,43 @@ export interface TaxBracket {
   range: string;
   rate: number;
 }
+
+export interface TransitionTask {
+  id: string;
+  transitionId: string;
+  title: string;
+  category: 'HR' | 'IT' | 'Finance' | 'Admin';
+  assignedTo?: string | null;
+  dueDate?: string | null;
+  status: 'pending' | 'completed';
+  completedAt?: string | null;
+}
+
+export interface Transition {
+  id: string;
+  type: 'Onboarding' | 'Offboarding';
+  employeeId: string;
+  employeeName: string;
+  employee?: {
+    id: string;
+    name: string;
+    lastName: string;
+    avatar?: string | null;
+    role?: string | null;
+    department?: string | null;
+    status?: string | null;
+  } | null;
+  stage: string;
+  status: 'Active' | 'Completed' | 'Cancelled';
+  progress: number;
+  startDate: string;
+  targetDate?: string | null;
+  reason?: string | null;
+  handoverToId?: string | null;
+  handoverToName?: string | null;
+  exitInterviewScheduled?: boolean | null;
+  initiatedByName?: string | null;
+  completedAt?: string | null;
+  cancelledAt?: string | null;
+  tasks: TransitionTask[];
+}

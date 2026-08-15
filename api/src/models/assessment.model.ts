@@ -5,6 +5,7 @@ export const assessments = sqliteTable('assessments', {
   id: text('id').primaryKey(),
   companyId: text('company_id').notNull(),
   employeeId: text('employee_id').notNull(),
+  cycleId: text('cycle_id'), // FK (soft) -> review_cycles.id; null on legacy/ad-hoc rows
   cycleName: text('cycle_name').notNull(), // e.g. "H2 2024", "Q1 2025"
   status: text('status').notNull().default('draft'), // 'draft' | 'submitted' | 'under_review' | 'completed'
 

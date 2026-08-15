@@ -5,6 +5,7 @@ export const feedbacks = sqliteTable('feedbacks', {
   id: text('id').primaryKey(),
   companyId: text('company_id').notNull(),
   fromEmployeeId: text('from_employee_id').notNull(),
+  toEmployeeId: text('to_employee_id'), // resolved when the recipient was picked from search; null for free-text names
   toEmployeeName: text('to_employee_name').notNull(),
   type: text('type').notNull(), // 'praise' | 'bravo' | 'gratitude'
   message: text('message').notNull(),

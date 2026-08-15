@@ -33,7 +33,9 @@ export const getMyPayslips = async (c: Context<AppEnv>) => {
       })
       .from(schema.payslips)
       .innerJoin(schema.payrollRuns, eq(schema.payslips.runId, schema.payrollRuns.id))
-      .where(and(eq(schema.payslips.employeeId, employeeId), eq(schema.payrollRuns.companyId, companyId)))
+      // Only finalized runs are visible to the employee — pending/rejected
+      // figures aren't final and shouldn't be delivered as a payslip yet.
+      .where(and(eq(schema.payslips.employeeId, employeeId), eq(schema.payrollRuns.companyId, companyId), eq(schema.payrollRuns.status, 'paid')))
       .orderBy(desc(schema.payrollRuns.periodYear), desc(schema.payrollRuns.periodMonth));
 
     return c.json({ data: records });

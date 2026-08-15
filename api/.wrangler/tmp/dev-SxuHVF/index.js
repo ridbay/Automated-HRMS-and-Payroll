@@ -8126,6 +8126,14 @@ __export(schema_exports, {
   assessments: () => assessments,
   attendanceRecords: () => attendanceRecords,
   auditLogs: () => auditLogs,
+  benefitClaims: () => benefitClaims,
+  benefitClaimsRelations: () => benefitClaimsRelations,
+  benefitDependents: () => benefitDependents,
+  benefitDependentsRelations: () => benefitDependentsRelations,
+  benefitEnrollments: () => benefitEnrollments,
+  benefitEnrollmentsRelations: () => benefitEnrollmentsRelations,
+  benefitPlans: () => benefitPlans,
+  benefitPlansRelations: () => benefitPlansRelations,
   companies: () => companies,
   companySettings: () => companySettings,
   complianceTasks: () => complianceTasks,
@@ -8157,10 +8165,19 @@ __export(schema_exports, {
   payrollSettings: () => payrollSettings,
   payslips: () => payslips,
   payslipsRelations: () => payslipsRelations,
+  reviewCycles: () => reviewCycles,
   roles: () => roles,
   salaryComponents: () => salaryComponents,
   taxBrackets: () => taxBrackets,
-  walletTransactions: () => walletTransactions
+  transitionTasks: () => transitionTasks,
+  transitionTasksRelations: () => transitionTasksRelations,
+  transitions: () => transitions,
+  transitionsRelations: () => transitionsRelations,
+  walletTransactions: () => walletTransactions,
+  wellnessParticipants: () => wellnessParticipants,
+  wellnessParticipantsRelations: () => wellnessParticipantsRelations,
+  wellnessPrograms: () => wellnessPrograms,
+  wellnessProgramsRelations: () => wellnessProgramsRelations
 });
 
 // src/models/company.model.ts
@@ -8703,12 +8720,162 @@ var employeeBenefitsRelations = relations(employeeBenefits, ({ one }) => ({
     references: [companies.id]
   })
 }));
+var benefitPlans = sqliteTable("benefit_plans", {
+  id: text("id").primaryKey(),
+  companyId: text("company_id").notNull().references(() => companies.id),
+  name: text("name").notNull(),
+  type: text("type").notNull(),
+  // 'health' | 'life' | 'retirement' | 'equity' | 'perk' | 'wellness' | 'fsa'
+  provider: text("provider"),
+  // e.g. 'AXA Mansard', 'Stanbic IBTC'
+  planTier: text("plan_tier"),
+  // e.g. 'Gold PPO', 'Standard'
+  description: text("description"),
+  highlights: text("highlights"),
+  // JSON-stringified array of bullet points
+  coverageLimit: integer("coverage_limit").default(0),
+  // e.g. annual health cover limit, in kobo/naira
+  employerCost: integer("employer_cost").default(0),
+  // employer-paid monthly cost
+  employeeCost: integer("employee_cost").default(0),
+  // employee-paid monthly cost (premium/deduction)
+  currency: text("currency").notNull().default("NGN"),
+  eligibility: text("eligibility").default("All Employees"),
+  icon: text("icon").default("Shield"),
+  color: text("color").default("indigo"),
+  status: text("status").notNull().default("active"),
+  // 'active' | 'inactive'
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").$onUpdate(() => (/* @__PURE__ */ new Date()).toISOString())
+});
+var benefitPlansRelations = relations(benefitPlans, ({ one, many }) => ({
+  company: one(companies, {
+    fields: [benefitPlans.companyId],
+    references: [companies.id]
+  }),
+  enrollments: many(benefitEnrollments)
+}));
+var benefitEnrollments = sqliteTable("benefit_enrollments", {
+  id: text("id").primaryKey(),
+  companyId: text("company_id").notNull().references(() => companies.id),
+  employeeId: text("employee_id").notNull().references(() => employees.id),
+  planId: text("plan_id").notNull().references(() => benefitPlans.id),
+  coverageLevel: text("coverage_level").default("Individual"),
+  // 'Individual' | 'Family'
+  status: text("status").notNull().default("enrolled"),
+  // 'enrolled' | 'waived' | 'cancelled'
+  enrolledAt: text("enrolled_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  cancelledAt: text("cancelled_at"),
+  notes: text("notes"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").$onUpdate(() => (/* @__PURE__ */ new Date()).toISOString())
+});
+var benefitEnrollmentsRelations = relations(benefitEnrollments, ({ one }) => ({
+  employee: one(employees, {
+    fields: [benefitEnrollments.employeeId],
+    references: [employees.id]
+  }),
+  plan: one(benefitPlans, {
+    fields: [benefitEnrollments.planId],
+    references: [benefitPlans.id]
+  })
+}));
+var benefitDependents = sqliteTable("benefit_dependents", {
+  id: text("id").primaryKey(),
+  companyId: text("company_id").notNull().references(() => companies.id),
+  employeeId: text("employee_id").notNull().references(() => employees.id),
+  name: text("name").notNull(),
+  relationship: text("relationship").notNull(),
+  // 'Spouse' | 'Child' | 'Parent' | 'Other'
+  dateOfBirth: text("date_of_birth"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`)
+});
+var benefitDependentsRelations = relations(benefitDependents, ({ one }) => ({
+  employee: one(employees, {
+    fields: [benefitDependents.employeeId],
+    references: [employees.id]
+  })
+}));
+var wellnessPrograms = sqliteTable("wellness_programs", {
+  id: text("id").primaryKey(),
+  companyId: text("company_id").notNull().references(() => companies.id),
+  title: text("title").notNull(),
+  description: text("description"),
+  category: text("category").notNull().default("fitness"),
+  // 'fitness' | 'mental-health' | 'financial' | 'nutrition' | 'other'
+  goalLabel: text("goal_label").default("Steps"),
+  // unit label shown next to progress, e.g. 'Steps'
+  goalTarget: integer("goal_target").default(0),
+  startDate: text("start_date"),
+  endDate: text("end_date"),
+  status: text("status").notNull().default("active"),
+  // 'active' | 'upcoming' | 'completed'
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").$onUpdate(() => (/* @__PURE__ */ new Date()).toISOString())
+});
+var wellnessProgramsRelations = relations(wellnessPrograms, ({ one, many }) => ({
+  company: one(companies, {
+    fields: [wellnessPrograms.companyId],
+    references: [companies.id]
+  }),
+  participants: many(wellnessParticipants)
+}));
+var wellnessParticipants = sqliteTable("wellness_participants", {
+  id: text("id").primaryKey(),
+  companyId: text("company_id").notNull().references(() => companies.id),
+  programId: text("program_id").notNull().references(() => wellnessPrograms.id),
+  employeeId: text("employee_id").notNull().references(() => employees.id),
+  progress: integer("progress").default(0),
+  status: text("status").notNull().default("joined"),
+  // 'joined' | 'completed' | 'dropped'
+  joinedAt: text("joined_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").$onUpdate(() => (/* @__PURE__ */ new Date()).toISOString())
+});
+var wellnessParticipantsRelations = relations(wellnessParticipants, ({ one }) => ({
+  program: one(wellnessPrograms, {
+    fields: [wellnessParticipants.programId],
+    references: [wellnessPrograms.id]
+  }),
+  employee: one(employees, {
+    fields: [wellnessParticipants.employeeId],
+    references: [employees.id]
+  })
+}));
+var benefitClaims = sqliteTable("benefit_claims", {
+  id: text("id").primaryKey(),
+  companyId: text("company_id").notNull().references(() => companies.id),
+  employeeId: text("employee_id").notNull().references(() => employees.id),
+  kind: text("kind").notNull(),
+  // 'health' | 'wellness'
+  category: text("category").notNull(),
+  // e.g. 'Consultation', 'Pharmacy', 'Gym Membership'
+  provider: text("provider"),
+  // hospital/vendor name
+  amount: integer("amount").notNull(),
+  description: text("description"),
+  status: text("status").notNull().default("pending"),
+  // 'pending' | 'approved' | 'rejected'
+  submittedAt: text("submitted_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  reviewedById: text("reviewed_by_id"),
+  reviewedByName: text("reviewed_by_name"),
+  reviewedAt: text("reviewed_at"),
+  reviewNotes: text("review_notes"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`)
+});
+var benefitClaimsRelations = relations(benefitClaims, ({ one }) => ({
+  employee: one(employees, {
+    fields: [benefitClaims.employeeId],
+    references: [employees.id]
+  })
+}));
 
 // src/models/feedback.model.ts
 var feedbacks = sqliteTable("feedbacks", {
   id: text("id").primaryKey(),
   companyId: text("company_id").notNull(),
   fromEmployeeId: text("from_employee_id").notNull(),
+  toEmployeeId: text("to_employee_id"),
+  // resolved when the recipient was picked from search; null for free-text names
   toEmployeeName: text("to_employee_name").notNull(),
   type: text("type").notNull(),
   // 'praise' | 'bravo' | 'gratitude'
@@ -8732,6 +8899,12 @@ var goals = sqliteTable("goals", {
   dueDate: text("due_date"),
   keyResults: text("key_results"),
   // JSON string
+  scope: text("scope").notNull().default("individual"),
+  // 'individual' | 'team' | 'department' | 'company'
+  assignedById: text("assigned_by_id"),
+  // set when a manager/admin creates it for someone else
+  parentGoalId: text("parent_goal_id"),
+  // links to a broader goal for alignment rollups
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`)
 });
@@ -8741,6 +8914,8 @@ var assessments = sqliteTable("assessments", {
   id: text("id").primaryKey(),
   companyId: text("company_id").notNull(),
   employeeId: text("employee_id").notNull(),
+  cycleId: text("cycle_id"),
+  // FK (soft) -> review_cycles.id; null on legacy/ad-hoc rows
   cycleName: text("cycle_name").notNull(),
   // e.g. "H2 2024", "Q1 2025"
   status: text("status").notNull().default("draft"),
@@ -8770,6 +8945,76 @@ var assessments = sqliteTable("assessments", {
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   submittedAt: text("submitted_at")
 });
+
+// src/models/reviewCycle.model.ts
+var reviewCycles = sqliteTable("review_cycles", {
+  id: text("id").primaryKey(),
+  companyId: text("company_id").notNull(),
+  name: text("name").notNull(),
+  status: text("status").notNull().default("upcoming"),
+  // 'upcoming' | 'active' | 'closed'
+  startDate: text("start_date"),
+  endDate: text("end_date"),
+  selfReviewDueDate: text("self_review_due_date"),
+  managerReviewDueDate: text("manager_review_due_date"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`)
+});
+
+// src/models/transition.model.ts
+var transitions = sqliteTable("transitions", {
+  id: text("id").primaryKey(),
+  companyId: text("company_id").notNull().references(() => companies.id),
+  employeeId: text("employee_id").notNull().references(() => employees.id),
+  type: text("type").notNull(),
+  // 'Onboarding' | 'Offboarding'
+  stage: text("stage").notNull(),
+  status: text("status").notNull().default("Active"),
+  // 'Active' | 'Completed' | 'Cancelled'
+  startDate: text("start_date").notNull(),
+  targetDate: text("target_date"),
+  // expected completion date / last working day
+  reason: text("reason"),
+  // offboarding only: 'Resignation' | 'Termination' | 'Contract Ended' | 'Retirement'
+  handoverToId: text("handover_to_id"),
+  handoverToName: text("handover_to_name"),
+  exitInterviewScheduled: integer("exit_interview_scheduled", { mode: "boolean" }).default(false),
+  initiatedById: text("initiated_by_id"),
+  initiatedByName: text("initiated_by_name"),
+  completedAt: text("completed_at"),
+  cancelledAt: text("cancelled_at"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").$onUpdate(() => (/* @__PURE__ */ new Date()).toISOString())
+});
+var transitionTasks = sqliteTable("transition_tasks", {
+  id: text("id").primaryKey(),
+  companyId: text("company_id").notNull().references(() => companies.id),
+  transitionId: text("transition_id").notNull().references(() => transitions.id),
+  title: text("title").notNull(),
+  category: text("category").notNull(),
+  // 'HR' | 'IT' | 'Finance' | 'Admin'
+  assignedTo: text("assigned_to"),
+  dueDate: text("due_date"),
+  status: text("status").notNull().default("pending"),
+  // 'pending' | 'completed'
+  sortOrder: integer("sort_order").notNull().default(0),
+  completedAt: text("completed_at"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").$onUpdate(() => (/* @__PURE__ */ new Date()).toISOString())
+});
+var transitionsRelations = relations(transitions, ({ many, one }) => ({
+  tasks: many(transitionTasks),
+  employee: one(employees, {
+    fields: [transitions.employeeId],
+    references: [employees.id]
+  })
+}));
+var transitionTasksRelations = relations(transitionTasks, ({ one }) => ({
+  transition: one(transitions, {
+    fields: [transitionTasks.transitionId],
+    references: [transitions.id]
+  })
+}));
 
 // node_modules/hono/dist/utils/encode.js
 var decodeBase64Url = /* @__PURE__ */ __name((str) => {
@@ -9690,6 +9935,19 @@ var EmployeeService = class {
   async deleteEmployee(companyId, employeeId) {
     await this.db.delete(emergencyContacts).where(eq(emergencyContacts.employeeId, employeeId));
     await this.db.delete(employeeDocuments).where(eq(employeeDocuments.employeeId, employeeId));
+    await this.db.delete(employeeAssets).where(eq(employeeAssets.employeeId, employeeId));
+    await this.db.delete(attendanceRecords).where(eq(attendanceRecords.employeeId, employeeId));
+    await this.db.delete(overtimeRequests).where(eq(overtimeRequests.employeeId, employeeId));
+    await this.db.delete(leaveRequests).where(eq(leaveRequests.employeeId, employeeId));
+    await this.db.delete(leaveBalances).where(eq(leaveBalances.employeeId, employeeId));
+    await this.db.delete(employeeBenefits).where(eq(employeeBenefits.employeeId, employeeId));
+    await this.db.delete(payslips).where(eq(payslips.employeeId, employeeId));
+    const employeeLoans = await this.db.select({ id: loans.id }).from(loans).where(eq(loans.employeeId, employeeId)).all();
+    const loanIds = employeeLoans.map((l) => l.id);
+    if (loanIds.length > 0) {
+      await this.db.delete(loanRepayments).where(inArray(loanRepayments.loanId, loanIds));
+    }
+    await this.db.delete(loans).where(eq(loans.employeeId, employeeId));
     await this.db.delete(employees).where(and(eq(employees.id, employeeId), eq(employees.companyId, companyId)));
     return { success: true };
   }
@@ -9942,6 +10200,303 @@ var deleteAsset = /* @__PURE__ */ __name(async (c) => {
   const result = await service.deleteAsset(companyId, employeeId, assetId);
   return c.json(result);
 }, "deleteAsset");
+
+// src/services/transition.service.ts
+var ONBOARDING_STAGES = ["Pre-boarding", "Orientation", "Equipment & Access", "Training", "Final Review"];
+var OFFBOARDING_STAGES = ["Exit Interview", "Handover", "Asset Return", "Account Deactivation"];
+var DAY_MS = 24 * 60 * 60 * 1e3;
+var addDays = /* @__PURE__ */ __name((iso, days) => new Date(new Date(iso).getTime() + days * DAY_MS).toISOString().split("T")[0], "addDays");
+var deriveStage = /* @__PURE__ */ __name((type, progress) => {
+  const stages = type === "Offboarding" ? OFFBOARDING_STAGES : ONBOARDING_STAGES;
+  if (progress <= 0) return stages[0];
+  const idx = Math.min(stages.length - 1, Math.floor(progress / 100 * stages.length));
+  return stages[idx];
+}, "deriveStage");
+var buildDefaultTasks = /* @__PURE__ */ __name((type, ctx) => {
+  if (type === "Offboarding") {
+    const lastDay = ctx.targetDate || ctx.startDate;
+    const tasks = [
+      { title: "Confirm Transition Plan with Manager", category: "HR", assignedTo: ctx.managerName || "Manager", dueDate: ctx.startDate },
+      {
+        title: ctx.exitInterviewScheduled ? "Conduct Exit Interview" : "Schedule Exit Interview",
+        category: "HR",
+        assignedTo: "HR Dept",
+        dueDate: lastDay
+      },
+      {
+        title: ctx.handoverToName ? `Handover Responsibilities to ${ctx.handoverToName}` : "Handover Responsibilities",
+        category: "Admin",
+        assignedTo: ctx.employeeName,
+        dueDate: lastDay
+      },
+      { title: "Revoke IT Access & Accounts", category: "IT", assignedTo: "IT Dept", dueDate: lastDay },
+      { title: "Process Final Settlement", category: "Finance", assignedTo: "Payroll Dept", dueDate: addDays(lastDay, 7) }
+    ];
+    for (const item of ctx.assetChecklist || []) {
+      tasks.push({ title: `Return ${item}`, category: "IT", assignedTo: ctx.employeeName, dueDate: lastDay });
+    }
+    return tasks;
+  }
+  return [
+    { title: "Sign Offer Letter", category: "HR", assignedTo: ctx.employeeName, dueDate: ctx.startDate },
+    { title: "Complete Documentation (Bank, Tax, Pension)", category: "HR", assignedTo: ctx.employeeName, dueDate: addDays(ctx.startDate, 2) },
+    { title: "Provision IT Accounts & Equipment", category: "IT", assignedTo: "IT Dept", dueDate: addDays(ctx.startDate, 1) },
+    { title: "HR Orientation Session", category: "HR", assignedTo: "HR Dept", dueDate: addDays(ctx.startDate, 3) },
+    { title: "Team Introduction", category: "Admin", assignedTo: ctx.managerName || "Manager", dueDate: addDays(ctx.startDate, 3) },
+    { title: "Benefits Enrollment", category: "HR", assignedTo: ctx.employeeName, dueDate: addDays(ctx.startDate, 7) }
+  ];
+}, "buildDefaultTasks");
+var TransitionService = class {
+  static {
+    __name(this, "TransitionService");
+  }
+  db;
+  constructor(dbBinding) {
+    this.db = drizzle(dbBinding, { schema: schema_exports });
+  }
+  async withDetail(row) {
+    const [tasks, employee] = await Promise.all([
+      this.db.query.transitionTasks.findMany({
+        where: eq(transitionTasks.transitionId, row.id),
+        orderBy: /* @__PURE__ */ __name((t, { asc: ascFn }) => [ascFn(t.sortOrder)], "orderBy")
+      }),
+      this.db.query.employees.findFirst({ where: eq(employees.id, row.employeeId) })
+    ]);
+    return {
+      ...row,
+      employeeName: employee ? [employee.name, employee.lastName].filter(Boolean).join(" ") : "Unknown",
+      employee: employee ? {
+        id: employee.id,
+        name: employee.name,
+        lastName: employee.lastName,
+        avatar: employee.avatar,
+        role: employee.role,
+        department: employee.department,
+        status: employee.status
+      } : null,
+      progress: tasks.length ? Math.round(tasks.filter((t) => t.status === "completed").length / tasks.length * 100) : 0,
+      tasks
+    };
+  }
+  async getAllByCompany(companyId, type) {
+    const conditions = [eq(transitions.companyId, companyId)];
+    if (type) conditions.push(eq(transitions.type, type));
+    const rows = await this.db.query.transitions.findMany({
+      where: and(...conditions),
+      orderBy: /* @__PURE__ */ __name((t, { desc: desc3 }) => [desc3(t.createdAt)], "orderBy")
+    });
+    return Promise.all(rows.map((row) => this.withDetail(row)));
+  }
+  async getById(companyId, id) {
+    const row = await this.db.query.transitions.findFirst({
+      where: and(eq(transitions.companyId, companyId), eq(transitions.id, id))
+    });
+    if (!row) return null;
+    return this.withDetail(row);
+  }
+  async create(companyId, actor, payload) {
+    const employee = await this.db.query.employees.findFirst({
+      where: and(eq(employees.id, payload.employeeId), eq(employees.companyId, companyId))
+    });
+    if (!employee) throw new Error("Employee not found");
+    const type = payload.type === "Offboarding" ? "Offboarding" : "Onboarding";
+    const id = `TRN-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+    const startDate = payload.startDate || (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+    const employeeName = [employee.name, employee.lastName].filter(Boolean).join(" ");
+    const manager = employee.managerId ? await this.db.query.employees.findFirst({ where: eq(employees.id, employee.managerId) }) : null;
+    const baseTasks = Array.isArray(payload.checklist) && payload.checklist.length > 0 ? payload.checklist : buildDefaultTasks(type, {
+      employeeName,
+      managerName: manager ? [manager.name, manager.lastName].filter(Boolean).join(" ") : employee.managerName,
+      startDate,
+      targetDate: payload.targetDate,
+      handoverToName: payload.handoverToName,
+      exitInterviewScheduled: !!payload.exitInterviewScheduled,
+      assetChecklist: payload.assetChecklist
+    });
+    const extraTasks = Array.isArray(payload.extraTasks) ? payload.extraTasks.filter((t) => t?.title?.trim()) : [];
+    const taskDefs = [...baseTasks, ...extraTasks];
+    await this.db.insert(transitions).values({
+      id,
+      companyId,
+      employeeId: employee.id,
+      type,
+      stage: deriveStage(type, 0),
+      status: "Active",
+      startDate,
+      targetDate: payload.targetDate || null,
+      reason: type === "Offboarding" ? payload.reason || null : null,
+      handoverToId: payload.handoverToId || null,
+      handoverToName: payload.handoverToName || null,
+      exitInterviewScheduled: !!payload.exitInterviewScheduled,
+      initiatedById: actor.id,
+      initiatedByName: actor.name
+    });
+    if (taskDefs.length > 0) {
+      await this.db.insert(transitionTasks).values(
+        taskDefs.map((t, idx) => ({
+          id: `TSK-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
+          companyId,
+          transitionId: id,
+          title: t.title,
+          category: t.category || "Admin",
+          assignedTo: t.assignedTo || null,
+          dueDate: t.dueDate || null,
+          status: "pending",
+          sortOrder: idx
+        }))
+      );
+    }
+    if (type === "Onboarding" && employee.status !== "active") {
+      await this.db.update(employees).set({ status: "onboarding", updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).where(eq(employees.id, employee.id));
+    } else if (type === "Offboarding" && employee.status !== "terminated") {
+      await this.db.update(employees).set({ status: "notice", updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).where(eq(employees.id, employee.id));
+    }
+    const created = await this.db.query.transitions.findFirst({ where: eq(transitions.id, id) });
+    return this.withDetail(created);
+  }
+  async addTask(companyId, transitionId, data) {
+    const transition = await this.db.query.transitions.findFirst({
+      where: and(eq(transitions.companyId, companyId), eq(transitions.id, transitionId))
+    });
+    if (!transition) return null;
+    const existing = await this.db.query.transitionTasks.findMany({ where: eq(transitionTasks.transitionId, transitionId) });
+    await this.db.insert(transitionTasks).values({
+      id: `TSK-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
+      companyId,
+      transitionId,
+      title: data.title,
+      category: data.category || "Admin",
+      assignedTo: data.assignedTo || null,
+      dueDate: data.dueDate || null,
+      status: "pending",
+      sortOrder: existing.length
+    });
+    return this.recompute(companyId, transitionId);
+  }
+  async setTaskStatus(companyId, transitionId, taskId, status) {
+    const task = await this.db.query.transitionTasks.findFirst({
+      where: and(
+        eq(transitionTasks.id, taskId),
+        eq(transitionTasks.companyId, companyId),
+        eq(transitionTasks.transitionId, transitionId)
+      )
+    });
+    if (!task) return null;
+    await this.db.update(transitionTasks).set({ status, completedAt: status === "completed" ? (/* @__PURE__ */ new Date()).toISOString() : null }).where(eq(transitionTasks.id, taskId));
+    return this.recompute(companyId, transitionId);
+  }
+  // Recomputes stage/progress/status from the current task list and keeps
+  // the linked employee's status in sync when a journey completes.
+  async recompute(companyId, transitionId) {
+    const transition = await this.db.query.transitions.findFirst({
+      where: and(eq(transitions.companyId, companyId), eq(transitions.id, transitionId))
+    });
+    if (!transition) return null;
+    if (transition.status === "Cancelled") return this.withDetail(transition);
+    const tasks = await this.db.query.transitionTasks.findMany({ where: eq(transitionTasks.transitionId, transitionId) });
+    const total = tasks.length;
+    const completed = tasks.filter((t) => t.status === "completed").length;
+    const progress = total ? Math.round(completed / total * 100) : 0;
+    const isComplete = total > 0 && completed === total;
+    const wasComplete = transition.status === "Completed";
+    await this.db.update(transitions).set({
+      stage: deriveStage(transition.type, progress),
+      status: isComplete ? "Completed" : "Active",
+      completedAt: isComplete ? transition.completedAt || (/* @__PURE__ */ new Date()).toISOString() : null,
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    }).where(eq(transitions.id, transitionId));
+    if (isComplete && !wasComplete) {
+      const employee = await this.db.query.employees.findFirst({ where: eq(employees.id, transition.employeeId) });
+      if (employee) {
+        if (transition.type === "Onboarding" && employee.status === "onboarding") {
+          await this.db.update(employees).set({ status: "active", updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).where(eq(employees.id, employee.id));
+        } else if (transition.type === "Offboarding" && employee.status !== "terminated") {
+          await this.db.update(employees).set({ status: "terminated", updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).where(eq(employees.id, employee.id));
+        }
+      }
+    }
+    const updated = await this.db.query.transitions.findFirst({ where: eq(transitions.id, transitionId) });
+    return this.withDetail(updated);
+  }
+  async cancel(companyId, id) {
+    const transition = await this.db.query.transitions.findFirst({
+      where: and(eq(transitions.companyId, companyId), eq(transitions.id, id))
+    });
+    if (!transition) return null;
+    await this.db.update(transitions).set({ status: "Cancelled", cancelledAt: (/* @__PURE__ */ new Date()).toISOString(), updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).where(eq(transitions.id, id));
+    const updated = await this.db.query.transitions.findFirst({ where: eq(transitions.id, id) });
+    return this.withDetail(updated);
+  }
+};
+
+// src/controllers/admin/transition.controller.ts
+var getActor = /* @__PURE__ */ __name(async (c) => {
+  const employeeId = c.get("employeeId");
+  if (!employeeId) return { id: "system", name: "System" };
+  const db = drizzle(c.env.DB, { schema: schema_exports });
+  const employee = await db.query.employees.findFirst({ where: eq(employees.id, employeeId) });
+  const name = employee ? [employee.name, employee.lastName].filter(Boolean).join(" ") : "Unknown";
+  return { id: employeeId, name };
+}, "getActor");
+var getTransitions = /* @__PURE__ */ __name(async (c) => {
+  const companyId = c.get("companyId");
+  const type = c.req.query("type");
+  const service = new TransitionService(c.env.DB);
+  const rows = await service.getAllByCompany(companyId, type);
+  return c.json(rows);
+}, "getTransitions");
+var getTransition = /* @__PURE__ */ __name(async (c) => {
+  const companyId = c.get("companyId");
+  const id = c.req.param("id");
+  const service = new TransitionService(c.env.DB);
+  const row = await service.getById(companyId, id);
+  if (!row) return c.json({ error: "Transition not found" }, 404);
+  return c.json(row);
+}, "getTransition");
+var createTransition = /* @__PURE__ */ __name(async (c) => {
+  const companyId = c.get("companyId");
+  const payload = await c.req.json();
+  if (!payload.employeeId) return c.json({ error: "employeeId is required" }, 400);
+  try {
+    const actor = await getActor(c);
+    const service = new TransitionService(c.env.DB);
+    const created = await service.create(companyId, actor, payload);
+    return c.json(created, 201);
+  } catch (err) {
+    return c.json({ error: err.message || "Failed to start transition" }, 400);
+  }
+}, "createTransition");
+var addTransitionTask = /* @__PURE__ */ __name(async (c) => {
+  const companyId = c.get("companyId");
+  const id = c.req.param("id");
+  const payload = await c.req.json();
+  if (!payload.title) return c.json({ error: "title is required" }, 400);
+  const service = new TransitionService(c.env.DB);
+  const updated = await service.addTask(companyId, id, payload);
+  if (!updated) return c.json({ error: "Transition not found" }, 404);
+  return c.json(updated, 201);
+}, "addTransitionTask");
+var updateTransitionTaskStatus = /* @__PURE__ */ __name(async (c) => {
+  const companyId = c.get("companyId");
+  const id = c.req.param("id");
+  const taskId = c.req.param("taskId");
+  const { status } = await c.req.json();
+  if (status !== "pending" && status !== "completed") {
+    return c.json({ error: "status must be 'pending' or 'completed'" }, 400);
+  }
+  const service = new TransitionService(c.env.DB);
+  const updated = await service.setTaskStatus(companyId, id, taskId, status);
+  if (!updated) return c.json({ error: "Transition or task not found" }, 404);
+  return c.json(updated);
+}, "updateTransitionTaskStatus");
+var cancelTransition = /* @__PURE__ */ __name(async (c) => {
+  const companyId = c.get("companyId");
+  const id = c.req.param("id");
+  const service = new TransitionService(c.env.DB);
+  const updated = await service.cancel(companyId, id);
+  if (!updated) return c.json({ error: "Transition not found" }, 404);
+  return c.json(updated);
+}, "cancelTransition");
 
 // src/middlewares/auth.middleware.ts
 var authMiddleware = /* @__PURE__ */ __name(async (c, next) => {
@@ -10372,32 +10927,35 @@ var PayrollService = class {
       notes: notes || null
     });
     if (preview.payslips.length > 0) {
-      await this.db.insert(payslips).values(
-        preview.payslips.map((ps) => ({
-          id: ps.id,
-          runId,
-          employeeId: ps.employeeId,
-          employeeName: ps.employeeName,
-          department: ps.department,
-          bankName: ps.bankName,
-          accountNumber: ps.accountNumber,
-          accountName: ps.accountName,
-          basicSalary: ps.basicSalary,
-          allowances: ps.allowances,
-          bonuses: ps.bonuses,
-          grossPay: ps.grossPay,
-          taxDeductions: ps.taxDeductions,
-          pensionDeductions: ps.pensionDeductions,
-          loanDeductions: ps.loanDeductions,
-          otherDeductions: ps.otherDeductions,
-          netPay: ps.netPay,
-          isProrated: ps.isProrated,
-          workingDays: ps.workingDays,
-          presentDays: ps.presentDays,
-          absentDays: ps.absentDays,
-          overtimeHours: ps.overtimeHours
-        }))
-      );
+      const rows = preview.payslips.map((ps) => ({
+        id: ps.id,
+        runId,
+        employeeId: ps.employeeId,
+        employeeName: ps.employeeName,
+        department: ps.department,
+        bankName: ps.bankName,
+        accountNumber: ps.accountNumber,
+        accountName: ps.accountName,
+        basicSalary: ps.basicSalary,
+        allowances: ps.allowances,
+        bonuses: ps.bonuses,
+        grossPay: ps.grossPay,
+        taxDeductions: ps.taxDeductions,
+        pensionDeductions: ps.pensionDeductions,
+        loanDeductions: ps.loanDeductions,
+        otherDeductions: ps.otherDeductions,
+        netPay: ps.netPay,
+        isProrated: ps.isProrated,
+        workingDays: ps.workingDays,
+        presentDays: ps.presentDays,
+        absentDays: ps.absentDays,
+        overtimeHours: ps.overtimeHours
+      }));
+      const CHUNK_SIZE = 4;
+      const chunks = [];
+      for (let i = 0; i < rows.length; i += CHUNK_SIZE) chunks.push(rows.slice(i, i + CHUNK_SIZE));
+      const statements = chunks.map((chunk) => this.db.insert(payslips).values(chunk));
+      await this.db.batch(statements);
     }
     return this.getRun(companyId, runId);
   }
@@ -11133,10 +11691,10 @@ leaveAdminRoutes.get("/employee/:id/requests", adminOnly2, view, getEmployeeLeav
 var leave_admin_routes_default = leaveAdminRoutes;
 
 // src/services/requisition.service.ts
-var DAY_MS = 24 * 60 * 60 * 1e3;
+var DAY_MS2 = 24 * 60 * 60 * 1e3;
 var withComputedDaysOpen = /* @__PURE__ */ __name((row) => {
   const opened = new Date(row.dateOpened).getTime();
-  const daysOpen = Number.isFinite(opened) ? Math.max(0, Math.floor((Date.now() - opened) / DAY_MS)) : 0;
+  const daysOpen = Number.isFinite(opened) ? Math.max(0, Math.floor((Date.now() - opened) / DAY_MS2)) : 0;
   return { ...row, daysOpen };
 }, "withComputedDaysOpen");
 var RequisitionService = class {
@@ -11160,7 +11718,7 @@ var RequisitionService = class {
         eq(jobRequisitions.companyId, companyId),
         eq(jobRequisitions.status, "Pending Approval")
       ),
-      orderBy: /* @__PURE__ */ __name((jobRequisitions2, { asc: asc2 }) => [asc2(jobRequisitions2.createdAt)], "orderBy")
+      orderBy: /* @__PURE__ */ __name((jobRequisitions2, { asc: asc3 }) => [asc3(jobRequisitions2.createdAt)], "orderBy")
     });
     return rows.map(withComputedDaysOpen);
   }
@@ -11240,7 +11798,7 @@ var RequisitionService = class {
 
 // src/controllers/admin/requisition.controller.ts
 var VALID_MANUAL_STATUSES = ["Open", "On Hold", "Filled", "Cancelled"];
-var getActor = /* @__PURE__ */ __name(async (c) => {
+var getActor2 = /* @__PURE__ */ __name(async (c) => {
   const employeeId = c.get("employeeId");
   const role = c.get("role");
   if (!employeeId) {
@@ -11280,7 +11838,7 @@ var createRequisition = /* @__PURE__ */ __name(async (c) => {
     if (!payload.title || !payload.department || !payload.location) {
       return c.json({ error: "title, department and location are required" }, 400);
     }
-    const requester = await getActor(c);
+    const requester = await getActor2(c);
     const service = new RequisitionService(c.env.DB);
     const created = await service.create(companyId, requester, payload);
     return c.json(created, 201);
@@ -11291,7 +11849,7 @@ var createRequisition = /* @__PURE__ */ __name(async (c) => {
 var approveRequisition = /* @__PURE__ */ __name(async (c) => {
   const companyId = c.get("companyId");
   const id = c.req.param("id");
-  const reviewer = await getActor(c);
+  const reviewer = await getActor2(c);
   const service = new RequisitionService(c.env.DB);
   const updated = await service.approve(companyId, id, reviewer);
   if (!updated) return c.json({ error: "Requisition not found" }, 404);
@@ -11301,7 +11859,7 @@ var rejectRequisition = /* @__PURE__ */ __name(async (c) => {
   const companyId = c.get("companyId");
   const id = c.req.param("id");
   const payload = await c.req.json().catch(() => ({}));
-  const reviewer = await getActor(c);
+  const reviewer = await getActor2(c);
   const service = new RequisitionService(c.env.DB);
   const updated = await service.reject(companyId, id, reviewer, payload.reason);
   if (!updated) return c.json({ error: "Requisition not found" }, 404);
@@ -11428,7 +11986,7 @@ var AttendanceService = class {
         eq(attendanceRecords.employeeId, employeeId),
         eq(attendanceRecords.date, today)
       ),
-      orderBy: /* @__PURE__ */ __name((attendanceRecords2, { asc: asc2 }) => [asc2(attendanceRecords2.clockIn)], "orderBy")
+      orderBy: /* @__PURE__ */ __name((attendanceRecords2, { asc: asc3 }) => [asc3(attendanceRecords2.clockIn)], "orderBy")
     });
   }
   async getActiveSession(companyId, employeeId) {
@@ -12151,6 +12709,93 @@ var DashboardService = class {
       )
     );
     const totalPayroll = payrollResult[0]?.total || 0;
+    const alerts = [];
+    const today = /* @__PURE__ */ new Date();
+    const thirtyDaysFromNow = new Date(today);
+    thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+    const todayStr = today.toISOString().slice(0, 10);
+    const thirtyDaysStr = thirtyDaysFromNow.toISOString().slice(0, 10);
+    const probationResult = await this.db.select({ count: sql`count(*)` }).from(employees).where(
+      and(
+        eq(employees.companyId, companyId),
+        gte(employees.probationEnd, todayStr),
+        sql`${employees.probationEnd} <= ${thirtyDaysStr}`
+      )
+    );
+    const probationCount = probationResult[0]?.count || 0;
+    if (probationCount > 0) {
+      alerts.push({
+        title: "Probation Ending",
+        sub: `${probationCount} Employees (Next 30 days)`,
+        type: "red",
+        iconType: "UserCheck"
+      });
+    }
+    const pendingLeaveResult = await this.db.select({ count: sql`count(*)` }).from(leaveRequests).where(
+      and(
+        eq(leaveRequests.companyId, companyId),
+        eq(leaveRequests.status, "pending")
+      )
+    );
+    const pendingLeaveCount = pendingLeaveResult[0]?.count || 0;
+    if (pendingLeaveCount > 0) {
+      alerts.push({
+        title: "Leave Requests",
+        sub: `${pendingLeaveCount} pending approvals`,
+        type: "orange",
+        iconType: "Calendar"
+      });
+    }
+    const pendingRequisitionsResult = await this.db.select({ count: sql`count(*)` }).from(jobRequisitions).where(
+      and(
+        eq(jobRequisitions.companyId, companyId),
+        eq(jobRequisitions.status, "Pending Approval")
+      )
+    );
+    const pendingReqCount = pendingRequisitionsResult[0]?.count || 0;
+    if (pendingReqCount > 0) {
+      alerts.push({
+        title: "Job Requisitions",
+        sub: `${pendingReqCount} awaiting review`,
+        type: "orange",
+        iconType: "Briefcase"
+        // Using Briefcase or similar for jobs
+      });
+    }
+    const recentActivityRaw = await this.db.select().from(auditLogs).where(eq(auditLogs.companyId, companyId)).orderBy(sql`${auditLogs.createdAt} DESC`).limit(5);
+    const recentActivity = recentActivityRaw.map((log) => {
+      const logDate = new Date(log.createdAt);
+      const diffMs = today.getTime() - logDate.getTime();
+      const diffHrs = Math.floor(diffMs / (1e3 * 60 * 60));
+      const diffDays = Math.floor(diffHrs / 24);
+      let tStr = "Just now";
+      if (diffDays > 0) tStr = `${diffDays}d ago`;
+      else if (diffHrs > 0) tStr = `${diffHrs}h ago`;
+      return {
+        ev: `${log.actorName} ${log.action} ${log.details}`.trim(),
+        t: tStr,
+        color: "bg-indigo-500"
+        // Default color, could map based on action
+      };
+    });
+    if (recentActivity.length === 0) {
+      recentActivity.push({ ev: "System initialized", t: "Just now", color: "bg-emerald-500" });
+    }
+    const currentMonth = today.toISOString().slice(5, 7);
+    const birthdaysResult = await this.db.select({ name: employees.name, lastName: employees.lastName }).from(employees).where(
+      and(
+        eq(employees.companyId, companyId),
+        like(employees.dob, `%-${currentMonth}-%`)
+      )
+    );
+    const birthdays = birthdaysResult.map((emp) => `${emp.name} ${emp.lastName?.[0]}.`);
+    const anniversariesResult = await this.db.select({ name: employees.name, lastName: employees.lastName, hireDate: employees.hireDate }).from(employees).where(
+      and(
+        eq(employees.companyId, companyId),
+        like(employees.hireDate, `%-${currentMonth}-%`)
+      )
+    );
+    const anniversaries = anniversariesResult.filter((emp) => emp.hireDate && !emp.hireDate.startsWith(today.getFullYear().toString())).map((emp) => `${emp.name} ${emp.lastName?.[0]}.`);
     return {
       totalHeadcount,
       newHires,
@@ -12159,7 +12804,13 @@ var DashboardService = class {
       totalPayroll,
       deptData,
       diversityData,
-      headcountTrend
+      headcountTrend,
+      alerts,
+      recentActivity,
+      events: {
+        birthdays,
+        anniversaries
+      }
     };
   }
 };
@@ -12291,11 +12942,12 @@ adminRoutes.get("/dev/seed", async (c) => {
       });
     }
     const users = [
-      { email: "admin@zenhr.com", role: "SUPER_ADMIN", name: "Super Admin" },
-      { email: "hr@zenhr.com", role: "HR_ADMIN", name: "HR Admin" },
-      { email: "manager@zenhr.com", role: "MANAGER", name: "Manager" },
-      { email: "recruiter@zenhr.com", role: "RECRUITER", name: "Recruiter" },
-      { email: "employee@zenhr.com", role: "EMPLOYEE", name: "Employee" }
+      { email: "admin@zenhr.com", role: "SUPER_ADMIN", name: "Super Admin", salary: 12e6 },
+      { email: "hr@zenhr.com", role: "HR_ADMIN", name: "HR Admin", salary: 96e5 },
+      { email: "manager@zenhr.com", role: "MANAGER", name: "Manager", salary: 84e5 },
+      { email: "recruiter@zenhr.com", role: "RECRUITER", name: "Recruiter", salary: 6e6 },
+      { email: "employee@zenhr.com", role: "EMPLOYEE", name: "Employee", salary: 48e5 },
+      { email: "payroll@zenhr.com", role: "PAYROLL_OFFICER", name: "Payroll Officer", salary: 72e5 }
     ];
     for (const u of users) {
       const existingUser = await db.query.employees.findFirst({
@@ -12319,7 +12971,18 @@ adminRoutes.get("/dev/seed", async (c) => {
           isPasswordChanged: true,
           department: "Engineering",
           employmentType: "Full-time",
-          status: "active"
+          status: "active",
+          // Seeded so the Payroll module has something real to compute on
+          // demo data instead of showing ₦0 for every employee.
+          salary: u.salary,
+          baseSalary: u.salary,
+          bankName: "GTBank",
+          accountNumber: `00${Math.floor(1e6 + Math.random() * 8999999)}`,
+          accountName: `${firstName} ${lastName}`.trim(),
+          pfa: "ARM Pension Managers",
+          pensionId: `PEN${Math.floor(1e5 + Math.random() * 899999)}`,
+          tin: `TIN${Math.floor(1e6 + Math.random() * 8999999)}`,
+          hireDate: "2023-01-15"
         });
       }
     }
@@ -12343,6 +13006,12 @@ adminRoutes.delete("/employees/:id/documents/:documentId", adminOnly4, edit2("wo
 adminRoutes.get("/employees/:id/assets", adminOnly4, view3("workforce"), getAssets);
 adminRoutes.post("/employees/:id/assets", adminOnly4, edit2("workforce"), addAsset);
 adminRoutes.delete("/employees/:id/assets/:assetId", adminOnly4, edit2("workforce"), deleteAsset);
+adminRoutes.get("/transitions", adminOnly4, view3("workforce"), getTransitions);
+adminRoutes.get("/transitions/:id", adminOnly4, view3("workforce"), getTransition);
+adminRoutes.post("/transitions", adminOnly4, create("workforce"), createTransition);
+adminRoutes.post("/transitions/:id/tasks", adminOnly4, edit2("workforce"), addTransitionTask);
+adminRoutes.patch("/transitions/:id/tasks/:taskId", adminOnly4, edit2("workforce"), updateTransitionTaskStatus);
+adminRoutes.patch("/transitions/:id/cancel", adminOnly4, del("workforce"), cancelTransition);
 adminRoutes.get("/performance/employee/:id", adminOnly4, view3("performance"), getEmployeeAssessments);
 adminRoutes.post("/performance/employee/:id", adminOnly4, create("performance"), addEmployeeAssessment);
 adminRoutes.get("/benefits/employee/:id", adminOnly4, getEmployeeBenefits);
@@ -12850,7 +13519,7 @@ var getMyPayslips = /* @__PURE__ */ __name(async (c) => {
       periodYear: payrollRuns.periodYear,
       status: payrollRuns.status,
       paidAt: payrollRuns.paidAt
-    }).from(payslips).innerJoin(payrollRuns, eq(payslips.runId, payrollRuns.id)).where(and(eq(payslips.employeeId, employeeId), eq(payrollRuns.companyId, companyId))).orderBy(desc(payrollRuns.periodYear), desc(payrollRuns.periodMonth));
+    }).from(payslips).innerJoin(payrollRuns, eq(payslips.runId, payrollRuns.id)).where(and(eq(payslips.employeeId, employeeId), eq(payrollRuns.companyId, companyId), eq(payrollRuns.status, "paid"))).orderBy(desc(payrollRuns.periodYear), desc(payrollRuns.periodMonth));
     return c.json({ data: records });
   } catch (error) {
     console.error("Error fetching my payslips:", error);
