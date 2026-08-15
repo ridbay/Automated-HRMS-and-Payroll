@@ -81,11 +81,7 @@ import {
   AreaChart,
   Area,
 } from "recharts";
-import {
-  MOCK_CANDIDATES_DETAILED,
-  MOCK_INTERVIEWS,
-  MOCK_EMPLOYEES,
-} from "../../data/mocks";
+import { MOCK_EMPLOYEES } from "../../data/mocks";
 import { Candidate, JobRequisition, Interview } from "../../types/index";
 import { useAuth } from "../../context/AuthContext";
 import {
@@ -96,6 +92,15 @@ import {
   useDeleteJobRequisition,
   useDepartments,
   useLocations,
+  useCandidates,
+  useUpdateCandidateStatus,
+  useInterviews,
+  useScheduleInterview,
+  useOffers,
+  useCreateOffer,
+  useSendOffer,
+  useRespondToOffer,
+  candidateResumeUrl,
 } from "../../api/client";
 import { RecruitmentAnalyticsBody } from "./RecruitmentAnalytics";
 
@@ -137,6 +142,29 @@ const Recruitment: React.FC = () => {
   const [showOfferModal, setShowOfferModal] = useState(false);
   const [offerStep, setOfferStep] = useState(1);
 
+  const emptyScheduleForm = {
+    candidateId: "",
+    type: "Video" as Interview["type"],
+    stage: "Technical" as Interview["stage"],
+    dateTime: "",
+    durationMinutes: 60,
+    interviewerIds: [] as string[],
+    meetingLink: "",
+  };
+  const [scheduleForm, setScheduleForm] = useState(emptyScheduleForm);
+  const [scheduleFormError, setScheduleFormError] = useState<string | null>(null);
+
+  const emptyOfferForm = {
+    candidateId: "",
+    title: "",
+    department: "",
+    salary: "",
+    startDate: "",
+    expiryDate: "",
+  };
+  const [offerForm, setOfferForm] = useState(emptyOfferForm);
+  const [offerFormError, setOfferFormError] = useState<string | null>(null);
+
   const emptyReqForm = {
     title: "",
     department: "",
@@ -163,6 +191,80 @@ const Recruitment: React.FC = () => {
   const approveRequisition = useApproveJobRequisition();
   const rejectRequisition = useRejectJobRequisition();
   const deleteRequisitionMutation = useDeleteJobRequisition();
+
+  const { data: candidates = [] } = useCandidates();
+  const updateCandidateStatus = useUpdateCandidateStatus();
+  const { data: interviews = [] } = useInterviews();
+  const scheduleInterview = useScheduleInterview();
+  const { data: offers = [] } = useOffers();
+  const createOffer = useCreateOffer();
+  const sendOffer = useSendOffer();
+  const respondToOffer = useRespondToOffer();
+  const candidatesById = useMemo(
+    () => new Map(candidates.map((c: Candidate) => [c.id, c])),
+    [candidates],
+  );
+
+  const openScheduleModal = () => {
+    setScheduleForm({ ...emptyScheduleForm, candidateId: selectedCandidate?.id || "" });
+    setScheduleFormError(null);
+    setScheduleStep(1);
+    setShowScheduleModal(true);
+  };
+
+  const handleSendInvites = () => {
+    if (!scheduleForm.candidateId) {
+      setScheduleFormError("Pick a candidate for this interview.");
+      return;
+    }
+    if (!scheduleForm.dateTime) {
+      setScheduleFormError("Pick a date & time.");
+      return;
+    }
+    setScheduleFormError(null);
+    scheduleInterview.mutate(scheduleForm, {
+      onSuccess: () => setShowScheduleModal(false),
+      onError: (err: any) => setScheduleFormError(err.message || "Failed to schedule interview."),
+    });
+  };
+
+  const openOfferModal = () => {
+    setOfferForm({
+      ...emptyOfferForm,
+      candidateId: selectedCandidate?.id || "",
+      title: selectedCandidate?.currentTitle || "",
+    });
+    setOfferFormError(null);
+    setOfferStep(1);
+    setShowOfferModal(true);
+  };
+
+  const handleSendOffer = () => {
+    if (!offerForm.candidateId || !offerForm.title.trim() || !offerForm.salary) {
+      setOfferFormError("Candidate, title and salary are required.");
+      return;
+    }
+    setOfferFormError(null);
+    createOffer.mutate(
+      {
+        candidateId: offerForm.candidateId,
+        title: offerForm.title.trim(),
+        department: offerForm.department || undefined,
+        salary: Number(String(offerForm.salary).replace(/[^\d.]/g, "")),
+        startDate: offerForm.startDate || undefined,
+        expiryDate: offerForm.expiryDate || undefined,
+      },
+      {
+        onSuccess: (created: any) => {
+          sendOffer.mutate(created.id, {
+            onSuccess: () => setShowOfferModal(false),
+            onError: (err: any) => setOfferFormError(err.message || "Offer created but failed to send."),
+          });
+        },
+        onError: (err: any) => setOfferFormError(err.message || "Failed to create offer."),
+      },
+    );
+  };
 
   const handleSubmitRequisition = () => {
     if (!reqForm.title.trim() || !reqForm.department || !reqForm.location) {
@@ -979,17 +1081,14 @@ const Recruitment: React.FC = () => {
                   </h3>
                 </div>
                 <span className="px-2.5 py-1 bg-slate-100 text-slate-500 rounded-lg text-[10px] font-black">
-                  {
-                    MOCK_CANDIDATES_DETAILED.filter((c) => c.status === col.id)
-                      .length
-                  }
+                  {candidates.filter((c: Candidate) => c.status === col.id).length}
                 </span>
               </div>
 
               <div className="flex-1 space-y-4 min-h-[600px] p-2 bg-slate-50/50 rounded-[2.5rem] border-2 border-dashed border-slate-100">
-                {MOCK_CANDIDATES_DETAILED.filter(
-                  (c) => c.status === col.id,
-                ).map((cand) => (
+                {candidates
+                  .filter((c: Candidate) => c.status === col.id)
+                  .map((cand: Candidate) => (
                   <motion.div
                     key={cand.id}
                     layoutId={cand.id}
@@ -997,13 +1096,15 @@ const Recruitment: React.FC = () => {
                     dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
                     dragElastic={0.2}
                     onDragEnd={(e, info) => {
-                      // Simulated drop logic
-                      if (info.offset.x > 100) {
-                        // Dragged right - simulate move to next stage
-                        console.log(`Moved ${cand.name} to next stage`);
-                      } else if (info.offset.x < -100) {
-                        // Dragged left - simulate move to prev stage
-                        console.log(`Moved ${cand.name} to prev stage`);
+                      const idx = columns.findIndex((c2) => c2.id === col.id);
+                      const nextCol =
+                        info.offset.x > 100
+                          ? columns[idx + 1]
+                          : info.offset.x < -100
+                            ? columns[idx - 1]
+                            : null;
+                      if (nextCol) {
+                        updateCandidateStatus.mutate({ id: cand.id, status: nextCol.id });
                       }
                     }}
                     whileHover={{
@@ -1071,7 +1172,7 @@ const Recruitment: React.FC = () => {
                     <div className="flex items-center justify-between pt-6 mt-6 border-t border-slate-50">
                       <div className="flex items-center gap-1.5 pointer-events-none">
                         <span
-                          className={`w-1.5 h-1.5 rounded-full ${cand.experience > 5 ? "bg-indigo-500" : "bg-slate-300"}`}
+                          className={`w-1.5 h-1.5 rounded-full ${(cand.experienceYears || 0) > 5 ? "bg-indigo-500" : "bg-slate-300"}`}
                         />
                         <span className="text-[9px] font-black text-slate-400 uppercase">
                           {cand.source}
@@ -1118,99 +1219,88 @@ const Recruitment: React.FC = () => {
           </p>
         </div>
         <button
-          onClick={() => setShowOfferModal(true)}
+          onClick={openOfferModal}
           className="px-8 py-3.5 bg-indigo-600 text-white rounded-[1.5rem] font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-100 flex items-center gap-2"
         >
           <Plus size={18} /> Generate Offer Letter
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        {[
-          {
-            name: "Alex Rivera",
-            role: "Senior React Developer",
-            salary: 14500000,
-            status: "Awaiting Candidate",
-            expiry: "2 days",
-            color: "amber",
-          },
-          {
-            name: "Jordan Smith",
-            role: "Backend Lead",
-            salary: 18000000,
-            status: "Negotiating",
-            expiry: "5 days",
-            color: "indigo",
-          },
-          {
-            name: "Taylor Swift",
-            role: "HR Manager",
-            salary: 9500000,
-            status: "Accepted",
-            expiry: "N/A",
-            color: "emerald",
-          },
-        ].map((offer, i) => (
-          <motion.div
-            key={i}
-            whileHover={{ y: -5 }}
-            className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm relative overflow-hidden group"
-          >
-            <div
-              className={`absolute top-0 right-0 w-16 h-16 bg-${offer.color}-50 rounded-full -mr-6 -mt-6 group-hover:scale-110 transition-transform`}
-            />
-            <div className="flex justify-between items-start mb-8">
-              <div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center shadow-inner">
-                <Zap
-                  size={28}
-                  className={`text-${offer.color}-500`}
-                  fill="currentColor"
-                />
-              </div>
-              <span
-                className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border ${
-                  offer.status === "Accepted"
-                    ? "bg-emerald-50 text-emerald-600 border-emerald-100"
-                    : "bg-slate-50 text-slate-500 border-slate-100"
-                }`}
+      {offers.length === 0 ? (
+        <div className="py-24 text-center text-slate-400 font-bold text-sm">
+          No offers yet. Move a candidate to the pipeline and generate one.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          {offers.map((offer: any) => {
+            const candidate = candidatesById.get(offer.candidateId);
+            const color =
+              offer.status === "accepted" ? "emerald" : offer.status === "declined" || offer.status === "rescinded" ? "rose" : "amber";
+            return (
+              <motion.div
+                key={offer.id}
+                whileHover={{ y: -5 }}
+                className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm relative overflow-hidden group"
               >
-                {offer.status}
-              </span>
-            </div>
-            <h3 className="text-xl font-black text-slate-800 mb-1">
-              {offer.name}
-            </h3>
-            <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-6">
-              {offer.role}
-            </p>
-            <div className="space-y-4">
-              <div className="flex justify-between items-center text-xs font-bold">
-                <span className="text-slate-400 uppercase">Annual Package</span>
-                <span className="text-slate-800">
-                  {formatCurrency(offer.salary)}
-                </span>
-              </div>
-              <div className="flex justify-between items-center text-xs font-bold">
-                <span className="text-slate-400 uppercase">Expires In</span>
-                <span
-                  className={`font-black ${offer.expiry === "2 days" ? "text-rose-500" : "text-slate-800"}`}
-                >
-                  {offer.expiry}
-                </span>
-              </div>
-            </div>
-            <div className="flex gap-2 mt-10">
-              <button className="flex-1 py-4 bg-slate-50 text-slate-600 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-600 hover:text-white transition-all shadow-sm">
-                Review Pack
-              </button>
-              <button className="p-4 bg-indigo-50 text-indigo-600 rounded-2xl hover:bg-indigo-600 hover:text-white transition-all">
-                <History size={16} />
-              </button>
-            </div>
-          </motion.div>
-        ))}
-      </div>
+                <div
+                  className={`absolute top-0 right-0 w-16 h-16 bg-${color}-50 rounded-full -mr-6 -mt-6 group-hover:scale-110 transition-transform`}
+                />
+                <div className="flex justify-between items-start mb-8">
+                  <div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center shadow-inner">
+                    <Zap size={28} className={`text-${color}-500`} fill="currentColor" />
+                  </div>
+                  <span
+                    className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border ${
+                      offer.status === "accepted"
+                        ? "bg-emerald-50 text-emerald-600 border-emerald-100"
+                        : "bg-slate-50 text-slate-500 border-slate-100"
+                    }`}
+                  >
+                    {offer.status.replace("_", " ")}
+                  </span>
+                </div>
+                <h3 className="text-xl font-black text-slate-800 mb-1">{candidate?.name || "Unknown candidate"}</h3>
+                <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-6">{offer.title}</p>
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center text-xs font-bold">
+                    <span className="text-slate-400 uppercase">Annual Package</span>
+                    <span className="text-slate-800">{formatCurrency(offer.salary)}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs font-bold">
+                    <span className="text-slate-400 uppercase">Expires</span>
+                    <span className="font-black text-slate-800">{offer.expiryDate || "—"}</span>
+                  </div>
+                </div>
+                <div className="flex gap-2 mt-10">
+                  {offer.status === "sent" ? (
+                    <>
+                      <button
+                        onClick={() => respondToOffer.mutate({ id: offer.id, decision: "accepted" })}
+                        className="flex-1 py-4 bg-emerald-50 text-emerald-600 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-emerald-600 hover:text-white transition-all shadow-sm"
+                      >
+                        Mark Accepted
+                      </button>
+                      <button
+                        onClick={() => respondToOffer.mutate({ id: offer.id, decision: "declined" })}
+                        className="flex-1 py-4 bg-slate-50 text-slate-600 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-rose-500 hover:text-white transition-all shadow-sm"
+                      >
+                        Mark Declined
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={() => candidate && setSelectedCandidate(candidate)}
+                      className="flex-1 py-4 bg-slate-50 text-slate-600 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-600 hover:text-white transition-all shadow-sm"
+                    >
+                      View Candidate
+                    </button>
+                  )}
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 
@@ -1350,22 +1440,32 @@ const Recruitment: React.FC = () => {
                     <Video size={20} /> Today's Syncs
                   </h4>
                   <div className="space-y-6">
-                    {MOCK_INTERVIEWS.map((it) => (
+                    {interviews.length === 0 && (
+                      <p className="text-xs text-white/40 font-bold">No interviews scheduled yet.</p>
+                    )}
+                    {interviews
+                      .filter((it: Interview) => it.status === "Scheduled")
+                      .slice(0, 5)
+                      .map((it: Interview) => (
                       <div
                         key={it.id}
                         className="p-6 bg-white/5 border border-white/10 rounded-3xl backdrop-blur-sm group hover:bg-white/10 transition-all cursor-pointer"
+                        onClick={() => {
+                          const c = candidatesById.get(it.candidateId);
+                          if (c) setSelectedCandidate(c);
+                        }}
                       >
                         <p className="text-[10px] font-black text-indigo-300 uppercase tracking-widest mb-1">
                           {it.stage} Round
                         </p>
                         <p className="text-sm font-black mb-6">
-                          {it.candidateName}
+                          {candidatesById.get(it.candidateId)?.name || "Candidate"}
                         </p>
                         <div className="flex justify-between items-center">
                           <div className="flex items-center gap-2">
                             <Clock size={12} className="text-slate-400" />
                             <span className="text-[10px] font-bold text-slate-400 uppercase">
-                              2:00 PM (Lagos)
+                              {it.dateTime ? new Date(it.dateTime).toLocaleString("en-NG", { dateStyle: "medium", timeStyle: "short" }) : "TBD"}
                             </span>
                           </div>
                           <button className="p-2 bg-indigo-600 text-white rounded-lg group-hover:scale-110 transition-transform">
@@ -1376,7 +1476,7 @@ const Recruitment: React.FC = () => {
                     ))}
                   </div>
                   <button
-                    onClick={() => setShowScheduleModal(true)}
+                    onClick={openScheduleModal}
                     className="w-full mt-10 py-5 bg-indigo-600 text-white rounded-[1.8rem] font-black text-[10px] uppercase tracking-widest shadow-xl flex items-center justify-center gap-3 hover:scale-105 active:scale-95 transition-all"
                   >
                     <Plus size={16} /> New Interview
@@ -1428,7 +1528,7 @@ const Recruitment: React.FC = () => {
                     </h2>
                     <p className="text-sm font-black text-indigo-600 uppercase tracking-[0.2em]">
                       {selectedCandidate.currentTitle} •{" "}
-                      {selectedCandidate.experience}y Experience
+                      {selectedCandidate.experienceYears || 0}y Experience
                     </p>
                     <div className="flex items-center gap-3 mt-4">
                       <span className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-lg text-[9px] font-black uppercase tracking-widest">
@@ -1600,26 +1700,32 @@ const Recruitment: React.FC = () => {
                         <section className="space-y-8">
                           <div className="flex justify-between items-center">
                             <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">
-                              Resume Preview
+                              Resume
                             </h3>
-                            <button className="text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:underline flex items-center gap-1">
-                              <Download size={14} /> Full Document
-                            </button>
+                            {selectedCandidate.resumeFileKey && (
+                              <a
+                                href={candidateResumeUrl(selectedCandidate.id)}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:underline flex items-center gap-1"
+                              >
+                                <Download size={14} /> Open Full Document
+                              </a>
+                            )}
                           </div>
-                          <div className="bg-slate-50 p-10 rounded-[3rem] border border-slate-100 min-h-[300px] relative">
-                            <div className="space-y-6 opacity-40">
-                              <div className="h-6 w-3/4 bg-slate-300 rounded-full" />
-                              <div className="h-4 w-full bg-slate-300 rounded-full" />
-                              <div className="h-4 w-full bg-slate-300 rounded-full" />
-                              <div className="h-4 w-1/2 bg-slate-300 rounded-full" />
-                              <div className="h-20 w-full bg-white rounded-[2rem] border border-slate-200" />
-                              <div className="h-4 w-full bg-slate-300 rounded-full" />
-                            </div>
-                            <div className="absolute inset-0 flex items-center justify-center bg-slate-50/20 backdrop-blur-[2px] transition-opacity rounded-[3rem]">
-                              <button className="px-10 py-5 bg-indigo-600 text-white rounded-[2rem] font-black text-xs uppercase tracking-widest shadow-2xl shadow-indigo-200 hover:scale-105 transition-all">
-                                Open PDF Viewer
-                              </button>
-                            </div>
+                          <div className="bg-slate-50 p-10 rounded-[3rem] border border-slate-100 min-h-[200px] relative flex items-center justify-center">
+                            {selectedCandidate.resumeFileKey ? (
+                              <a
+                                href={candidateResumeUrl(selectedCandidate.id)}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="px-10 py-5 bg-indigo-600 text-white rounded-[2rem] font-black text-xs uppercase tracking-widest shadow-2xl shadow-indigo-200 hover:scale-105 transition-all"
+                              >
+                                Open Resume
+                              </a>
+                            ) : (
+                              <p className="text-sm font-bold text-slate-400">No resume on file for this candidate.</p>
+                            )}
                           </div>
                         </section>
                       </div>
@@ -1729,7 +1835,7 @@ const Recruitment: React.FC = () => {
                           </p>
                           <div className="flex gap-4 max-w-md mx-auto">
                             <button
-                              onClick={() => setShowOfferModal(true)}
+                              onClick={openOfferModal}
                               className="flex-1 py-5 bg-white text-slate-900 rounded-[1.8rem] font-black text-xs uppercase tracking-widest shadow-xl group-hover:scale-105 transition-all"
                             >
                               Extend Offer (₦)
@@ -1855,9 +1961,12 @@ const Recruitment: React.FC = () => {
                           </button>
                         </div>
                         <div className="space-y-6">
-                          {MOCK_INTERVIEWS.filter(
-                            (it) => it.candidateId === selectedCandidate.id,
-                          ).map((it) => (
+                          {interviews.filter((it: Interview) => it.candidateId === selectedCandidate.id).length === 0 && (
+                            <p className="text-sm text-slate-400 font-bold">No interviews logged yet.</p>
+                          )}
+                          {interviews
+                            .filter((it: Interview) => it.candidateId === selectedCandidate.id)
+                            .map((it: Interview) => (
                             <div
                               key={it.id}
                               className="bg-white p-10 rounded-[3rem] border border-slate-200 shadow-sm flex flex-col md:flex-row gap-10"
@@ -1872,7 +1981,15 @@ const Recruitment: React.FC = () => {
                                       {it.type} Interview
                                     </h4>
                                   </div>
-                                  <span className="px-4 py-1.5 bg-emerald-50 text-emerald-600 rounded-xl text-[10px] font-black uppercase tracking-widest border border-emerald-100">
+                                  <span
+                                    className={`px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border ${
+                                      it.status === "Completed"
+                                        ? "bg-emerald-50 text-emerald-600 border-emerald-100"
+                                        : it.status === "Cancelled"
+                                          ? "bg-rose-50 text-rose-600 border-rose-100"
+                                          : "bg-amber-50 text-amber-600 border-amber-100"
+                                    }`}
+                                  >
                                     {it.status}
                                   </span>
                                 </div>
@@ -1886,7 +2003,7 @@ const Recruitment: React.FC = () => {
                                         Date & Time
                                       </p>
                                       <p className="text-sm font-bold text-slate-700">
-                                        {new Date(it.dateTime).toLocaleString()}
+                                        {it.dateTime ? new Date(it.dateTime).toLocaleString() : "TBD"}
                                       </p>
                                     </div>
                                   </div>
@@ -1899,7 +2016,7 @@ const Recruitment: React.FC = () => {
                                         Interviewers
                                       </p>
                                       <p className="text-sm font-bold text-slate-700">
-                                        {it.interviewers.join(", ")}
+                                        {(it.interviewerIds || []).length} assigned
                                       </p>
                                     </div>
                                   </div>
@@ -1910,13 +2027,15 @@ const Recruitment: React.FC = () => {
                                   Internal Scorecard
                                 </p>
                                 <div className="w-20 h-20 bg-white rounded-[1.5rem] shadow-xl flex items-center justify-center mb-4">
-                                  <span className="text-3xl font-black text-indigo-600">
-                                    4.8
-                                  </span>
+                                  {it.status === "Completed" ? (
+                                    <CheckCircle2 size={32} className="text-emerald-500" />
+                                  ) : (
+                                    <Clock size={32} className="text-slate-300" />
+                                  )}
                                 </div>
-                                <button className="text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:underline">
-                                  Full Feedback (3)
-                                </button>
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                  {it.status === "Completed" ? "Feedback submitted" : "Pending"}
+                                </span>
                               </div>
                             </div>
                           ))}
@@ -1929,17 +2048,32 @@ const Recruitment: React.FC = () => {
 
               {/* Fixed Footer Actions */}
               <div className="p-10 border-t border-slate-100 bg-white flex gap-4 shrink-0 shadow-[0_-20px_40px_-20px_rgba(0,0,0,0.1)]">
-                <button className="px-10 py-5 bg-white border border-slate-200 text-rose-500 rounded-[2rem] font-black text-xs uppercase tracking-widest shadow-sm hover:bg-rose-50 transition-all flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    updateCandidateStatus.mutate({ id: selectedCandidate.id, status: "rejected" });
+                    setSelectedCandidate(null);
+                  }}
+                  className="px-10 py-5 bg-white border border-slate-200 text-rose-500 rounded-[2rem] font-black text-xs uppercase tracking-widest shadow-sm hover:bg-rose-50 transition-all flex items-center gap-2"
+                >
                   <Trash size={18} /> Reject
                 </button>
                 <div className="flex-1" />
                 <button
-                  onClick={() => setShowScheduleModal(true)}
+                  onClick={openScheduleModal}
                   className="px-12 py-5 bg-white border border-slate-200 text-slate-600 rounded-[2rem] font-black text-xs uppercase tracking-widest shadow-sm flex items-center gap-2"
                 >
                   <Calendar size={18} /> Schedule
                 </button>
-                <button className="px-14 py-5 bg-indigo-600 text-white rounded-[2rem] font-black text-xs uppercase tracking-widest shadow-2xl shadow-indigo-100 hover:scale-105 active:scale-95 transition-all flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    const order = ["applied", "screening", "interview", "offer", "hired"];
+                    const idx = order.indexOf(selectedCandidate.status);
+                    const next = order[idx + 1];
+                    if (next) updateCandidateStatus.mutate({ id: selectedCandidate.id, status: next });
+                  }}
+                  disabled={selectedCandidate.status === "hired" || selectedCandidate.status === "rejected"}
+                  className="px-14 py-5 bg-indigo-600 text-white rounded-[2rem] font-black text-xs uppercase tracking-widest shadow-2xl shadow-indigo-100 hover:scale-105 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-40 disabled:hover:scale-100"
+                >
                   Advance Stage <ArrowRight size={18} />
                 </button>
               </div>
@@ -2224,27 +2358,53 @@ const Recruitment: React.FC = () => {
                   >
                     {scheduleStep === 1 && (
                       <section className="grid grid-cols-2 gap-12">
+                        <div className="col-span-2 space-y-4">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
+                            Candidate
+                          </label>
+                          <select
+                            value={scheduleForm.candidateId}
+                            onChange={(e) => setScheduleForm((f) => ({ ...f, candidateId: e.target.value }))}
+                            className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-800"
+                          >
+                            <option value="">Select a candidate…</option>
+                            {candidates.map((c: Candidate) => (
+                              <option key={c.id} value={c.id}>
+                                {c.name} — {c.currentTitle || "Candidate"}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                         <div>
                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 block">
                             Interview Type
                           </label>
                           <div className="grid grid-cols-2 gap-4">
-                            {["Video Call", "In-Person", "Phoner", "Panel"].map(
-                              (t) => (
-                                <button
-                                  key={t}
-                                  className="p-6 bg-slate-50 border border-slate-100 rounded-[2rem] hover:border-indigo-500 hover:ring-1 hover:ring-indigo-500 transition-all text-left group focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
-                                >
-                                  <Video
-                                    size={24}
-                                    className="mb-4 text-slate-300 group-hover:text-indigo-600 group-focus:text-indigo-600"
-                                  />
-                                  <span className="text-sm font-black text-slate-700 block">
-                                    {t}
-                                  </span>
-                                </button>
-                              ),
-                            )}
+                            {(
+                              [
+                                { label: "Video Call", value: "Video" },
+                                { label: "In-Person", value: "In-person" },
+                                { label: "Phoner", value: "Phone" },
+                                { label: "Panel", value: "Panel" },
+                              ] as { label: string; value: Interview["type"] }[]
+                            ).map((t) => (
+                              <button
+                                key={t.value}
+                                type="button"
+                                onClick={() => setScheduleForm((f) => ({ ...f, type: t.value }))}
+                                className={`p-6 border rounded-[2rem] transition-all text-left group ${
+                                  scheduleForm.type === t.value
+                                    ? "bg-indigo-50 border-indigo-500 ring-1 ring-indigo-500"
+                                    : "bg-slate-50 border-slate-100 hover:border-indigo-500 hover:ring-1 hover:ring-indigo-500"
+                                }`}
+                              >
+                                <Video
+                                  size={24}
+                                  className={`mb-4 ${scheduleForm.type === t.value ? "text-indigo-600" : "text-slate-300 group-hover:text-indigo-600"}`}
+                                />
+                                <span className="text-sm font-black text-slate-700 block">{t.label}</span>
+                              </button>
+                            ))}
                           </div>
                         </div>
                         <div className="space-y-8">
@@ -2252,11 +2412,15 @@ const Recruitment: React.FC = () => {
                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 block">
                               Stage Context
                             </label>
-                            <select className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-800">
-                              <option>Technical Deep Dive</option>
-                              <option>Culture Fit</option>
-                              <option>Hiring Manager Screen</option>
-                              <option>Executive Final</option>
+                            <select
+                              value={scheduleForm.stage}
+                              onChange={(e) => setScheduleForm((f) => ({ ...f, stage: e.target.value as Interview["stage"] }))}
+                              className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-800"
+                            >
+                              <option value="Technical">Technical Deep Dive</option>
+                              <option value="Cultural">Culture Fit</option>
+                              <option value="Screening">Hiring Manager Screen</option>
+                              <option value="Final">Executive Final</option>
                             </select>
                           </div>
                           <div>
@@ -2264,15 +2428,32 @@ const Recruitment: React.FC = () => {
                               Duration
                             </label>
                             <div className="flex gap-4">
-                              {["30m", "45m", "60m", "90m"].map((d) => (
+                              {[30, 45, 60, 90].map((d) => (
                                 <button
                                   key={d}
-                                  className="flex-1 py-3 bg-white border border-slate-200 rounded-xl text-xs font-black text-slate-600 hover:bg-slate-50"
+                                  type="button"
+                                  onClick={() => setScheduleForm((f) => ({ ...f, durationMinutes: d }))}
+                                  className={`flex-1 py-3 border rounded-xl text-xs font-black transition-all ${
+                                    scheduleForm.durationMinutes === d
+                                      ? "bg-indigo-600 border-indigo-600 text-white"
+                                      : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                                  }`}
                                 >
-                                  {d}
+                                  {d}m
                                 </button>
                               ))}
                             </div>
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 block">
+                              Date & Time
+                            </label>
+                            <input
+                              type="datetime-local"
+                              value={scheduleForm.dateTime}
+                              onChange={(e) => setScheduleForm((f) => ({ ...f, dateTime: e.target.value }))}
+                              className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-800"
+                            />
                           </div>
                         </div>
                       </section>
@@ -2299,6 +2480,15 @@ const Recruitment: React.FC = () => {
                             >
                               <input
                                 type="checkbox"
+                                checked={scheduleForm.interviewerIds.includes(m.id)}
+                                onChange={(e) =>
+                                  setScheduleForm((f) => ({
+                                    ...f,
+                                    interviewerIds: e.target.checked
+                                      ? [...f.interviewerIds, m.id]
+                                      : f.interviewerIds.filter((id) => id !== m.id),
+                                  }))
+                                }
                                 className="w-5 h-5 rounded-lg border-slate-300 text-indigo-600 focus:ring-indigo-500/20"
                               />
                               <img
@@ -2412,11 +2602,13 @@ const Recruitment: React.FC = () => {
                         </div>
                         <div className="space-y-4">
                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                            Or Specific Location
+                            Meeting Link / Location
                           </label>
                           <input
                             type="text"
-                            placeholder="e.g. Glass Room 3, Lagos HQ"
+                            value={scheduleForm.meetingLink}
+                            onChange={(e) => setScheduleForm((f) => ({ ...f, meetingLink: e.target.value }))}
+                            placeholder="e.g. https://meet.google.com/... or Glass Room 3, Lagos HQ"
                             className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-800"
                           />
                         </div>
@@ -2468,28 +2660,30 @@ const Recruitment: React.FC = () => {
                 </AnimatePresence>
               </div>
 
-              <div className="p-10 bg-white border-t border-slate-100 flex justify-between items-center shrink-0">
-                <button
-                  onClick={() =>
-                    scheduleStep > 1
-                      ? setScheduleStep((s) => s - 1)
-                      : setShowScheduleModal(false)
-                  }
-                  className="px-8 py-4 bg-slate-50 text-slate-500 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-100"
-                >
-                  {scheduleStep === 1 ? "Cancel" : "Back"}
-                </button>
-                <button
-                  onClick={() =>
-                    scheduleStep < 5
-                      ? setScheduleStep((s) => s + 1)
-                      : setShowScheduleModal(false)
-                  } // In real app, close on finish
-                  className="px-12 py-4 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-100 hover:scale-105 active:scale-95 transition-all flex items-center gap-2"
-                >
-                  {scheduleStep === 5 ? "Send Invites" : "Continue"}{" "}
-                  <ArrowRight size={16} />
-                </button>
+              <div className="p-10 bg-white border-t border-slate-100 flex flex-col gap-4 shrink-0">
+                {scheduleFormError && (
+                  <p className="text-xs font-bold text-rose-500 text-center">{scheduleFormError}</p>
+                )}
+                <div className="flex justify-between items-center">
+                  <button
+                    onClick={() =>
+                      scheduleStep > 1
+                        ? setScheduleStep((s) => s - 1)
+                        : setShowScheduleModal(false)
+                    }
+                    className="px-8 py-4 bg-slate-50 text-slate-500 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-100"
+                  >
+                    {scheduleStep === 1 ? "Cancel" : "Back"}
+                  </button>
+                  <button
+                    disabled={scheduleInterview.isPending}
+                    onClick={() => (scheduleStep < 5 ? setScheduleStep((s) => s + 1) : handleSendInvites())}
+                    className="px-12 py-4 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-100 hover:scale-105 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-50"
+                  >
+                    {scheduleStep === 5 ? (scheduleInterview.isPending ? "Sending…" : "Send Invites") : "Continue"}{" "}
+                    <ArrowRight size={16} />
+                  </button>
+                </div>
               </div>
             </motion.div>
           </div>
@@ -2572,20 +2766,29 @@ const Recruitment: React.FC = () => {
                         <div className="space-y-8">
                           <div className="space-y-2">
                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                              Candidate & Role
+                              Candidate
+                            </label>
+                            <select
+                              value={offerForm.candidateId}
+                              onChange={(e) => setOfferForm((f) => ({ ...f, candidateId: e.target.value }))}
+                              className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-800"
+                            >
+                              <option value="">Select a candidate…</option>
+                              {candidates.map((c: Candidate) => (
+                                <option key={c.id} value={c.id}>
+                                  {c.name}
+                                </option>
+                              ))}
+                            </select>
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mt-4">
+                              Role Title
                             </label>
                             <input
                               type="text"
-                              defaultValue={
-                                selectedCandidate?.name || "Chinedu Okeke"
-                              }
+                              value={offerForm.title}
+                              onChange={(e) => setOfferForm((f) => ({ ...f, title: e.target.value }))}
+                              placeholder="e.g. Senior React Developer"
                               className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-800"
-                              readOnly
-                            />
-                            <input
-                              type="text"
-                              defaultValue="Senior React Developer"
-                              className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-800 mt-2"
                             />
                           </div>
                           <div className="space-y-2">
@@ -2594,6 +2797,19 @@ const Recruitment: React.FC = () => {
                             </label>
                             <input
                               type="date"
+                              value={offerForm.startDate}
+                              onChange={(e) => setOfferForm((f) => ({ ...f, startDate: e.target.value }))}
+                              className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-800"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                              Offer Expires
+                            </label>
+                            <input
+                              type="date"
+                              value={offerForm.expiryDate}
+                              onChange={(e) => setOfferForm((f) => ({ ...f, expiryDate: e.target.value }))}
                               className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-800"
                             />
                           </div>
@@ -2614,7 +2830,9 @@ const Recruitment: React.FC = () => {
                                   </span>
                                   <input
                                     type="text"
-                                    defaultValue="14,500,000"
+                                    value={offerForm.salary}
+                                    onChange={(e) => setOfferForm((f) => ({ ...f, salary: e.target.value }))}
+                                    placeholder="14,500,000"
                                     className="w-full pl-10 pr-6 py-4 bg-white border-none rounded-2xl outline-none font-black text-indigo-700 shadow-sm"
                                   />
                                 </div>
@@ -2718,18 +2936,16 @@ const Recruitment: React.FC = () => {
                             </h1>
                             <div className="space-y-6 text-sm text-slate-600 leading-relaxed font-serif">
                               <p>
-                                Dear {selectedCandidate?.name || "Chinedu"},
+                                Dear {candidatesById.get(offerForm.candidateId)?.name || "Candidate"},
                               </p>
                               <p>
                                 We are pleased to offer you the position of{" "}
-                                <strong>Senior React Developer</strong> at
-                                ZenHR.
+                                <strong>{offerForm.title || "the role"}</strong> at ZenHR.
                               </p>
                               <p>
                                 Your starting annual compensation will be{" "}
-                                <strong>₦14,500,000</strong> paid in monthly
-                                installments, along with <strong>1,500</strong>{" "}
-                                stock options vesting over 4 years.
+                                <strong>₦{Number(String(offerForm.salary).replace(/[^\d.]/g, "")) ? Number(String(offerForm.salary).replace(/[^\d.]/g, "")).toLocaleString() : "—"}</strong>
+                                {offerForm.startDate ? `, starting ${offerForm.startDate}` : ""}.
                               </p>
                               <p>
                                 We believe your skills and experience will be an
@@ -2747,7 +2963,7 @@ const Recruitment: React.FC = () => {
                                 <div className="h-10 border-b border-slate-800 mb-2" />
                                 <p className="text-xs font-serif italic">
                                   Accepted By:{" "}
-                                  {selectedCandidate?.name || "Candidate"}
+                                  {candidatesById.get(offerForm.candidateId)?.name || "Candidate"}
                                 </p>
                               </div>
                             </div>
@@ -2763,7 +2979,7 @@ const Recruitment: React.FC = () => {
                                 Expiry Date
                               </span>
                               <span className="text-xs font-black text-slate-400">
-                                7 Days
+                                {offerForm.expiryDate || "Not set"}
                               </span>
                             </div>
                             <div className="flex justify-between items-center p-4 bg-white border border-slate-200 rounded-2xl">
@@ -2785,28 +3001,28 @@ const Recruitment: React.FC = () => {
                 </AnimatePresence>
               </div>
 
-              <div className="p-10 bg-white border-t border-slate-100 flex justify-between items-center shrink-0">
-                <button
-                  onClick={() =>
-                    offerStep > 1
-                      ? setOfferStep((s) => s - 1)
-                      : setShowOfferModal(false)
-                  }
-                  className="px-8 py-4 bg-slate-50 text-slate-500 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-100"
-                >
-                  {offerStep === 1 ? "Cancel" : "Back"}
-                </button>
-                <button
-                  onClick={() =>
-                    offerStep < 3
-                      ? setOfferStep((s) => s + 1)
-                      : setShowOfferModal(false)
-                  }
-                  className="px-12 py-4 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-emerald-100 hover:scale-105 active:scale-95 transition-all flex items-center gap-2"
-                >
-                  {offerStep === 3 ? "Send Offer" : "Continue"}{" "}
-                  <ArrowRight size={16} />
-                </button>
+              <div className="p-10 bg-white border-t border-slate-100 flex flex-col gap-4 shrink-0">
+                {offerFormError && <p className="text-xs font-bold text-rose-500 text-center">{offerFormError}</p>}
+                <div className="flex justify-between items-center">
+                  <button
+                    onClick={() =>
+                      offerStep > 1
+                        ? setOfferStep((s) => s - 1)
+                        : setShowOfferModal(false)
+                    }
+                    className="px-8 py-4 bg-slate-50 text-slate-500 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-100"
+                  >
+                    {offerStep === 1 ? "Cancel" : "Back"}
+                  </button>
+                  <button
+                    disabled={createOffer.isPending || sendOffer.isPending}
+                    onClick={() => (offerStep < 3 ? setOfferStep((s) => s + 1) : handleSendOffer())}
+                    className="px-12 py-4 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-emerald-100 hover:scale-105 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-50"
+                  >
+                    {offerStep === 3 ? (createOffer.isPending || sendOffer.isPending ? "Sending…" : "Send Offer") : "Continue"}{" "}
+                    <ArrowRight size={16} />
+                  </button>
+                </div>
               </div>
             </motion.div>
           </div>

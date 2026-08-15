@@ -1,5 +1,5 @@
 import { drizzle } from 'drizzle-orm/d1';
-import { eq, and, gte, lte, asc, desc } from 'drizzle-orm';
+import { eq, and, gte, lte, asc, desc, inArray } from 'drizzle-orm';
 import * as schema from '../db/schema';
 
 const genId = (prefix: string) => `${prefix}-${crypto.randomUUID().split('-')[0].toUpperCase()}`;
@@ -26,6 +26,12 @@ const DEFAULT_SETTINGS = {
   pensionEmployeeRate: 8,
   pensionEmployerRate: 10,
   applyConsolidatedReliefAllowance: true,
+  nhfEnabled: true,
+  nhfRate: 2.5,
+  nsitfEnabled: true,
+  nsitfRate: 1,
+  itfEnabled: true,
+  itfRate: 1,
   currency: 'NGN',
 };
 
@@ -315,6 +321,14 @@ export class PayrollService {
     const pensionableBase = basicSalary + allowances;
     const pensionDeductions = Math.round(pensionableBase * ((settings.pensionEmployeeRate ?? 8) / 100));
 
+    // NHF: employee deduction (National Housing Fund, remitted to FMBN),
+    // reduces net pay like pension does. NSITF/ITF are employer-only
+    // statutory costs — computed for remittance/compliance tracking but
+    // deliberately excluded from the netPay subtraction below.
+    const nhfDeductions = settings.nhfEnabled ? Math.round(basicSalary * ((settings.nhfRate ?? 2.5) / 100)) : 0;
+    const nsitfContribution = settings.nsitfEnabled ? Math.round(grossPay * ((settings.nsitfRate ?? 1) / 100)) : 0;
+    const itfContribution = settings.itfEnabled ? Math.round(grossPay * ((settings.itfRate ?? 1) / 100)) : 0;
+
     const grossAnnual = grossPay * 12;
     let taxableAnnual;
     if (settings.applyConsolidatedReliefAllowance) {
@@ -328,7 +342,7 @@ export class PayrollService {
     const loanDeduction = loan && loan.remainingBalance > 0 ? Math.min(loan.monthlyInstallment, loan.remainingBalance) : 0;
     const otherDeductions = Math.max(0, Math.round(Number(overrides?.otherDeductions) || 0));
 
-    const netPay = grossPay - taxDeductions - pensionDeductions - loanDeduction - otherDeductions;
+    const netPay = grossPay - taxDeductions - pensionDeductions - nhfDeductions - loanDeduction - otherDeductions;
 
     return {
       id: crypto.randomUUID(),
@@ -344,6 +358,9 @@ export class PayrollService {
       grossPay,
       taxDeductions,
       pensionDeductions,
+      nhfDeductions,
+      nsitfContribution,
+      itfContribution,
       loanDeductions: loanDeduction,
       otherDeductions,
       netPay,
@@ -372,6 +389,9 @@ export class PayrollService {
     let totalNet = 0;
     let totalTaxes = 0;
     let totalPension = 0;
+    let totalNhf = 0;
+    let totalNsitf = 0;
+    let totalItf = 0;
     let totalLoanDeductions = 0;
 
     const payslips = activeEmployees.map((emp: any) => {
@@ -380,6 +400,9 @@ export class PayrollService {
       totalNet += ps.netPay;
       totalTaxes += ps.taxDeductions;
       totalPension += ps.pensionDeductions;
+      totalNhf += ps.nhfDeductions;
+      totalNsitf += ps.nsitfContribution;
+      totalItf += ps.itfContribution;
       totalLoanDeductions += ps.loanDeductions;
       return ps;
     });
@@ -392,6 +415,9 @@ export class PayrollService {
       totalNet,
       totalTaxes,
       totalPension,
+      totalNhf,
+      totalNsitf,
+      totalItf,
       totalLoanDeductions,
       employeeCount: activeEmployees.length,
       exceptions: this.buildExceptions(activeEmployees),
@@ -417,6 +443,9 @@ export class PayrollService {
       totalNet: preview.totalNet,
       totalTaxes: preview.totalTaxes,
       totalPension: preview.totalPension,
+      totalNhf: preview.totalNhf,
+      totalNsitf: preview.totalNsitf,
+      totalItf: preview.totalItf,
       totalLoanDeductions: preview.totalLoanDeductions,
       employeeCount: preview.employeeCount,
       dueDate: `${periodYear}-${String(periodMonth).padStart(2, '0')}-${String(settings.paymentDay).padStart(2, '0')}`,
@@ -441,6 +470,9 @@ export class PayrollService {
         grossPay: ps.grossPay,
         taxDeductions: ps.taxDeductions,
         pensionDeductions: ps.pensionDeductions,
+        nhfDeductions: ps.nhfDeductions,
+        nsitfContribution: ps.nsitfContribution,
+        itfContribution: ps.itfContribution,
         loanDeductions: ps.loanDeductions,
         otherDeductions: ps.otherDeductions,
         netPay: ps.netPay,
@@ -452,7 +484,7 @@ export class PayrollService {
       }));
 
       // D1 caps bound parameters at 100 per statement. Each payslip row binds
-      // ~21 params, so a single multi-row VALUES insert breaks past ~4-5
+      // ~24 params, so a single multi-row VALUES insert breaks past ~4-5
       // employees. Chunk into a batch of smaller inserts (still one atomic
       // D1 round trip) instead.
       const CHUNK_SIZE = 4;
@@ -549,6 +581,10 @@ export class PayrollService {
     const pad = (n: number) => String(n).padStart(2, '0');
     const periodLabel = new Date(run.periodYear, run.periodMonth - 1, 1).toLocaleString('en-US', { month: 'long', year: 'numeric' });
 
+    // NSITF/ITF are realistically remitted quarterly/annually rather than
+    // monthly in practice, but a task is generated every run anyway to keep
+    // the Compliance tracker uniform — refining the cadence is a reasonable
+    // fast-follow, not a blocker for having the obligation tracked at all.
     await this.db.insert(schema.complianceTasks).values([
       {
         id: genId('CT'),
@@ -570,6 +606,36 @@ export class PayrollService {
         amount: run.totalPension,
         status: 'pending',
       },
+      {
+        id: genId('CT'),
+        companyId,
+        payrollRunId: runId,
+        title: `${periodLabel} NHF Remittance`,
+        type: 'nhf',
+        dueDate: `${np.year}-${pad(np.month)}-30`,
+        amount: run.totalNhf || 0,
+        status: 'pending',
+      },
+      {
+        id: genId('CT'),
+        companyId,
+        payrollRunId: runId,
+        title: `${periodLabel} NSITF Contribution`,
+        type: 'nsitf',
+        dueDate: `${np.year}-${pad(np.month)}-30`,
+        amount: run.totalNsitf || 0,
+        status: 'pending',
+      },
+      {
+        id: genId('CT'),
+        companyId,
+        payrollRunId: runId,
+        title: `${periodLabel} ITF Levy`,
+        type: 'itf',
+        dueDate: `${np.year}-${pad(np.month)}-30`,
+        amount: run.totalItf || 0,
+        status: 'pending',
+      },
     ]);
 
     return this.getRun(companyId, runId);
@@ -583,6 +649,68 @@ export class PayrollService {
       [ps.employeeId, ps.employeeName, ps.bankName || '', ps.accountNumber || '', ps.accountName || '', ps.netPay].join(',')
     );
     return { filename: `bank-file-${run.periodYear}-${String(run.periodMonth).padStart(2, '0')}.csv`, content: header + lines.join('\n') };
+  }
+
+  // ---------------- Statutory remittance schedules ----------------
+  // One CSV per scheme, shaped to resemble what each agency's filing
+  // actually asks for (PAYE per-state-IRS, Pension per-PFA, NHF/NSITF
+  // per-employee, ITF as a single company-level levy line).
+  async getRemittanceSchedule(companyId: string, runId: string, type: 'paye' | 'pension' | 'nhf' | 'nsitf' | 'itf') {
+    const run = await this.getRun(companyId, runId);
+    if (!run) return null;
+
+    const employeeIds = run.payslips.map((ps: any) => ps.employeeId);
+    const [employees, settings] = await Promise.all([
+      employeeIds.length ? this.db.query.employees.findMany({ where: inArray(schema.employees.id, employeeIds) }) : Promise.resolve([]),
+      this.getSettings(companyId),
+    ]);
+    const empById = new Map<string, any>(employees.map((e: any) => [e.id, e]));
+
+    const periodLabel = `${run.periodYear}-${String(run.periodMonth).padStart(2, '0')}`;
+    const csv = (header: string, rows: string[]) => ({ filename: `${type}-remittance-${periodLabel}.csv`, content: header + '\n' + rows.join('\n') });
+
+    if (type === 'paye') {
+      const header = 'Employee Name,TIN,Tax State,Gross Annual,PAYE Deducted (Monthly)';
+      const rows = run.payslips.map((ps: any) => {
+        const emp = empById.get(ps.employeeId);
+        return [ps.employeeName, emp?.tin || '', emp?.taxState || '', ps.grossPay * 12, ps.taxDeductions].join(',');
+      });
+      return csv(header, rows);
+    }
+
+    if (type === 'pension') {
+      const header = 'Employee Name,PFA,Pension PIN,Employee Contribution,Employer Contribution,Total';
+      const rows = run.payslips.map((ps: any) => {
+        const emp = empById.get(ps.employeeId);
+        const employerContribution = Math.round((ps.basicSalary + ps.allowances) * ((settings.pensionEmployerRate ?? 10) / 100));
+        return [ps.employeeName, emp?.pfa || '', emp?.pensionId || '', ps.pensionDeductions, employerContribution, ps.pensionDeductions + employerContribution].join(',');
+      });
+      return csv(header, rows);
+    }
+
+    if (type === 'nhf') {
+      const header = 'Employee Name,NHF Number,Basic Salary,NHF Contribution';
+      const rows = run.payslips.map((ps: any) => {
+        const emp = empById.get(ps.employeeId);
+        return [ps.employeeName, emp?.nhf || '', ps.basicSalary, ps.nhfDeductions].join(',');
+      });
+      return csv(header, rows);
+    }
+
+    if (type === 'nsitf') {
+      const header = 'Employee Name,NIN,Gross Pay,NSITF Contribution (Employer)';
+      const rows = run.payslips.map((ps: any) => {
+        const emp = empById.get(ps.employeeId);
+        return [ps.employeeName, emp?.nin || '', ps.grossPay, ps.nsitfContribution].join(',');
+      });
+      return csv(header, rows);
+    }
+
+    // ITF is a flat annual levy on total payroll cost, filed at company
+    // level rather than per-employee.
+    const header = 'Period,Total Payroll Cost,ITF Levy (1%)';
+    const totalItf = run.payslips.reduce((sum: number, ps: any) => sum + (ps.itfContribution || 0), 0);
+    return csv(header, [[periodLabel, run.totalGross, totalItf].join(',')]);
   }
 
   // ---------------- Compliance ----------------
@@ -628,6 +756,9 @@ export class PayrollService {
       totalNet: currentRun ? currentRun.totalNet : preview.totalNet,
       totalTaxes: currentRun ? currentRun.totalTaxes : preview.totalTaxes,
       totalPension: currentRun ? currentRun.totalPension : preview.totalPension,
+      totalNhf: currentRun ? currentRun.totalNhf : preview.totalNhf,
+      totalNsitf: currentRun ? currentRun.totalNsitf : preview.totalNsitf,
+      totalItf: currentRun ? currentRun.totalItf : preview.totalItf,
       totalLoanDeductions: currentRun ? currentRun.totalLoanDeductions : preview.totalLoanDeductions,
       exceptions: preview.exceptions,
       pendingComplianceCount: pendingCompliance.length,

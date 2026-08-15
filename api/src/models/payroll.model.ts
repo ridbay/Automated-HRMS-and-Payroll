@@ -17,6 +17,16 @@ export const payrollSettings = sqliteTable('payroll_settings', {
   pensionEmployeeRate: real('pension_employee_rate').notNull().default(8), // % of basic+housing+transport
   pensionEmployerRate: real('pension_employer_rate').notNull().default(10),
   applyConsolidatedReliefAllowance: integer('apply_cra', { mode: 'boolean' }).notNull().default(true),
+  // NHF (Federal Mortgage Bank): employee deduction, reduces net pay.
+  nhfEnabled: integer('nhf_enabled', { mode: 'boolean' }).notNull().default(true),
+  nhfRate: real('nhf_rate').notNull().default(2.5), // % of basic salary
+  // NSITF (Employees' Compensation Scheme) and ITF (Industrial Training Fund)
+  // are both employer-paid statutory costs — computed and tracked for
+  // remittance, but never subtracted from an employee's net pay.
+  nsitfEnabled: integer('nsitf_enabled', { mode: 'boolean' }).notNull().default(true),
+  nsitfRate: real('nsitf_rate').notNull().default(1), // % of gross pay
+  itfEnabled: integer('itf_enabled', { mode: 'boolean' }).notNull().default(true),
+  itfRate: real('itf_rate').notNull().default(1), // % of gross pay
   currency: text('currency').notNull().default('NGN'),
   createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text('updated_at').$onUpdate(() => new Date().toISOString()),
@@ -95,7 +105,7 @@ export const complianceTasks = sqliteTable('compliance_tasks', {
   companyId: text('company_id').notNull().references(() => companies.id),
   payrollRunId: text('payroll_run_id'),
   title: text('title').notNull(),
-  type: text('type').notNull(), // 'tax' | 'pension' | 'other'
+  type: text('type').notNull(), // 'tax' | 'pension' | 'nhf' | 'nsitf' | 'itf' | 'other'
   dueDate: text('due_date').notNull(),
   amount: integer('amount').notNull().default(0),
   status: text('status').notNull().default('pending'), // 'pending' | 'completed'
@@ -117,6 +127,9 @@ export const payrollRuns = sqliteTable('payroll_runs', {
   totalNet: integer('total_net').notNull().default(0),
   totalTaxes: integer('total_taxes').notNull().default(0),
   totalPension: integer('total_pension').notNull().default(0),
+  totalNhf: integer('total_nhf').notNull().default(0),
+  totalNsitf: integer('total_nsitf').notNull().default(0), // employer cost, not part of totalNet
+  totalItf: integer('total_itf').notNull().default(0), // employer cost, not part of totalNet
   totalLoanDeductions: integer('total_loan_deductions').notNull().default(0),
   employeeCount: integer('employee_count').notNull().default(0),
   dueDate: text('due_date'),
@@ -147,6 +160,10 @@ export const payslips = sqliteTable('payslips', {
   grossPay: integer('gross_pay').notNull().default(0),
   taxDeductions: integer('tax_deductions').notNull().default(0),
   pensionDeductions: integer('pension_deductions').notNull().default(0),
+  nhfDeductions: integer('nhf_deductions').notNull().default(0),
+  // Employer-cost, informational only — not subtracted from netPay.
+  nsitfContribution: integer('nsitf_contribution').notNull().default(0),
+  itfContribution: integer('itf_contribution').notNull().default(0),
   loanDeductions: integer('loan_deductions').notNull().default(0),
   otherDeductions: integer('other_deductions').notNull().default(0),
   netPay: integer('net_pay').notNull().default(0),

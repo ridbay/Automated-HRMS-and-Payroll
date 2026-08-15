@@ -6,15 +6,18 @@ import {
   LogOut,
   ChevronDown,
   Settings,
+  Sparkles,
 } from "lucide-react";
 import { useNavigation } from "../context/NavigationContext";
 import { useAuth } from "../context/AuthContext";
 import { motion, AnimatePresence } from "framer-motion";
+import AIAssistant from "../features/core/AIAssistant";
 
 const Header: React.FC = () => {
   const { activeTab, setActiveTab } = useNavigation();
   const { user, logout } = useAuth();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [showAssistant, setShowAssistant] = useState(false);
   const formattedTitle = activeTab
     .split("-")
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
@@ -41,6 +44,14 @@ const Header: React.FC = () => {
       </div>
 
       <div className="flex items-center gap-3">
+        <button
+          onClick={() => setShowAssistant(true)}
+          title="Ask the ZenHR assistant"
+          className="p-2.5 text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 rounded-2xl transition-all"
+        >
+          <Sparkles size={20} />
+        </button>
+
         <button className="p-2.5 text-slate-400 hover:bg-slate-50 hover:text-indigo-600 rounded-2xl relative transition-all">
           <Bell size={20} />
           <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-rose-500 rounded-full border-2 border-white"></span>
@@ -139,6 +150,8 @@ const Header: React.FC = () => {
           </AnimatePresence>
         </div>
       </div>
+
+      <AIAssistant open={showAssistant} onClose={() => setShowAssistant(false)} />
     </header>
   );
 };

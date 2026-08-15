@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm';
 import * as schema from '../../db/schema';
 import { AtsService, AtsActor } from '../../services/ats.service';
 import { StorageService } from '../../services/storage.service';
+import { NotificationService } from '../../services/controlCenter.service';
 import { AppEnv } from '../../types';
 
 // Same shape/derivation as requisition.controller.ts's getActor — kept as a
@@ -212,6 +213,14 @@ export const sendOffer = async (c: Context<AppEnv>) => {
     const service = new AtsService(c.env.DB);
     const updated = await service.sendOffer(companyId, actor, (c.req.param('id') as string));
     if (!updated) return c.json({ error: 'Not found' }, 404);
+
+    const candidate = await service.getCandidate(companyId, updated.candidateId);
+    await new NotificationService(c.env.DB).notify(
+      companyId,
+      'ats.offer_sent',
+      `📨 Offer sent to ${candidate?.name || 'a candidate'} for *${updated.title}*`
+    );
+
     return c.json({ data: updated });
   } catch (error: any) {
     return c.json({ error: error.message }, 400);
@@ -227,6 +236,16 @@ export const respondToOffer = async (c: Context<AppEnv>) => {
     const service = new AtsService(c.env.DB);
     const updated = await service.respondToOffer(companyId, actor, (c.req.param('id') as string), decision);
     if (!updated) return c.json({ error: 'Not found' }, 404);
+
+    if (decision === 'accepted') {
+      const candidate = await service.getCandidate(companyId, updated.candidateId);
+      await new NotificationService(c.env.DB).notify(
+        companyId,
+        'ats.offer_accepted',
+        `🎉 ${candidate?.name || 'A candidate'} accepted the offer for *${updated.title}* — welcome to the team!`
+      );
+    }
+
     return c.json({ data: updated });
   } catch (error: any) {
     return c.json({ error: error.message }, 400);

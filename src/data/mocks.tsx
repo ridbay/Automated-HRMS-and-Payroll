@@ -32,8 +32,6 @@ import {
   ComplianceTask,
   TaxBracket,
   JobRequisition,
-  Candidate,
-  Interview,
 } from "../types/index";
 
 export const NAV_ITEMS = [
@@ -91,65 +89,10 @@ export const MOCK_REQUISITIONS: JobRequisition[] = [
   },
 ];
 
-export const MOCK_CANDIDATES_DETAILED: Candidate[] = [
-  {
-    id: "C-001",
-    name: "Chinedu Okeke",
-    currentTitle: "Senior Frontend Dev",
-    currentEmployer: "Paystack",
-    email: "cokeke@example.com",
-    phone: "+234 801 234 5678",
-    location: "Lekki, Lagos",
-    experience: 7,
-    education: "B.Sc. Computer Science, UNILAG",
-    source: "LinkedIn",
-    rating: 4.8,
-    skills: ["React", "TypeScript", "Redux", "System Design"],
-    salaryExpectation: "₦14.0M - ₦16.0M",
-    status: "interview",
-    appliedDate: "2024-05-20",
-    timeline: [
-      { event: "Application Submitted", date: "2024-05-20" },
-      {
-        event: "Screening Passed",
-        date: "2024-05-22",
-        note: "Strong technical background.",
-      },
-    ],
-  },
-  {
-    id: "C-002",
-    name: "Bolanle Adeyemi",
-    currentTitle: "React Engineer",
-    currentEmployer: "Flutterwave",
-    email: "badeyemi@example.com",
-    phone: "+234 809 876 5432",
-    location: "Remote",
-    experience: 4,
-    education: "B.Tech. Software Engineering, FUTA",
-    source: "Referral",
-    rating: 4.2,
-    skills: ["React", "Next.js", "Tailwind", "Node.js"],
-    status: "screening",
-    appliedDate: "2024-05-21",
-    timeline: [{ event: "Application Submitted", date: "2024-05-21" }],
-  },
-];
-
-export const MOCK_INTERVIEWS: Interview[] = [
-  {
-    id: "INT-001",
-    candidateId: "C-001",
-    candidateName: "Chinedu Okeke",
-    type: "Video",
-    stage: "Technical",
-    dateTime: "2024-05-25T14:00:00Z",
-    duration: 60,
-    interviewers: ["Tunde Bakare", "Emeka Okafor"],
-    link: "https://zoom.us/j/8293048",
-    status: "Scheduled",
-  },
-];
+// MOCK_CANDIDATES_DETAILED / MOCK_INTERVIEWS removed — Recruitment.tsx now
+// reads real data from the ATS backend (useCandidates/useInterviews in
+// src/api/client.ts) instead of these, per AGENT.md's "phase out mocks as
+// API integration completes" convention.
 
 export const MOCK_BADGES: Badge[] = [
   {

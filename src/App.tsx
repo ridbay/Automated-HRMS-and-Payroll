@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 const RegisterPage = React.lazy(() => import('./features/core/RegisterPage'));
+const CareersPage = React.lazy(() => import('./features/public/CareersPage'));
 import Sidebar from "./layouts/Sidebar";
 import Header from "./layouts/Header";
 import Dashboard from "./features/core/Dashboard";
@@ -37,10 +38,20 @@ import { NavigationProvider, useNavigation } from "./context/NavigationContext";
 import Support from "./features/support/Support";
 import EmployeeOnboarding from "./features/employee/EmployeeOnboarding";
 
+// The app has no client-side router anywhere else — this is the one
+// deliberately narrow exception, letting the public careers page be reached
+// at a real shareable URL (/careers/:companyIdentifier[/:requisitionId])
+// without a login gate. Everything else still renders via the activeTab
+// switch below.
+const CAREERS_PATH_MATCH = /^\/careers\/([^/]+)(?:\/([^/]+))?\/?$/;
+
 const AppContent: React.FC = () => {
   const { user, isAuthenticated, login, logout } = useAuth();
   const { activeTab, setActiveTab, isSidebarOpen, toggleSidebar } =
     useNavigation();
+
+  const careersMatch =
+    typeof window !== "undefined" ? window.location.pathname.match(CAREERS_PATH_MATCH) : null;
 
   useEffect(() => {
     if (user) {
@@ -150,6 +161,14 @@ const AppContent: React.FC = () => {
   };
 
   const [isRegistering, setIsRegistering] = useState(false);
+
+  if (careersMatch) {
+    return (
+      <React.Suspense fallback={<div>Loading...</div>}>
+        <CareersPage companyIdentifier={careersMatch[1]} initialRequisitionId={careersMatch[2] || null} />
+      </React.Suspense>
+    );
+  }
 
   if (!isAuthenticated) {
     if (isRegistering) {

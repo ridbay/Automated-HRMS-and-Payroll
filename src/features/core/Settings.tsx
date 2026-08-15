@@ -26,6 +26,7 @@ import {
   useHolidays, useCreateHoliday, useDeleteHoliday,
   useEmailTemplates, useUpdateEmailTemplate,
   useIntegrations, useToggleIntegration,
+  useConnectSlack, useDisconnectSlack, useTestSlack, useIntegrationEvents,
   useWorkflows, useUpdateWorkflow,
   useDataStats, exportCompanyData,
   useAuditLogs, exportAuditLogsCsv,
@@ -134,6 +135,14 @@ const Settings: React.FC = () => {
   // Integrations
   const { data: integrations, isLoading: isIntegrationsLoading } = useIntegrations(isAdmin);
   const toggleIntegration = useToggleIntegration();
+  const connectSlack = useConnectSlack();
+  const disconnectSlack = useDisconnectSlack();
+  const testSlack = useTestSlack();
+  const [showSlackModal, setShowSlackModal] = useState(false);
+  const [slackWebhookUrl, setSlackWebhookUrl] = useState('');
+  const [slackError, setSlackError] = useState<string | null>(null);
+  const slackConnected = integrations?.find((i: any) => i.key === 'slack')?.status === 'connected';
+  const { data: slackEvents } = useIntegrationEvents('slack', isAdmin && slackConnected);
 
   // Workflows
   const { data: workflows, isLoading: isWorkflowsLoading } = useWorkflows(isAdmin);
@@ -765,6 +774,12 @@ const Settings: React.FC = () => {
          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {integrations?.map((app: any) => {
               const isConnected = app.status === 'connected';
+              const isSlack = app.key === 'slack';
+              // Only Slack has a real connection behind it (an Incoming
+              // Webhook, no OAuth needed) — everything else is still just
+              // this on/off catalog state, so it's labeled honestly rather
+              // than implying a live handshake that doesn't exist.
+              const isReal = isSlack;
               const ICONS: Record<string, React.ReactNode> = {
                 google_calendar: <Calendar />, slack: <Smartphone />, paystack: <Globe />,
                 outlook: <Mail />, zoom: <Monitor />, quickbooks: <Database />,
@@ -786,19 +801,112 @@ const Settings: React.FC = () => {
                       </span>
                    </div>
                    <h3 className="text-lg font-black text-slate-800 mb-1">{app.name}</h3>
-                   <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-6">{app.category}</p>
-                   <button
-                     onClick={() => toggleIntegration.mutate(app.key)}
-                     disabled={toggleIntegration.isPending}
-                     className={`w-full py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 disabled:opacity-50 ${
-                       isConnected ? 'bg-slate-50 text-slate-600 hover:bg-rose-50 hover:text-rose-600' : 'bg-indigo-600 text-white shadow-lg hover:bg-indigo-700'
-                     }`}
-                   >
-                     {isConnected ? <><Unlink size={13} /> Disconnect</> : <><Link2 size={13} /> Connect Account</>}
-                   </button>
+                   <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-2">{app.category}</p>
+                   {!isReal && (
+                     <p className="text-[10px] text-amber-500 font-bold mb-4">Requires setup — not live yet</p>
+                   )}
+                   {isSlack && isConnected && app.lastError && (
+                     <p className="text-[10px] text-rose-500 font-bold mb-4">Last delivery failed: {app.lastError}</p>
+                   )}
+
+                   {isSlack ? (
+                     isConnected ? (
+                       <div className="space-y-2">
+                         <button
+                           onClick={() => testSlack.mutate(undefined, { onError: (e: any) => popupAlert(e.message, 'Test Failed') })}
+                           disabled={testSlack.isPending}
+                           className="w-full py-3 rounded-xl font-black text-[10px] uppercase tracking-widest bg-indigo-50 text-indigo-600 hover:bg-indigo-100 disabled:opacity-50"
+                         >
+                           {testSlack.isPending ? 'Sending…' : 'Send Test Message'}
+                         </button>
+                         <button
+                           onClick={() => disconnectSlack.mutate()}
+                           disabled={disconnectSlack.isPending}
+                           className="w-full py-3 rounded-xl font-black text-[10px] uppercase tracking-widest bg-slate-50 text-slate-600 hover:bg-rose-50 hover:text-rose-600 flex items-center justify-center gap-2 disabled:opacity-50"
+                         >
+                           <Unlink size={13} /> Disconnect
+                         </button>
+                       </div>
+                     ) : (
+                       <button
+                         onClick={() => { setSlackWebhookUrl(''); setSlackError(null); setShowSlackModal(true); }}
+                         className="w-full py-3 rounded-xl font-black text-[10px] uppercase tracking-widest bg-indigo-600 text-white shadow-lg hover:bg-indigo-700 flex items-center justify-center gap-2"
+                       >
+                         <Link2 size={13} /> Connect Slack
+                       </button>
+                     )
+                   ) : (
+                     <button
+                       onClick={() => toggleIntegration.mutate(app.key)}
+                       disabled={toggleIntegration.isPending}
+                       className={`w-full py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 disabled:opacity-50 ${
+                         isConnected ? 'bg-slate-50 text-slate-600 hover:bg-rose-50 hover:text-rose-600' : 'bg-indigo-600 text-white shadow-lg hover:bg-indigo-700'
+                       }`}
+                     >
+                       {isConnected ? <><Unlink size={13} /> Disconnect</> : <><Link2 size={13} /> Connect Account</>}
+                     </button>
+                   )}
                 </motion.div>
               );
             })}
+         </div>
+       )}
+
+       {slackConnected && slackEvents?.length > 0 && (
+         <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm">
+           <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-6">Recent Slack Activity</h3>
+           <div className="space-y-2">
+             {slackEvents.slice(0, 8).map((e: any) => (
+               <div key={e.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
+                 <span className="text-xs font-bold text-slate-600 truncate">{e.payloadSummary}</span>
+                 <span className={`text-[9px] font-black uppercase px-2 py-1 rounded-lg shrink-0 ml-3 ${
+                   e.status === 'sent' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'
+                 }`}>{e.status}</span>
+               </div>
+             ))}
+           </div>
+         </div>
+       )}
+
+       {showSlackModal && (
+         <div className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-6">
+           <div className="bg-white rounded-3xl p-10 max-w-lg w-full shadow-2xl">
+             <h3 className="text-xl font-black text-slate-800 mb-2">Connect Slack</h3>
+             <p className="text-sm text-slate-500 font-medium mb-6">
+               In Slack, create an{' '}
+               <a href="https://api.slack.com/messaging/webhooks" target="_blank" rel="noreferrer" className="text-indigo-600 underline">
+                 Incoming Webhook
+               </a>{' '}
+               for the channel you want notifications in, then paste the URL below.
+             </p>
+             {slackError && <p className="text-xs font-bold text-rose-500 mb-4">{slackError}</p>}
+             <input
+               value={slackWebhookUrl}
+               onChange={(e) => setSlackWebhookUrl(e.target.value)}
+               placeholder="https://hooks.slack.com/services/…"
+               className="w-full px-5 py-4 bg-slate-50 rounded-2xl outline-none font-medium text-sm border border-transparent focus:border-indigo-400 mb-6"
+             />
+             <div className="flex gap-3">
+               <button
+                 onClick={() => setShowSlackModal(false)}
+                 className="flex-1 py-3 bg-slate-50 text-slate-600 rounded-xl font-black text-xs uppercase tracking-widest"
+               >
+                 Cancel
+               </button>
+               <button
+                 disabled={connectSlack.isPending}
+                 onClick={() =>
+                   connectSlack.mutate(slackWebhookUrl, {
+                     onSuccess: () => setShowSlackModal(false),
+                     onError: (e: any) => setSlackError(e.message || 'Failed to connect Slack'),
+                   })
+                 }
+                 className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-black text-xs uppercase tracking-widest disabled:opacity-50"
+               >
+                 {connectSlack.isPending ? 'Connecting…' : 'Connect'}
+               </button>
+             </div>
+           </div>
          </div>
        )}
     </div>

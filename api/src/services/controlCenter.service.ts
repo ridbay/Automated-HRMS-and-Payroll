@@ -108,9 +108,14 @@ export class EmailTemplateService {
 }
 
 // ---------------- Integrations ----------------
+// Slack is the one real integration (see connectSlack/NotificationService
+// below) — it now seeds as 'available' like everything else, since actually
+// reaching 'connected' requires an admin to paste a real webhook URL rather
+// than being pre-faked on. The rest of the catalog stays exactly what it
+// was: an on/off state with no live handshake behind it yet.
 const DEFAULT_INTEGRATIONS = [
   { key: 'google_calendar', name: 'Google Calendar', category: 'Scheduling', status: 'connected' },
-  { key: 'slack', name: 'Slack Notifications', category: 'Communication', status: 'connected' },
+  { key: 'slack', name: 'Slack Notifications', category: 'Communication', status: 'available' },
   { key: 'paystack', name: 'Paystack Bank', category: 'Fintech', status: 'connected' },
   { key: 'outlook', name: 'Microsoft Outlook', category: 'Communications', status: 'available' },
   { key: 'zoom', name: 'Zoom Conferencing', category: 'Video', status: 'available' },
@@ -153,6 +158,9 @@ export class IntegrationService {
       where: and(eq(schema.integrations.companyId, companyId), eq(schema.integrations.key, key)),
     });
     if (!current) return null;
+    // Slack's "connected" state requires a real webhook URL — routed through
+    // connectSlack/disconnect below, not the generic toggle.
+    if (key === 'slack') throw new Error('Use the Slack connect flow (a webhook URL is required) instead of toggle');
 
     const nextStatus = current.status === 'connected' ? 'available' : 'connected';
     return this.db.update(schema.integrations)
@@ -164,6 +172,96 @@ export class IntegrationService {
       .where(and(eq(schema.integrations.companyId, companyId), eq(schema.integrations.key, key)))
       .returning()
       .get();
+  }
+
+  async connectSlack(companyId: string, webhookUrl: string) {
+    if (!/^https:\/\/hooks\.slack\.com\/services\/.+/.test(webhookUrl)) {
+      throw new Error('That doesn\'t look like a Slack Incoming Webhook URL (should start with https://hooks.slack.com/services/...)');
+    }
+    await this.list(companyId); // ensure the row exists (seeds on first read)
+    return this.db.update(schema.integrations)
+      .set({
+        status: 'connected',
+        connectedAt: new Date().toISOString(),
+        config: { webhookUrl },
+        lastError: null,
+        updatedAt: new Date().toISOString(),
+      })
+      .where(and(eq(schema.integrations.companyId, companyId), eq(schema.integrations.key, 'slack')))
+      .returning()
+      .get();
+  }
+
+  async disconnect(companyId: string, key: string) {
+    return this.db.update(schema.integrations)
+      .set({ status: 'available', connectedAt: null, config: null, lastError: null, updatedAt: new Date().toISOString() })
+      .where(and(eq(schema.integrations.companyId, companyId), eq(schema.integrations.key, key)))
+      .returning()
+      .get();
+  }
+
+  async getEvents(companyId: string, key: string, limit = 20) {
+    return this.db.select().from(schema.integrationEvents)
+      .where(and(eq(schema.integrationEvents.companyId, companyId), eq(schema.integrationEvents.integrationKey, key)))
+      .orderBy(desc(schema.integrationEvents.createdAt))
+      .limit(limit)
+      .all();
+  }
+}
+
+// Central dispatcher for outbound integration notifications. Called from
+// controllers right after a mutation succeeds (requisition approval,
+// payroll paid, offer sent/accepted) — always fire-and-forget from the
+// caller's perspective: a broken webhook logs a failed delivery and sets
+// `lastError` but never throws, so it can't break the underlying HR action.
+export class NotificationService {
+  private db;
+  constructor(dbBinding: D1Database) {
+    this.db = drizzle(dbBinding, { schema });
+  }
+
+  async notify(companyId: string, eventType: string, message: string) {
+    const slack = await this.db.query.integrations.findFirst({
+      where: and(eq(schema.integrations.companyId, companyId), eq(schema.integrations.key, 'slack'), eq(schema.integrations.status, 'connected')),
+    });
+    const webhookUrl = (slack?.config as any)?.webhookUrl;
+    if (!webhookUrl) return; // not connected — nothing to do, not an error
+
+    let status: 'sent' | 'failed' = 'sent';
+    let responseCode: number | null = null;
+    let errorMessage: string | null = null;
+
+    try {
+      const res = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: message }),
+      });
+      responseCode = res.status;
+      if (!res.ok) {
+        status = 'failed';
+        errorMessage = `Slack responded ${res.status}`;
+      }
+    } catch (err: any) {
+      status = 'failed';
+      errorMessage = err?.message || 'Network error delivering to Slack';
+    }
+
+    await this.db.insert(schema.integrationEvents).values({
+      id: genId('evt'),
+      companyId,
+      integrationKey: 'slack',
+      eventType,
+      payloadSummary: message.slice(0, 500),
+      status,
+      responseCode,
+    });
+
+    if (status === 'failed') {
+      await this.db.update(schema.integrations)
+        .set({ lastError: errorMessage, updatedAt: new Date().toISOString() })
+        .where(and(eq(schema.integrations.companyId, companyId), eq(schema.integrations.key, 'slack')));
+    }
   }
 }
 

@@ -27,3 +27,4 @@ export * from '../models/controlCenter.model';
 export * from '../models/ats.model';
 export * from '../models/survey.model';
 export * from '../models/learning.model';
+export * from '../models/ai.model';

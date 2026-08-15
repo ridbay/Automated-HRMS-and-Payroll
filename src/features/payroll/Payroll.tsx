@@ -983,6 +983,9 @@ const Payroll: React.FC = () => {
                     { key: "workingDaysPerMonth", label: "Working Days / Month", type: "number" },
                     { key: "pensionEmployeeRate", label: "Pension Rate — Employee (%)", type: "number" },
                     { key: "pensionEmployerRate", label: "Pension Rate — Employer (%)", type: "number" },
+                    { key: "nhfRate", label: "NHF Rate — of Basic (%)", type: "number" },
+                    { key: "nsitfRate", label: "NSITF Rate — Employer, of Gross (%)", type: "number" },
+                    { key: "itfRate", label: "ITF Levy — Employer, of Gross (%)", type: "number" },
                     { key: "minWageAnnual", label: "Minimum Wage (Annual, ₦)", type: "number" },
                   ].map((f) => (
                     <div key={f.key} className="space-y-2">
@@ -1000,6 +1003,9 @@ const Payroll: React.FC = () => {
                     {[
                       { key: "prorationEnabled", label: "Proration Logic", sub: "Auto-calc for joiners/leavers" },
                       { key: "applyConsolidatedReliefAllowance", label: "Apply CRA", sub: "Consolidated Relief Allowance in PAYE" },
+                      { key: "nhfEnabled", label: "NHF Deduction", sub: "National Housing Fund — deducted from net pay" },
+                      { key: "nsitfEnabled", label: "NSITF Contribution", sub: "Employer-paid, tracked for remittance only" },
+                      { key: "itfEnabled", label: "ITF Levy", sub: "Employer-paid, tracked for remittance only" },
                     ].map((t) => (
                       <div key={t.key} className="flex-1 p-6 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
                         <div>

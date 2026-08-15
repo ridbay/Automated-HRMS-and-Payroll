@@ -6,7 +6,11 @@ vi.mock('../../../src/services/requisition.service');
 vi.mock('drizzle-orm/d1', () => ({
   drizzle: vi.fn(() => ({
     query: {
-      employees: { findFirst: vi.fn().mockResolvedValue({ name: 'Admin', lastName: 'User' }) }
+      employees: { findFirst: vi.fn().mockResolvedValue({ name: 'Admin', lastName: 'User' }) },
+      // approveRequisition also fires a NotificationService.notify() call —
+      // no Slack integration connected is the realistic default, so this
+      // resolves undefined and notify() returns early without erroring.
+      integrations: { findFirst: vi.fn().mockResolvedValue(undefined) },
     }
   }))
 }));

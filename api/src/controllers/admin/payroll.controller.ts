@@ -3,6 +3,7 @@ import { eq, and, desc } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { AppEnv } from '../../types';
 import { PayrollService } from '../../services/payroll.service';
+import { NotificationService } from '../../services/controlCenter.service';
 import * as schema from '../../db/schema';
 
 const currentPeriod = (c: Context) => {
@@ -282,9 +283,18 @@ export const rejectPayrollRun = async (c: Context<AppEnv>) => {
 
 export const markPayrollRunPaid = async (c: Context<AppEnv>) => {
   try {
+    const companyId = c.get('companyId') as string;
     const service = new PayrollService(c.env.DB);
-    const run = await service.markRunPaid((c.get('companyId') as string), (c.req.param('id') as string));
+    const run = await service.markRunPaid(companyId, (c.req.param('id') as string));
     if (!run) return c.json({ error: 'Not found' }, 404);
+
+    const period = new Date(run.periodYear, run.periodMonth - 1, 1).toLocaleString('en-US', { month: 'long', year: 'numeric' });
+    await new NotificationService(c.env.DB).notify(
+      companyId,
+      'payroll.paid',
+      `💰 Payroll for *${period}* has been paid — ${run.employeeCount} employees, net ₦${run.totalNet.toLocaleString()}`
+    );
+
     return c.json({ data: run });
   } catch (error: any) {
     return c.json({ error: error.message }, 400);
@@ -295,6 +305,25 @@ export const getBankFile = async (c: Context<AppEnv>) => {
   try {
     const service = new PayrollService(c.env.DB);
     const file = await service.getBankFile((c.get('companyId') as string), (c.req.param('id') as string));
+    if (!file) return c.json({ error: 'Not found' }, 404);
+    c.header('Content-Type', 'text/csv');
+    c.header('Content-Disposition', `attachment; filename="${file.filename}"`);
+    return c.body(file.content);
+  } catch (error: any) {
+    return c.json({ error: error.message }, 500);
+  }
+};
+
+const VALID_REMITTANCE_TYPES = ['paye', 'pension', 'nhf', 'nsitf', 'itf'];
+
+export const getRemittanceSchedule = async (c: Context<AppEnv>) => {
+  try {
+    const type = c.req.param('type') as string;
+    if (!VALID_REMITTANCE_TYPES.includes(type)) {
+      return c.json({ error: `type must be one of ${VALID_REMITTANCE_TYPES.join(', ')}` }, 400);
+    }
+    const service = new PayrollService(c.env.DB);
+    const file = await service.getRemittanceSchedule((c.get('companyId') as string), (c.req.param('id') as string), type as any);
     if (!file) return c.json({ error: 'Not found' }, 404);
     c.header('Content-Type', 'text/csv');
     c.header('Content-Disposition', `attachment; filename="${file.filename}"`);

@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { 
-  HolidayService, 
-  EmailTemplateService, 
-  IntegrationService, 
-  WorkflowService, 
-  DataExportService 
+import {
+  HolidayService,
+  EmailTemplateService,
+  IntegrationService,
+  WorkflowService,
+  DataExportService,
+  NotificationService,
 } from '../../src/services/controlCenter.service';
 
 describe('Control Center Services', () => {
@@ -90,10 +91,13 @@ describe('Control Center Services', () => {
     });
 
     it('should toggle integration status from connected to available', async () => {
-      mockDb.query.integrations.findFirst.mockResolvedValueOnce({ key: 'slack', status: 'connected' });
-      mockDb.get.mockResolvedValueOnce({ key: 'slack', status: 'available' });
-      
-      const result = await service.toggle('comp-1', 'slack');
+      // 'slack' is excluded here — it now requires the dedicated connectSlack
+      // flow (a webhook URL) rather than a bare toggle; see the Slack-specific
+      // tests below.
+      mockDb.query.integrations.findFirst.mockResolvedValueOnce({ key: 'zoom', status: 'connected' });
+      mockDb.get.mockResolvedValueOnce({ key: 'zoom', status: 'available' });
+
+      const result = await service.toggle('comp-1', 'zoom');
       expect(mockDb.update).toHaveBeenCalled();
       const setArgs = mockDb.set.mock.calls[0][0];
       expect(setArgs.status).toBe('available');
@@ -101,14 +105,35 @@ describe('Control Center Services', () => {
     });
 
     it('should toggle integration status from available to connected', async () => {
-      mockDb.query.integrations.findFirst.mockResolvedValueOnce({ key: 'slack', status: 'available' });
-      mockDb.get.mockResolvedValueOnce({ key: 'slack', status: 'connected' });
-      
-      const result = await service.toggle('comp-1', 'slack');
+      mockDb.query.integrations.findFirst.mockResolvedValueOnce({ key: 'zoom', status: 'available' });
+      mockDb.get.mockResolvedValueOnce({ key: 'zoom', status: 'connected' });
+
+      const result = await service.toggle('comp-1', 'zoom');
       expect(mockDb.update).toHaveBeenCalled();
       const setArgs = mockDb.set.mock.calls[0][0];
       expect(setArgs.status).toBe('connected');
       expect(setArgs.connectedAt).not.toBeNull();
+    });
+
+    it('rejects toggling slack directly, pointing at the dedicated connect flow', async () => {
+      mockDb.query.integrations.findFirst.mockResolvedValueOnce({ key: 'slack', status: 'available' });
+      await expect(service.toggle('comp-1', 'slack')).rejects.toThrow('Use the Slack connect flow');
+    });
+
+    it('connectSlack validates the webhook URL shape', async () => {
+      await expect(service.connectSlack('comp-1', 'https://example.com/not-slack')).rejects.toThrow(
+        "doesn't look like a Slack Incoming Webhook URL"
+      );
+    });
+
+    it('connectSlack stores the webhook URL and marks the integration connected', async () => {
+      mockDb.all.mockResolvedValueOnce([{ key: 'slack', status: 'available' }]); // list() sees an existing row, skips reseeding
+
+      await service.connectSlack('comp-1', 'https://hooks.slack.com/services/T000/B000/XXXX');
+      expect(mockDb.update).toHaveBeenCalled();
+      const setArgs = mockDb.set.mock.calls[0][0];
+      expect(setArgs.status).toBe('connected');
+      expect(setArgs.config).toEqual({ webhookUrl: 'https://hooks.slack.com/services/T000/B000/XXXX' });
     });
   });
 
@@ -129,6 +154,73 @@ describe('Control Center Services', () => {
       expect((result.employees[0] as any).passwordHash).toBeUndefined();
       expect((result.employees[0] as any).passwordSalt).toBeUndefined();
       expect(result.employees[0].name).toBe('John');
+    });
+  });
+
+  describe('NotificationService', () => {
+    let service: NotificationService;
+    beforeEach(() => {
+      service = new NotificationService({} as any);
+      (service as any).db = mockDb;
+      vi.stubGlobal('fetch', vi.fn());
+    });
+
+    it('does nothing when Slack is not connected', async () => {
+      mockDb.query.integrations.findFirst.mockResolvedValueOnce(undefined);
+      await service.notify('comp-1', 'test', 'hello');
+      expect(global.fetch).not.toHaveBeenCalled();
+      expect(mockDb.insert).not.toHaveBeenCalled();
+    });
+
+    it('posts to the stored webhook and logs a "sent" event on success', async () => {
+      mockDb.query.integrations.findFirst.mockResolvedValueOnce({
+        key: 'slack',
+        status: 'connected',
+        config: { webhookUrl: 'https://hooks.slack.com/services/T000/B000/XXXX' },
+      });
+      (global.fetch as any).mockResolvedValueOnce({ ok: true, status: 200 });
+
+      await service.notify('comp-1', 'payroll.paid', 'Payroll paid');
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        'https://hooks.slack.com/services/T000/B000/XXXX',
+        expect.objectContaining({ method: 'POST', body: JSON.stringify({ text: 'Payroll paid' }) })
+      );
+      const eventValues = mockDb.values.mock.calls[0][0];
+      expect(eventValues.status).toBe('sent');
+      expect(eventValues.eventType).toBe('payroll.paid');
+      expect(mockDb.update).not.toHaveBeenCalled(); // no lastError to record
+    });
+
+    it('logs a "failed" event and records lastError without throwing, on a non-2xx response', async () => {
+      mockDb.query.integrations.findFirst.mockResolvedValueOnce({
+        key: 'slack',
+        status: 'connected',
+        config: { webhookUrl: 'https://hooks.slack.com/services/T000/B000/XXXX' },
+      });
+      (global.fetch as any).mockResolvedValueOnce({ ok: false, status: 404 });
+
+      await expect(service.notify('comp-1', 'test', 'hello')).resolves.not.toThrow();
+
+      const eventValues = mockDb.values.mock.calls[0][0];
+      expect(eventValues.status).toBe('failed');
+      expect(mockDb.update).toHaveBeenCalled();
+      expect(mockDb.set.mock.calls[0][0].lastError).toContain('404');
+    });
+
+    it('logs a "failed" event and never throws when the fetch itself rejects (network error)', async () => {
+      mockDb.query.integrations.findFirst.mockResolvedValueOnce({
+        key: 'slack',
+        status: 'connected',
+        config: { webhookUrl: 'https://hooks.slack.com/services/T000/B000/XXXX' },
+      });
+      (global.fetch as any).mockRejectedValueOnce(new Error('network down'));
+
+      await expect(service.notify('comp-1', 'test', 'hello')).resolves.not.toThrow();
+
+      const eventValues = mockDb.values.mock.calls[0][0];
+      expect(eventValues.status).toBe('failed');
+      expect(mockDb.set.mock.calls[0][0].lastError).toBe('network down');
     });
   });
 });

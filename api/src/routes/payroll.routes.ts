@@ -26,6 +26,7 @@ import {
   rejectPayrollRun,
   markPayrollRunPaid,
   getBankFile,
+  getRemittanceSchedule,
   getComplianceTasks,
   completeComplianceTask,
   getPayrollDashboard,
@@ -88,6 +89,7 @@ payrollRoutes.post('/runs/:id/approve', adminOnly, requirePermission('payroll', 
 payrollRoutes.post('/runs/:id/reject', adminOnly, requirePermission('payroll', 'edit'), rejectPayrollRun);
 payrollRoutes.post('/runs/:id/mark-paid', adminOnly, requirePermission('payroll', 'edit'), markPayrollRunPaid);
 payrollRoutes.get('/runs/:id/bank-file', adminOnly, requirePermission('payroll', 'view'), getBankFile);
+payrollRoutes.get('/runs/:id/remittance/:type', adminOnly, requirePermission('payroll', 'view'), getRemittanceSchedule);
 
 // Compliance / remittances
 payrollRoutes.get('/compliance', adminOnly, requirePermission('payroll', 'view'), getComplianceTasks);

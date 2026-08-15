@@ -21,7 +21,18 @@ import {
   useComplianceTasks,
   useCompleteComplianceTask,
   useLoans,
+  downloadRemittanceSchedule,
 } from "../../api/client";
+
+// complianceTasks.type -> the remittance schedule endpoint's type param
+// ('tax' is the DB/UI label for what the PAYE schedule covers).
+const REMITTANCE_TYPE_BY_TASK_TYPE: Record<string, "paye" | "pension" | "nhf" | "nsitf" | "itf"> = {
+  tax: "paye",
+  pension: "pension",
+  nhf: "nhf",
+  nsitf: "nsitf",
+  itf: "itf",
+};
 
 const formatCurrency = (val: number | undefined | null) =>
   new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 }).format(val || 0);
@@ -278,25 +289,38 @@ const PayrollDashboard: React.FC = () => {
               </div>
             ) : (
               <div className="space-y-3">
-                {upcomingRemittances.map((t: any) => (
-                  <div key={t.id} className="p-4 bg-slate-50 rounded-2xl">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="text-xs font-black text-slate-800 truncate">{t.title}</p>
-                        <p className="text-[9px] font-bold text-slate-400 uppercase flex items-center gap-1 mt-1">
-                          <Clock size={10} /> Due {t.dueDate}
-                        </p>
+                {upcomingRemittances.map((t: any) => {
+                  const remittanceType = REMITTANCE_TYPE_BY_TASK_TYPE[t.type];
+                  return (
+                    <div key={t.id} className="p-4 bg-slate-50 rounded-2xl">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-xs font-black text-slate-800 truncate">{t.title}</p>
+                          <p className="text-[9px] font-bold text-slate-400 uppercase flex items-center gap-1 mt-1">
+                            <Clock size={10} /> Due {t.dueDate}
+                          </p>
+                        </div>
+                        <div className="shrink-0 flex items-center gap-2">
+                          {remittanceType && t.payrollRunId && (
+                            <button
+                              onClick={() => downloadRemittanceSchedule(t.payrollRunId, remittanceType).catch(() => {})}
+                              className="px-3 py-1.5 bg-white border border-slate-200 text-indigo-600 rounded-lg text-[9px] font-black uppercase hover:bg-indigo-50 transition-all"
+                            >
+                              Schedule
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleCompleteTask(t.id)}
+                            disabled={completeTask.isPending}
+                            className="px-3 py-1.5 bg-white border border-slate-200 text-emerald-600 rounded-lg text-[9px] font-black uppercase hover:bg-emerald-50 transition-all disabled:opacity-50"
+                          >
+                            Mark Done
+                          </button>
+                        </div>
                       </div>
-                      <button
-                        onClick={() => handleCompleteTask(t.id)}
-                        disabled={completeTask.isPending}
-                        className="shrink-0 px-3 py-1.5 bg-white border border-slate-200 text-emerald-600 rounded-lg text-[9px] font-black uppercase hover:bg-emerald-50 transition-all disabled:opacity-50"
-                      >
-                        Mark Done
-                      </button>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </section>

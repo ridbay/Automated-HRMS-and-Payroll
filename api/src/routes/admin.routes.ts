@@ -57,6 +57,7 @@ import {
   IntegrationService,
   WorkflowService,
   DataExportService,
+  NotificationService,
 } from "../services/controlCenter.service";
 import {
   getOverview as getReportsOverview,
@@ -599,15 +600,74 @@ adminRoutes.get("/integrations", adminOnly, view("settings"), async (c: any) => 
 adminRoutes.put("/integrations/:key/toggle", adminOnly, edit("settings"), async (c: any) => {
   const companyId = c.get("companyId");
   const service = new IntegrationService(c.env.DB);
-  const integration = await service.toggle(companyId, c.req.param("key"));
-  if (!integration) return c.json({ error: "Not found" }, 404);
+  try {
+    const integration = await service.toggle(companyId, c.req.param("key"));
+    if (!integration) return c.json({ error: "Not found" }, 404);
+    await new AuditService(c.env.DB).log(companyId, {
+      actorId: c.get("employeeId"),
+      action: `${integration.status === "connected" ? "Connected" : "Disconnected"} ${integration.name}`,
+      module: "integrations",
+      ip: c.req.header("cf-connecting-ip"),
+    });
+    return c.json(integration);
+  } catch (error: any) {
+    return c.json({ error: error.message }, 400);
+  }
+});
+
+// Slack is the one integration with a real connection flow — an admin
+// pastes an Incoming Webhook URL (no OAuth app registration needed).
+adminRoutes.put("/integrations/slack/connect", adminOnly, edit("settings"), async (c: any) => {
+  const companyId = c.get("companyId");
+  const { webhookUrl } = await c.req.json();
+  const service = new IntegrationService(c.env.DB);
+  try {
+    const integration = await service.connectSlack(companyId, webhookUrl);
+    await new AuditService(c.env.DB).log(companyId, {
+      actorId: c.get("employeeId"),
+      action: "Connected Slack Notifications",
+      module: "integrations",
+      ip: c.req.header("cf-connecting-ip"),
+    });
+    return c.json(integration);
+  } catch (error: any) {
+    return c.json({ error: error.message }, 400);
+  }
+});
+
+adminRoutes.post("/integrations/slack/disconnect", adminOnly, edit("settings"), async (c: any) => {
+  const companyId = c.get("companyId");
+  const service = new IntegrationService(c.env.DB);
+  const integration = await service.disconnect(companyId, "slack");
   await new AuditService(c.env.DB).log(companyId, {
     actorId: c.get("employeeId"),
-    action: `${integration.status === "connected" ? "Connected" : "Disconnected"} ${integration.name}`,
+    action: "Disconnected Slack Notifications",
     module: "integrations",
     ip: c.req.header("cf-connecting-ip"),
   });
   return c.json(integration);
+});
+
+adminRoutes.post("/integrations/slack/test", adminOnly, edit("settings"), async (c: any) => {
+  const companyId = c.get("companyId");
+  const integrationService = new IntegrationService(c.env.DB);
+  const integrations = await integrationService.list(companyId);
+  const slack = integrations.find((i: any) => i.key === "slack");
+  if (slack?.status !== "connected") return c.json({ error: "Slack isn't connected yet" }, 400);
+
+  const beforeCount = (await integrationService.getEvents(companyId, "slack", 1))[0]?.id;
+  await new NotificationService(c.env.DB).notify(companyId, "test", "👋 This is a test message from ZenHR — your Slack integration is working.");
+  const events = await integrationService.getEvents(companyId, "slack", 1);
+  const lastEvent = events[0];
+  if (!lastEvent || lastEvent.id === beforeCount) return c.json({ error: "No delivery was recorded" }, 502);
+  if (lastEvent.status === "failed") return c.json({ error: "Failed to deliver test message — check the webhook URL" }, 502);
+  return c.json({ success: true });
+});
+
+adminRoutes.get("/integrations/:key/events", adminOnly, view("settings"), async (c: any) => {
+  const companyId = c.get("companyId");
+  const service = new IntegrationService(c.env.DB);
+  return c.json(await service.getEvents(companyId, c.req.param("key")));
 });
 
 // ---------------- Workflows ----------------

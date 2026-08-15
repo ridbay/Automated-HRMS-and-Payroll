@@ -102,8 +102,8 @@ describe('Payroll Service', () => {
 
   describe('Bank File', () => {
     it('should generate a CSV bank file', async () => {
-      mockDb.query.payrollRuns.findFirst.mockResolvedValueOnce({ 
-        id: 'RUN-1', periodMonth: 10, periodYear: 2023 
+      mockDb.query.payrollRuns.findFirst.mockResolvedValueOnce({
+        id: 'RUN-1', periodMonth: 10, periodYear: 2023
       });
       mockDb.query.payslips.findMany.mockResolvedValueOnce([
         { employeeId: 'emp-1', employeeName: 'John', bankName: 'GTB', accountNumber: '123', accountName: 'John Doe', netPay: 10000 }
@@ -112,6 +112,109 @@ describe('Payroll Service', () => {
       const file = await service.getBankFile('comp-1', 'RUN-1');
       expect(file?.filename).toBe('bank-file-2023-10.csv');
       expect(file?.content).toContain('emp-1,John,GTB,123,John Doe,10000');
+    });
+  });
+
+  describe('Statutory: NHF / NSITF / ITF', () => {
+    it('deducts NHF from net pay but keeps NSITF/ITF as employer-only cost', async () => {
+      // Annual salary 1,200,000 -> gross monthly 100,000 -> basic (40%) = 40,000.
+      mockDb.query.employees.findMany.mockResolvedValueOnce([
+        { id: 'emp-1', name: 'John', lastName: 'Doe', status: 'active', salary: 1200000, bankName: 'GTB', accountNumber: '123' },
+      ]);
+      mockDb.query.payrollSettings.findFirst.mockResolvedValueOnce({
+        companyId: 'comp-1',
+        prorationEnabled: false,
+        nhfEnabled: true,
+        nhfRate: 2.5,
+        nsitfEnabled: true,
+        nsitfRate: 1,
+        itfEnabled: true,
+        itfRate: 1,
+        pensionEmployeeRate: 8,
+      });
+
+      const preview = await service.previewRun('comp-1', 10, 2023);
+      const ps = preview.payslips[0];
+
+      expect(ps.basicSalary).toBe(40000);
+      expect(ps.nhfDeductions).toBe(1000); // 2.5% of 40,000
+      expect(ps.nsitfContribution).toBe(1000); // 1% of gross (100,000)
+      expect(ps.itfContribution).toBe(1000); // 1% of gross (100,000)
+      // netPay = gross - tax - pension - nhf - loan - other; NSITF/ITF never subtracted.
+      expect(ps.netPay).toBe(ps.grossPay - ps.taxDeductions - ps.pensionDeductions - ps.nhfDeductions);
+      expect(preview.totalNhf).toBe(1000);
+      expect(preview.totalNsitf).toBe(1000);
+      expect(preview.totalItf).toBe(1000);
+    });
+
+    it('skips NHF/NSITF/ITF entirely when disabled in settings', async () => {
+      mockDb.query.employees.findMany.mockResolvedValueOnce([
+        { id: 'emp-1', name: 'John', lastName: 'Doe', status: 'active', salary: 1200000, bankName: 'GTB', accountNumber: '123' },
+      ]);
+      mockDb.query.payrollSettings.findFirst.mockResolvedValueOnce({
+        companyId: 'comp-1',
+        prorationEnabled: false,
+        nhfEnabled: false,
+        nsitfEnabled: false,
+        itfEnabled: false,
+      });
+
+      const preview = await service.previewRun('comp-1', 10, 2023);
+      const ps = preview.payslips[0];
+      expect(ps.nhfDeductions).toBe(0);
+      expect(ps.nsitfContribution).toBe(0);
+      expect(ps.itfContribution).toBe(0);
+    });
+
+    it('markRunPaid generates NHF/NSITF/ITF compliance tasks alongside PAYE/Pension', async () => {
+      mockDb.query.payrollRuns.findFirst.mockResolvedValueOnce({
+        id: 'RUN-1',
+        status: 'approved',
+        periodMonth: 10,
+        periodYear: 2023,
+        totalTaxes: 5000,
+        totalPension: 3000,
+        totalNhf: 1000,
+        totalNsitf: 1000,
+        totalItf: 1000,
+        payslips: [],
+      });
+
+      await service.markRunPaid('comp-1', 'RUN-1');
+
+      const insertedTasks = mockDb.values.mock.calls.find((call: any) => Array.isArray(call[0]) && call[0][0]?.title?.includes('PAYE Filing'))?.[0];
+      expect(insertedTasks).toBeDefined();
+      const types = insertedTasks.map((t: any) => t.type);
+      expect(types).toEqual(expect.arrayContaining(['tax', 'pension', 'nhf', 'nsitf', 'itf']));
+      const nhfTask = insertedTasks.find((t: any) => t.type === 'nhf');
+      expect(nhfTask.amount).toBe(1000);
+    });
+  });
+
+  describe('Remittance Schedules', () => {
+    it('generates a PAYE schedule CSV with employee TIN/tax state', async () => {
+      mockDb.query.payrollRuns.findFirst.mockResolvedValueOnce({ id: 'RUN-1', periodMonth: 10, periodYear: 2023 });
+      mockDb.query.payslips.findMany.mockResolvedValueOnce([
+        { employeeId: 'emp-1', employeeName: 'John Doe', grossPay: 100000, taxDeductions: 8000 },
+      ]);
+      mockDb.query.employees.findMany.mockResolvedValueOnce([{ id: 'emp-1', tin: 'TIN123', taxState: 'Lagos' }]);
+      mockDb.query.payrollSettings.findFirst.mockResolvedValueOnce({ companyId: 'comp-1' });
+
+      const file = await service.getRemittanceSchedule('comp-1', 'RUN-1', 'paye');
+      expect(file?.filename).toBe('paye-remittance-2023-10.csv');
+      expect(file?.content).toContain('John Doe,TIN123,Lagos,1200000,8000');
+    });
+
+    it('generates an ITF schedule as a single company-level levy row', async () => {
+      mockDb.query.payrollRuns.findFirst.mockResolvedValueOnce({ id: 'RUN-1', periodMonth: 10, periodYear: 2023, totalGross: 500000 });
+      mockDb.query.payslips.findMany.mockResolvedValueOnce([
+        { employeeId: 'emp-1', employeeName: 'John Doe', itfContribution: 5000 },
+      ]);
+      mockDb.query.employees.findMany.mockResolvedValueOnce([]);
+      mockDb.query.payrollSettings.findFirst.mockResolvedValueOnce({ companyId: 'comp-1' });
+
+      const file = await service.getRemittanceSchedule('comp-1', 'RUN-1', 'itf');
+      expect(file?.content).toContain('2023-10,500000,5000');
     });
   });
 });

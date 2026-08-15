@@ -24,6 +24,10 @@ export interface JobRequisition {
   daysOpen: number;
   justification?: string;
   budgetRange?: string;
+  // Public careers page copy — see api/src/models/misc.model.ts.
+  description?: string;
+  requirements?: string;
+  isPubliclyListed?: boolean;
   requestedById?: string;
   requestedByName?: string;
   reviewedById?: string;
@@ -39,53 +43,86 @@ export interface JobRequisition {
   };
 }
 
+// Matches api/src/models/ats.model.ts's `candidates` table + AtsService.getCandidate's
+// joined shape (timeline/interviews/offers) — see api/src/services/ats.service.ts.
 export interface Candidate {
   id: string;
+  companyId?: string;
+  requisitionId?: string | null;
   name: string;
-  currentTitle: string;
+  currentTitle?: string;
   currentEmployer?: string;
   email: string;
-  phone: string;
-  location: string;
-  experience: number;
-  education: string;
+  phone?: string;
+  location?: string;
+  experienceYears?: number | null;
+  education?: string;
   avatar?: string;
   source: 'LinkedIn' | 'Referral' | 'Job Board' | 'Career Page';
-  rating: number; // 1-5
+  rating?: number | null; // 1-5
   skills: string[];
   salaryExpectation?: string;
+  linkedinUrl?: string;
+  githubUrl?: string;
+  portfolioUrl?: string;
+  coverLetter?: string;
+  // R2 object key (see candidateResumeUrl in src/api/client.ts for the download route) — not a URL.
+  resumeFileKey?: string | null;
   status: 'applied' | 'screening' | 'interview' | 'offer' | 'hired' | 'rejected';
   appliedDate: string;
-  socials?: {
-    linkedin?: string;
-    github?: string;
-    portfolio?: string;
-  };
-  timeline: {
+  timeline?: {
     event: string;
-    date: string;
     note?: string;
+    actorName?: string;
+    createdAt: string;
   }[];
+  interviews?: Interview[];
+  offers?: Offer[];
 }
 
 export interface Interview {
   id: string;
+  companyId?: string;
   candidateId: string;
-  candidateName: string;
+  // Populated client-side by joining against the candidates list where
+  // needed (the API doesn't denormalize it onto the interview row) — see
+  // usages in src/features/recruitment/Recruitment.tsx.
+  candidateName?: string;
+  requisitionId?: string | null;
   type: 'Phone' | 'Video' | 'In-person' | 'Panel';
   stage: 'Screening' | 'Technical' | 'Cultural' | 'Final';
   dateTime: string;
-  duration: number; // minutes
-  interviewers: string[];
-  link?: string;
+  durationMinutes: number;
+  interviewerIds: string[];
+  meetingLink?: string;
   status: 'Scheduled' | 'Completed' | 'Cancelled';
-  scorecard?: {
-    technical: number;
-    communication: number;
-    cultural: number;
-    notes: string;
-    recommendation: 'Hire' | 'Maybe' | 'No Hire';
-  };
+  scorecards?: {
+    id: string;
+    interviewerId?: string;
+    interviewerName?: string;
+    technical?: number | null;
+    communication?: number | null;
+    cultural?: number | null;
+    notes?: string;
+    recommendation?: 'Hire' | 'Maybe' | 'No Hire';
+  }[];
+}
+
+export interface Offer {
+  id: string;
+  companyId?: string;
+  candidateId: string;
+  requisitionId?: string | null;
+  title: string;
+  department?: string;
+  salary: number;
+  currency: string;
+  startDate?: string;
+  expiryDate?: string;
+  status: 'draft' | 'pending_approval' | 'sent' | 'accepted' | 'declined' | 'rescinded';
+  letterBody?: string;
+  sentAt?: string;
+  respondedAt?: string;
 }
 
 // ... existing types below

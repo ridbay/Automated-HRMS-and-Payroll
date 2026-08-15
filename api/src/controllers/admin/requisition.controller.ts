@@ -3,6 +3,7 @@ import { drizzle } from 'drizzle-orm/d1';
 import { eq } from 'drizzle-orm';
 import * as schema from '../../db/schema';
 import { RequisitionService, RequisitionActor } from '../../services/requisition.service';
+import { NotificationService } from '../../services/controlCenter.service';
 import { AppEnv } from '../../types';
 
 const VALID_MANUAL_STATUSES = ['Open', 'On Hold', 'Filled', 'Cancelled'];
@@ -77,6 +78,17 @@ export const approveRequisition = async (c: Context<AppEnv>) => {
   const service = new RequisitionService(c.env.DB);
   const updated = await service.approve(companyId, id, reviewer);
   if (!updated) return c.json({ error: 'Requisition not found' }, 404);
+
+  // Awaited (not fire-and-forget) because Workers doesn't guarantee an
+  // un-awaited promise runs to completion after the response is sent unless
+  // routed through executionCtx.waitUntil — notify() itself never throws
+  // (it catches its own delivery errors), so this can't fail the approval.
+  await new NotificationService(c.env.DB).notify(
+    companyId,
+    'requisition.approved',
+    `🎉 New role approved: *${updated.title}* (${updated.department})`
+  );
+
   return c.json(updated);
 };
 

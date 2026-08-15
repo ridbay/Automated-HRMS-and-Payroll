@@ -9,7 +9,7 @@ var __export = (target, all) => {
     __defProp(target, name2, { get: all[name2], enumerable: true });
 };
 
-// .wrangler/tmp/bundle-MRdSYo/checked-fetch.js
+// .wrangler/tmp/bundle-NWxQhk/checked-fetch.js
 function checkURL(request, init) {
   const url = request instanceof URL ? request : new URL(
     (typeof request === "string" ? new Request(request, init) : request).url
@@ -27,7 +27,7 @@ function checkURL(request, init) {
 }
 var urls;
 var init_checked_fetch = __esm({
-  ".wrangler/tmp/bundle-MRdSYo/checked-fetch.js"() {
+  ".wrangler/tmp/bundle-NWxQhk/checked-fetch.js"() {
     "use strict";
     urls = /* @__PURE__ */ new Set();
     __name(checkURL, "checkURL");
@@ -49,9 +49,9 @@ var init_wrangler_modules_watch = __esm({
   }
 });
 
-// node_modules/wrangler/templates/modules-watch-stub.js
+// ../../../../../../opt/homebrew/lib/node_modules/wrangler/templates/modules-watch-stub.js
 var init_modules_watch_stub = __esm({
-  "node_modules/wrangler/templates/modules-watch-stub.js"() {
+  "../../../../../../opt/homebrew/lib/node_modules/wrangler/templates/modules-watch-stub.js"() {
     init_wrangler_modules_watch();
   }
 });
@@ -2737,11 +2737,11 @@ var init_drizzle_orm = __esm({
   }
 });
 
-// .wrangler/tmp/bundle-MRdSYo/middleware-loader.entry.ts
+// .wrangler/tmp/bundle-NWxQhk/middleware-loader.entry.ts
 init_checked_fetch();
 init_modules_watch_stub();
 
-// .wrangler/tmp/bundle-MRdSYo/middleware-insertion-facade.js
+// .wrangler/tmp/bundle-NWxQhk/middleware-insertion-facade.js
 init_checked_fetch();
 init_modules_watch_stub();
 
@@ -9061,6 +9061,7 @@ init_drizzle_orm();
 // src/db/schema.ts
 var schema_exports = {};
 __export(schema_exports, {
+  aiQueryLogs: () => aiQueryLogs,
   apiKeys: () => apiKeys,
   assessments: () => assessments,
   attendanceRecords: () => attendanceRecords,
@@ -9097,6 +9098,7 @@ __export(schema_exports, {
   employeesRelations: () => employeesRelations,
   feedbacks: () => feedbacks,
   goals: () => goals,
+  integrationEvents: () => integrationEvents,
   integrations: () => integrations,
   interviewScorecards: () => interviewScorecards,
   interviewScorecardsRelations: () => interviewScorecardsRelations,
@@ -9507,6 +9509,19 @@ var payrollSettings = sqliteTable("payroll_settings", {
   // % of basic+housing+transport
   pensionEmployerRate: real("pension_employer_rate").notNull().default(10),
   applyConsolidatedReliefAllowance: integer("apply_cra", { mode: "boolean" }).notNull().default(true),
+  // NHF (Federal Mortgage Bank): employee deduction, reduces net pay.
+  nhfEnabled: integer("nhf_enabled", { mode: "boolean" }).notNull().default(true),
+  nhfRate: real("nhf_rate").notNull().default(2.5),
+  // % of basic salary
+  // NSITF (Employees' Compensation Scheme) and ITF (Industrial Training Fund)
+  // are both employer-paid statutory costs — computed and tracked for
+  // remittance, but never subtracted from an employee's net pay.
+  nsitfEnabled: integer("nsitf_enabled", { mode: "boolean" }).notNull().default(true),
+  nsitfRate: real("nsitf_rate").notNull().default(1),
+  // % of gross pay
+  itfEnabled: integer("itf_enabled", { mode: "boolean" }).notNull().default(true),
+  itfRate: real("itf_rate").notNull().default(1),
+  // % of gross pay
   currency: text("currency").notNull().default("NGN"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").$onUpdate(() => (/* @__PURE__ */ new Date()).toISOString())
@@ -9581,7 +9596,7 @@ var complianceTasks = sqliteTable("compliance_tasks", {
   payrollRunId: text("payroll_run_id"),
   title: text("title").notNull(),
   type: text("type").notNull(),
-  // 'tax' | 'pension' | 'other'
+  // 'tax' | 'pension' | 'nhf' | 'nsitf' | 'itf' | 'other'
   dueDate: text("due_date").notNull(),
   amount: integer("amount").notNull().default(0),
   status: text("status").notNull().default("pending"),
@@ -9603,6 +9618,11 @@ var payrollRuns = sqliteTable("payroll_runs", {
   totalNet: integer("total_net").notNull().default(0),
   totalTaxes: integer("total_taxes").notNull().default(0),
   totalPension: integer("total_pension").notNull().default(0),
+  totalNhf: integer("total_nhf").notNull().default(0),
+  totalNsitf: integer("total_nsitf").notNull().default(0),
+  // employer cost, not part of totalNet
+  totalItf: integer("total_itf").notNull().default(0),
+  // employer cost, not part of totalNet
   totalLoanDeductions: integer("total_loan_deductions").notNull().default(0),
   employeeCount: integer("employee_count").notNull().default(0),
   dueDate: text("due_date"),
@@ -9632,6 +9652,10 @@ var payslips = sqliteTable("payslips", {
   grossPay: integer("gross_pay").notNull().default(0),
   taxDeductions: integer("tax_deductions").notNull().default(0),
   pensionDeductions: integer("pension_deductions").notNull().default(0),
+  nhfDeductions: integer("nhf_deductions").notNull().default(0),
+  // Employer-cost, informational only — not subtracted from netPay.
+  nsitfContribution: integer("nsitf_contribution").notNull().default(0),
+  itfContribution: integer("itf_contribution").notNull().default(0),
   loanDeductions: integer("loan_deductions").notNull().default(0),
   otherDeductions: integer("other_deductions").notNull().default(0),
   netPay: integer("net_pay").notNull().default(0),
@@ -10167,8 +10191,24 @@ var integrations = sqliteTable("integrations", {
   status: text("status").default("available").notNull(),
   // 'available' | 'connected'
   connectedAt: text("connected_at"),
+  // Provider-specific settings, e.g. Slack's { webhookUrl }. Nullable — most
+  // catalog entries have nothing real to configure yet.
+  config: text("config", { mode: "json" }),
+  lastError: text("last_error"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").$onUpdate(() => (/* @__PURE__ */ new Date()).toISOString())
+});
+var integrationEvents = sqliteTable("integration_events", {
+  id: text("id").primaryKey(),
+  companyId: text("company_id").references(() => companies.id).notNull(),
+  integrationKey: text("integration_key").notNull(),
+  eventType: text("event_type").notNull(),
+  // e.g. 'requisition.approved', 'payroll.paid', 'test'
+  payloadSummary: text("payload_summary").notNull(),
+  status: text("status").notNull(),
+  // 'sent' | 'failed'
+  responseCode: integer("response_code"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`)
 });
 var workflows = sqliteTable("workflows", {
   id: text("id").primaryKey(),
@@ -10384,6 +10424,20 @@ var courseEnrollments = sqliteTable("course_enrollments", {
   completedAt: text("completed_at"),
   progress: integer("progress").notNull().default(0)
   // Percentage 0-100
+});
+
+// src/models/ai.model.ts
+init_checked_fetch();
+init_modules_watch_stub();
+init_drizzle_orm();
+var aiQueryLogs = sqliteTable("ai_query_logs", {
+  id: text("id").primaryKey(),
+  companyId: text("company_id").notNull().references(() => companies.id),
+  employeeId: text("employee_id").notNull(),
+  role: text("role").notNull(),
+  question: text("question").notNull(),
+  toolsUsed: text("tools_used", { mode: "json" }).$type().default(sql`'[]'`),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`)
 });
 
 // src/services/auth.service.ts
@@ -11466,7 +11520,7 @@ var EmployeeService = class {
         eq(auditLogs.companyId, companyId),
         eq(auditLogs.employeeId, employeeId)
       ),
-      orderBy: /* @__PURE__ */ __name((auditLogs2, { desc: desc4 }) => [desc4(auditLogs2.createdAt)], "orderBy")
+      orderBy: /* @__PURE__ */ __name((auditLogs2, { desc: desc3 }) => [desc3(auditLogs2.createdAt)], "orderBy")
     });
   }
   async getAssets(companyId, employeeId) {
@@ -12046,7 +12100,7 @@ var LeaveService = class {
         eq(leaveRequests.companyId, companyId),
         eq(leaveRequests.employeeId, employeeId)
       ),
-      orderBy: /* @__PURE__ */ __name((leaveRequests2, { desc: desc4 }) => [desc4(leaveRequests2.appliedOn)], "orderBy")
+      orderBy: /* @__PURE__ */ __name((leaveRequests2, { desc: desc3 }) => [desc3(leaveRequests2.appliedOn)], "orderBy")
     });
   }
   async calculateLeaveBalances(companyId, employeeId) {
@@ -12262,7 +12316,7 @@ var AttendanceService = class {
         eq(attendanceRecords.companyId, companyId),
         eq(attendanceRecords.employeeId, employeeId)
       ),
-      orderBy: /* @__PURE__ */ __name((attendanceRecords2, { desc: desc4 }) => [desc4(attendanceRecords2.date), desc4(attendanceRecords2.clockIn)], "orderBy")
+      orderBy: /* @__PURE__ */ __name((attendanceRecords2, { desc: desc3 }) => [desc3(attendanceRecords2.date), desc3(attendanceRecords2.clockIn)], "orderBy")
     });
     const grouped = {};
     for (const r of records) {
@@ -12307,7 +12361,7 @@ var AttendanceService = class {
         eq(overtimeRequests.companyId, companyId),
         eq(overtimeRequests.employeeId, employeeId)
       ),
-      orderBy: /* @__PURE__ */ __name((overtimeRequests2, { desc: desc4 }) => [desc4(overtimeRequests2.date), desc4(overtimeRequests2.createdAt)], "orderBy")
+      orderBy: /* @__PURE__ */ __name((overtimeRequests2, { desc: desc3 }) => [desc3(overtimeRequests2.date), desc3(overtimeRequests2.createdAt)], "orderBy")
     });
   }
   async createOvertimeRequest(data) {
@@ -15815,7 +15869,7 @@ var TransitionService = class {
     if (type) conditions.push(eq(transitions.type, type));
     const rows = await this.db.query.transitions.findMany({
       where: and(...conditions),
-      orderBy: /* @__PURE__ */ __name((t, { desc: desc4 }) => [desc4(t.createdAt)], "orderBy")
+      orderBy: /* @__PURE__ */ __name((t, { desc: desc3 }) => [desc3(t.createdAt)], "orderBy")
     });
     return Promise.all(rows.map((row) => this.withDetail(row)));
   }
@@ -16177,6 +16231,12 @@ var DEFAULT_SETTINGS = {
   pensionEmployeeRate: 8,
   pensionEmployerRate: 10,
   applyConsolidatedReliefAllowance: true,
+  nhfEnabled: true,
+  nhfRate: 2.5,
+  nsitfEnabled: true,
+  nsitfRate: 1,
+  itfEnabled: true,
+  itfRate: 1,
   currency: "NGN"
 };
 function calculateAnnualPaye(taxableAnnualIncome, brackets) {
@@ -16424,6 +16484,9 @@ var PayrollService = class {
     const grossPay = proratedGross + bonuses;
     const pensionableBase = basicSalary + allowances;
     const pensionDeductions = Math.round(pensionableBase * ((settings.pensionEmployeeRate ?? 8) / 100));
+    const nhfDeductions = settings.nhfEnabled ? Math.round(basicSalary * ((settings.nhfRate ?? 2.5) / 100)) : 0;
+    const nsitfContribution = settings.nsitfEnabled ? Math.round(grossPay * ((settings.nsitfRate ?? 1) / 100)) : 0;
+    const itfContribution = settings.itfEnabled ? Math.round(grossPay * ((settings.itfRate ?? 1) / 100)) : 0;
     const grossAnnual = grossPay * 12;
     let taxableAnnual;
     if (settings.applyConsolidatedReliefAllowance) {
@@ -16435,7 +16498,7 @@ var PayrollService = class {
     const taxDeductions = Math.round(calculateAnnualPaye(taxableAnnual, brackets) / 12);
     const loanDeduction = loan && loan.remainingBalance > 0 ? Math.min(loan.monthlyInstallment, loan.remainingBalance) : 0;
     const otherDeductions = Math.max(0, Math.round(Number(overrides?.otherDeductions) || 0));
-    const netPay = grossPay - taxDeductions - pensionDeductions - loanDeduction - otherDeductions;
+    const netPay = grossPay - taxDeductions - pensionDeductions - nhfDeductions - loanDeduction - otherDeductions;
     return {
       id: crypto.randomUUID(),
       employeeId: emp.id,
@@ -16450,6 +16513,9 @@ var PayrollService = class {
       grossPay,
       taxDeductions,
       pensionDeductions,
+      nhfDeductions,
+      nsitfContribution,
+      itfContribution,
       loanDeductions: loanDeduction,
       otherDeductions,
       netPay,
@@ -16475,6 +16541,9 @@ var PayrollService = class {
     let totalNet = 0;
     let totalTaxes = 0;
     let totalPension = 0;
+    let totalNhf = 0;
+    let totalNsitf = 0;
+    let totalItf = 0;
     let totalLoanDeductions = 0;
     const payslips2 = activeEmployees.map((emp) => {
       const ps = this.computePayslip(emp, settings, brackets, month, year, attendanceMap.get(emp.id), loanMap.get(emp.id), overrides?.[emp.id]);
@@ -16482,6 +16551,9 @@ var PayrollService = class {
       totalNet += ps.netPay;
       totalTaxes += ps.taxDeductions;
       totalPension += ps.pensionDeductions;
+      totalNhf += ps.nhfDeductions;
+      totalNsitf += ps.nsitfContribution;
+      totalItf += ps.itfContribution;
       totalLoanDeductions += ps.loanDeductions;
       return ps;
     });
@@ -16493,6 +16565,9 @@ var PayrollService = class {
       totalNet,
       totalTaxes,
       totalPension,
+      totalNhf,
+      totalNsitf,
+      totalItf,
       totalLoanDeductions,
       employeeCount: activeEmployees.length,
       exceptions: this.buildExceptions(activeEmployees),
@@ -16515,6 +16590,9 @@ var PayrollService = class {
       totalNet: preview.totalNet,
       totalTaxes: preview.totalTaxes,
       totalPension: preview.totalPension,
+      totalNhf: preview.totalNhf,
+      totalNsitf: preview.totalNsitf,
+      totalItf: preview.totalItf,
       totalLoanDeductions: preview.totalLoanDeductions,
       employeeCount: preview.employeeCount,
       dueDate: `${periodYear}-${String(periodMonth).padStart(2, "0")}-${String(settings.paymentDay).padStart(2, "0")}`,
@@ -16538,6 +16616,9 @@ var PayrollService = class {
         grossPay: ps.grossPay,
         taxDeductions: ps.taxDeductions,
         pensionDeductions: ps.pensionDeductions,
+        nhfDeductions: ps.nhfDeductions,
+        nsitfContribution: ps.nsitfContribution,
+        itfContribution: ps.itfContribution,
         loanDeductions: ps.loanDeductions,
         otherDeductions: ps.otherDeductions,
         netPay: ps.netPay,
@@ -16632,6 +16713,36 @@ var PayrollService = class {
         dueDate: `${np.year}-${pad(np.month)}-07`,
         amount: run.totalPension,
         status: "pending"
+      },
+      {
+        id: genId2("CT"),
+        companyId,
+        payrollRunId: runId,
+        title: `${periodLabel} NHF Remittance`,
+        type: "nhf",
+        dueDate: `${np.year}-${pad(np.month)}-30`,
+        amount: run.totalNhf || 0,
+        status: "pending"
+      },
+      {
+        id: genId2("CT"),
+        companyId,
+        payrollRunId: runId,
+        title: `${periodLabel} NSITF Contribution`,
+        type: "nsitf",
+        dueDate: `${np.year}-${pad(np.month)}-30`,
+        amount: run.totalNsitf || 0,
+        status: "pending"
+      },
+      {
+        id: genId2("CT"),
+        companyId,
+        payrollRunId: runId,
+        title: `${periodLabel} ITF Levy`,
+        type: "itf",
+        dueDate: `${np.year}-${pad(np.month)}-30`,
+        amount: run.totalItf || 0,
+        status: "pending"
       }
     ]);
     return this.getRun(companyId, runId);
@@ -16644,6 +16755,58 @@ var PayrollService = class {
       (ps) => [ps.employeeId, ps.employeeName, ps.bankName || "", ps.accountNumber || "", ps.accountName || "", ps.netPay].join(",")
     );
     return { filename: `bank-file-${run.periodYear}-${String(run.periodMonth).padStart(2, "0")}.csv`, content: header + lines.join("\n") };
+  }
+  // ---------------- Statutory remittance schedules ----------------
+  // One CSV per scheme, shaped to resemble what each agency's filing
+  // actually asks for (PAYE per-state-IRS, Pension per-PFA, NHF/NSITF
+  // per-employee, ITF as a single company-level levy line).
+  async getRemittanceSchedule(companyId, runId, type) {
+    const run = await this.getRun(companyId, runId);
+    if (!run) return null;
+    const employeeIds = run.payslips.map((ps) => ps.employeeId);
+    const [employees2, settings] = await Promise.all([
+      employeeIds.length ? this.db.query.employees.findMany({ where: inArray(employees.id, employeeIds) }) : Promise.resolve([]),
+      this.getSettings(companyId)
+    ]);
+    const empById = new Map(employees2.map((e) => [e.id, e]));
+    const periodLabel = `${run.periodYear}-${String(run.periodMonth).padStart(2, "0")}`;
+    const csv = /* @__PURE__ */ __name((header2, rows) => ({ filename: `${type}-remittance-${periodLabel}.csv`, content: header2 + "\n" + rows.join("\n") }), "csv");
+    if (type === "paye") {
+      const header2 = "Employee Name,TIN,Tax State,Gross Annual,PAYE Deducted (Monthly)";
+      const rows = run.payslips.map((ps) => {
+        const emp = empById.get(ps.employeeId);
+        return [ps.employeeName, emp?.tin || "", emp?.taxState || "", ps.grossPay * 12, ps.taxDeductions].join(",");
+      });
+      return csv(header2, rows);
+    }
+    if (type === "pension") {
+      const header2 = "Employee Name,PFA,Pension PIN,Employee Contribution,Employer Contribution,Total";
+      const rows = run.payslips.map((ps) => {
+        const emp = empById.get(ps.employeeId);
+        const employerContribution = Math.round((ps.basicSalary + ps.allowances) * ((settings.pensionEmployerRate ?? 10) / 100));
+        return [ps.employeeName, emp?.pfa || "", emp?.pensionId || "", ps.pensionDeductions, employerContribution, ps.pensionDeductions + employerContribution].join(",");
+      });
+      return csv(header2, rows);
+    }
+    if (type === "nhf") {
+      const header2 = "Employee Name,NHF Number,Basic Salary,NHF Contribution";
+      const rows = run.payslips.map((ps) => {
+        const emp = empById.get(ps.employeeId);
+        return [ps.employeeName, emp?.nhf || "", ps.basicSalary, ps.nhfDeductions].join(",");
+      });
+      return csv(header2, rows);
+    }
+    if (type === "nsitf") {
+      const header2 = "Employee Name,NIN,Gross Pay,NSITF Contribution (Employer)";
+      const rows = run.payslips.map((ps) => {
+        const emp = empById.get(ps.employeeId);
+        return [ps.employeeName, emp?.nin || "", ps.grossPay, ps.nsitfContribution].join(",");
+      });
+      return csv(header2, rows);
+    }
+    const header = "Period,Total Payroll Cost,ITF Levy (1%)";
+    const totalItf = run.payslips.reduce((sum2, ps) => sum2 + (ps.itfContribution || 0), 0);
+    return csv(header, [[periodLabel, run.totalGross, totalItf].join(",")]);
   }
   // ---------------- Compliance ----------------
   async getComplianceTasks(companyId) {
@@ -16682,6 +16845,9 @@ var PayrollService = class {
       totalNet: currentRun ? currentRun.totalNet : preview.totalNet,
       totalTaxes: currentRun ? currentRun.totalTaxes : preview.totalTaxes,
       totalPension: currentRun ? currentRun.totalPension : preview.totalPension,
+      totalNhf: currentRun ? currentRun.totalNhf : preview.totalNhf,
+      totalNsitf: currentRun ? currentRun.totalNsitf : preview.totalNsitf,
+      totalItf: currentRun ? currentRun.totalItf : preview.totalItf,
       totalLoanDeductions: currentRun ? currentRun.totalLoanDeductions : preview.totalLoanDeductions,
       exceptions: preview.exceptions,
       pendingComplianceCount: pendingCompliance.length,
@@ -16689,6 +16855,334 @@ var PayrollService = class {
       activeLoanCount: activeLoans.length,
       activeLoanBalance: activeLoans.reduce((sum2, l) => sum2 + l.remainingBalance, 0),
       recentRuns: latestRuns.slice(0, 5)
+    };
+  }
+};
+
+// src/services/controlCenter.service.ts
+init_checked_fetch();
+init_modules_watch_stub();
+init_drizzle_orm();
+var genId3 = /* @__PURE__ */ __name((prefix) => `${prefix}_${Math.random().toString(36).substring(2, 9)}`, "genId");
+var HolidayService = class {
+  static {
+    __name(this, "HolidayService");
+  }
+  db;
+  constructor(dbBinding) {
+    this.db = drizzle(dbBinding, { schema: schema_exports });
+  }
+  async list(companyId) {
+    return this.db.select().from(publicHolidays).where(eq(publicHolidays.companyId, companyId)).orderBy(publicHolidays.date).all();
+  }
+  async create(companyId, data) {
+    return this.db.insert(publicHolidays).values({ id: genId3("hol"), companyId, name: data.name, date: data.date, createdAt: (/* @__PURE__ */ new Date()).toISOString() }).returning().get();
+  }
+  async delete(companyId, id) {
+    return this.db.delete(publicHolidays).where(and(eq(publicHolidays.id, id), eq(publicHolidays.companyId, companyId))).returning().get();
+  }
+};
+var DEFAULT_EMAIL_TEMPLATES = [
+  {
+    key: "welcome_email",
+    name: "Welcome Email",
+    subject: "Welcome to {{company_name}}, {{employee_first_name}}!",
+    body: "Hi {{employee_first_name}},\n\nWelcome aboard! We're thrilled to have you join {{company_name}} as {{job_title}}, starting {{start_date}}.\n\nYour manager, {{manager_name}}, will be in touch shortly with your first-week schedule. In the meantime, please complete your onboarding checklist in ZenHR.\n\nWelcome to the team!\n{{company_name}} HR"
+  },
+  {
+    key: "offer_letter",
+    name: "Offer Letter",
+    subject: "Your Offer from {{company_name}}",
+    body: "Dear {{employee_first_name}},\n\nWe are delighted to offer you the position of {{job_title}} at {{company_name}}, reporting to {{manager_name}}, with a proposed start date of {{start_date}}.\n\nPlease review the attached offer details and confirm your acceptance by replying to this email.\n\nCongratulations!\n{{company_name}} HR"
+  },
+  {
+    key: "payslip_notification",
+    name: "Payslip Notification",
+    subject: "Your payslip for {{pay_period}} is ready",
+    body: "Hi {{employee_first_name}},\n\nYour payslip for {{pay_period}} has been generated and is now available in ZenHR under My Payroll.\n\nNet pay: {{net_pay}}\n\nIf you have any questions, reach out to payroll@{{company_domain}}."
+  },
+  {
+    key: "leave_approved",
+    name: "Leave Request Approved",
+    subject: "Your leave request has been approved",
+    body: "Hi {{employee_first_name}},\n\nGood news \u2014 your {{leave_type}} request from {{start_date}} to {{end_date}} has been approved by {{approver_name}}.\n\nEnjoy your time off!"
+  },
+  {
+    key: "leave_rejected",
+    name: "Leave Request Declined",
+    subject: "Update on your leave request",
+    body: "Hi {{employee_first_name}},\n\nYour {{leave_type}} request from {{start_date}} to {{end_date}} could not be approved at this time.\n\nReason: {{rejection_reason}}\n\nPlease reach out to {{approver_name}} if you have questions."
+  }
+];
+var EmailTemplateService = class {
+  static {
+    __name(this, "EmailTemplateService");
+  }
+  db;
+  constructor(dbBinding) {
+    this.db = drizzle(dbBinding, { schema: schema_exports });
+  }
+  async list(companyId) {
+    const existing = await this.db.select().from(emailTemplates).where(eq(emailTemplates.companyId, companyId)).all();
+    if (existing.length > 0) return existing;
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const seeded = DEFAULT_EMAIL_TEMPLATES.map((t) => ({
+      id: genId3("tmpl"),
+      companyId,
+      key: t.key,
+      name: t.name,
+      subject: t.subject,
+      body: t.body,
+      createdAt: now
+    }));
+    for (const row of seeded) {
+      await this.db.insert(emailTemplates).values(row);
+    }
+    return this.db.select().from(emailTemplates).where(eq(emailTemplates.companyId, companyId)).all();
+  }
+  async update(companyId, key, data) {
+    return this.db.update(emailTemplates).set({ ...data, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).where(and(eq(emailTemplates.companyId, companyId), eq(emailTemplates.key, key))).returning().get();
+  }
+};
+var DEFAULT_INTEGRATIONS = [
+  { key: "google_calendar", name: "Google Calendar", category: "Scheduling", status: "connected" },
+  { key: "slack", name: "Slack Notifications", category: "Communication", status: "available" },
+  { key: "paystack", name: "Paystack Bank", category: "Fintech", status: "connected" },
+  { key: "outlook", name: "Microsoft Outlook", category: "Communications", status: "available" },
+  { key: "zoom", name: "Zoom Conferencing", category: "Video", status: "available" },
+  { key: "quickbooks", name: "QuickBooks Accounting", category: "Finance", status: "available" }
+];
+var IntegrationService = class {
+  static {
+    __name(this, "IntegrationService");
+  }
+  db;
+  constructor(dbBinding) {
+    this.db = drizzle(dbBinding, { schema: schema_exports });
+  }
+  async list(companyId) {
+    const existing = await this.db.select().from(integrations).where(eq(integrations.companyId, companyId)).all();
+    if (existing.length > 0) return existing;
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const seeded = DEFAULT_INTEGRATIONS.map((i) => ({
+      id: genId3("intg"),
+      companyId,
+      key: i.key,
+      name: i.name,
+      category: i.category,
+      status: i.status,
+      connectedAt: i.status === "connected" ? now : null,
+      createdAt: now
+    }));
+    for (const row of seeded) {
+      await this.db.insert(integrations).values(row);
+    }
+    return this.db.select().from(integrations).where(eq(integrations.companyId, companyId)).all();
+  }
+  async toggle(companyId, key) {
+    const current = await this.db.query.integrations.findFirst({
+      where: and(eq(integrations.companyId, companyId), eq(integrations.key, key))
+    });
+    if (!current) return null;
+    if (key === "slack") throw new Error("Use the Slack connect flow (a webhook URL is required) instead of toggle");
+    const nextStatus = current.status === "connected" ? "available" : "connected";
+    return this.db.update(integrations).set({
+      status: nextStatus,
+      connectedAt: nextStatus === "connected" ? (/* @__PURE__ */ new Date()).toISOString() : null,
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    }).where(and(eq(integrations.companyId, companyId), eq(integrations.key, key))).returning().get();
+  }
+  async connectSlack(companyId, webhookUrl) {
+    if (!/^https:\/\/hooks\.slack\.com\/services\/.+/.test(webhookUrl)) {
+      throw new Error("That doesn't look like a Slack Incoming Webhook URL (should start with https://hooks.slack.com/services/...)");
+    }
+    await this.list(companyId);
+    return this.db.update(integrations).set({
+      status: "connected",
+      connectedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      config: { webhookUrl },
+      lastError: null,
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    }).where(and(eq(integrations.companyId, companyId), eq(integrations.key, "slack"))).returning().get();
+  }
+  async disconnect(companyId, key) {
+    return this.db.update(integrations).set({ status: "available", connectedAt: null, config: null, lastError: null, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).where(and(eq(integrations.companyId, companyId), eq(integrations.key, key))).returning().get();
+  }
+  async getEvents(companyId, key, limit = 20) {
+    return this.db.select().from(integrationEvents).where(and(eq(integrationEvents.companyId, companyId), eq(integrationEvents.integrationKey, key))).orderBy(desc(integrationEvents.createdAt)).limit(limit).all();
+  }
+};
+var NotificationService = class {
+  static {
+    __name(this, "NotificationService");
+  }
+  db;
+  constructor(dbBinding) {
+    this.db = drizzle(dbBinding, { schema: schema_exports });
+  }
+  async notify(companyId, eventType, message) {
+    const slack = await this.db.query.integrations.findFirst({
+      where: and(eq(integrations.companyId, companyId), eq(integrations.key, "slack"), eq(integrations.status, "connected"))
+    });
+    const webhookUrl = slack?.config?.webhookUrl;
+    if (!webhookUrl) return;
+    let status = "sent";
+    let responseCode = null;
+    let errorMessage = null;
+    try {
+      const res = await fetch(webhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: message })
+      });
+      responseCode = res.status;
+      if (!res.ok) {
+        status = "failed";
+        errorMessage = `Slack responded ${res.status}`;
+      }
+    } catch (err) {
+      status = "failed";
+      errorMessage = err?.message || "Network error delivering to Slack";
+    }
+    await this.db.insert(integrationEvents).values({
+      id: genId3("evt"),
+      companyId,
+      integrationKey: "slack",
+      eventType,
+      payloadSummary: message.slice(0, 500),
+      status,
+      responseCode
+    });
+    if (status === "failed") {
+      await this.db.update(integrations).set({ lastError: errorMessage, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).where(and(eq(integrations.companyId, companyId), eq(integrations.key, "slack")));
+    }
+  }
+};
+var DEFAULT_WORKFLOWS = [
+  {
+    key: "onboarding",
+    name: "Onboarding Pipeline",
+    description: "Automated steps, triggers, and assignees for new hires.",
+    steps: [
+      { id: "s1", name: "Send offer & welcome email", assignee: "HR Admin" },
+      { id: "s2", name: "Collect statutory documents (TIN, PFA, bank details)", assignee: "HR Admin" },
+      { id: "s3", name: "Provision system access & equipment", assignee: "IT Admin" },
+      { id: "s4", name: "Assign onboarding buddy & schedule orientation", assignee: "Manager" },
+      { id: "s5", name: "5-day access verification check-in", assignee: "Line Manager" }
+    ]
+  },
+  {
+    key: "offboarding",
+    name: "Offboarding Pipeline",
+    description: "Handover, access revocation, and final settlement steps for exits.",
+    steps: [
+      { id: "s1", name: "Confirm last working day & handover plan", assignee: "Manager" },
+      { id: "s2", name: "Conduct exit interview", assignee: "HR Admin" },
+      { id: "s3", name: "Revoke system access & collect assets", assignee: "IT Admin" },
+      { id: "s4", name: "Process final settlement & documentation", assignee: "Payroll Officer" }
+    ]
+  },
+  {
+    key: "leave_approvals",
+    name: "Leave Approvals",
+    description: "Routing and sign-off chain for employee leave requests.",
+    steps: [
+      { id: "s1", name: "Employee submits request", assignee: "Employee" },
+      { id: "s2", name: "Line manager reviews & approves", assignee: "Manager" },
+      { id: "s3", name: "HR verifies balance & confirms", assignee: "HR Admin" }
+    ]
+  },
+  {
+    key: "payroll_locking",
+    name: "Payroll Locking",
+    description: "Month-end lock sequence before a payroll run is disbursed.",
+    steps: [
+      { id: "s1", name: "Attendance & timesheets lock at month end", assignee: "System" },
+      { id: "s2", name: "Payroll officer reviews & submits run", assignee: "Payroll Officer" },
+      { id: "s3", name: "Admin approves before disbursement", assignee: "HR Admin" }
+    ]
+  }
+];
+var WorkflowService = class {
+  static {
+    __name(this, "WorkflowService");
+  }
+  db;
+  constructor(dbBinding) {
+    this.db = drizzle(dbBinding, { schema: schema_exports });
+  }
+  async list(companyId) {
+    const existing = await this.db.select().from(workflows).where(eq(workflows.companyId, companyId)).all();
+    if (existing.length > 0) return existing;
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const seeded = DEFAULT_WORKFLOWS.map((w) => ({
+      id: genId3("wf"),
+      companyId,
+      key: w.key,
+      name: w.name,
+      description: w.description,
+      steps: w.steps,
+      enabled: true,
+      createdAt: now
+    }));
+    for (const row of seeded) {
+      await this.db.insert(workflows).values(row);
+    }
+    return this.db.select().from(workflows).where(eq(workflows.companyId, companyId)).all();
+  }
+  async update(companyId, key, data) {
+    return this.db.update(workflows).set({ ...data, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).where(and(eq(workflows.companyId, companyId), eq(workflows.key, key))).returning().get();
+  }
+};
+var DataExportService = class {
+  static {
+    __name(this, "DataExportService");
+  }
+  db;
+  constructor(dbBinding) {
+    this.db = drizzle(dbBinding, { schema: schema_exports });
+  }
+  async getStats(companyId) {
+    const [employees2, departments2, locations2, documents, payrollRuns2, requisitions] = await Promise.all([
+      this.db.select().from(employees).where(eq(employees.companyId, companyId)).all(),
+      this.db.select().from(departments).where(eq(departments.companyId, companyId)).all(),
+      this.db.select().from(locations).where(eq(locations.companyId, companyId)).all(),
+      this.db.select().from(employeeDocuments).where(eq(employeeDocuments.companyId, companyId)).all(),
+      this.db.select().from(payrollRuns).where(eq(payrollRuns.companyId, companyId)).all(),
+      this.db.select().from(jobRequisitions).where(eq(jobRequisitions.companyId, companyId)).all()
+    ]);
+    return {
+      employees: employees2.length,
+      activeEmployees: employees2.filter((e) => e.status === "active").length,
+      departments: departments2.length,
+      locations: locations2.length,
+      documents: documents.length,
+      payrollRuns: payrollRuns2.length,
+      jobRequisitions: requisitions.length
+    };
+  }
+  // Sanitized JSON snapshot of the company's core records — no password
+  // hashes/salts, no raw document file bytes (R2 keys only).
+  async exportAll(companyId) {
+    const [company, settings, employees2, departments2, locations2, roles2, payrollRuns2] = await Promise.all([
+      this.db.select().from(companies).where(eq(companies.id, companyId)).get(),
+      this.db.select().from(companySettings).where(eq(companySettings.companyId, companyId)).get(),
+      this.db.select().from(employees).where(eq(employees.companyId, companyId)).all(),
+      this.db.select().from(departments).where(eq(departments.companyId, companyId)).all(),
+      this.db.select().from(locations).where(eq(locations.companyId, companyId)).all(),
+      this.db.select().from(roles).where(eq(roles.companyId, companyId)).all(),
+      this.db.select().from(payrollRuns).where(eq(payrollRuns.companyId, companyId)).all()
+    ]);
+    const safeEmployees = employees2.map(({ passwordHash, passwordSalt, ...rest }) => rest);
+    return {
+      exportedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      company,
+      settings,
+      employees: safeEmployees,
+      departments: departments2,
+      locations: locations2,
+      roles: roles2,
+      payrollRuns: payrollRuns2
     };
   }
 };
@@ -16937,9 +17431,16 @@ var rejectPayrollRun = /* @__PURE__ */ __name(async (c) => {
 }, "rejectPayrollRun");
 var markPayrollRunPaid = /* @__PURE__ */ __name(async (c) => {
   try {
+    const companyId = c.get("companyId");
     const service = new PayrollService(c.env.DB);
-    const run = await service.markRunPaid(c.get("companyId"), c.req.param("id"));
+    const run = await service.markRunPaid(companyId, c.req.param("id"));
     if (!run) return c.json({ error: "Not found" }, 404);
+    const period = new Date(run.periodYear, run.periodMonth - 1, 1).toLocaleString("en-US", { month: "long", year: "numeric" });
+    await new NotificationService(c.env.DB).notify(
+      companyId,
+      "payroll.paid",
+      `\u{1F4B0} Payroll for *${period}* has been paid \u2014 ${run.employeeCount} employees, net \u20A6${run.totalNet.toLocaleString()}`
+    );
     return c.json({ data: run });
   } catch (error) {
     return c.json({ error: error.message }, 400);
@@ -16957,6 +17458,23 @@ var getBankFile = /* @__PURE__ */ __name(async (c) => {
     return c.json({ error: error.message }, 500);
   }
 }, "getBankFile");
+var VALID_REMITTANCE_TYPES = ["paye", "pension", "nhf", "nsitf", "itf"];
+var getRemittanceSchedule = /* @__PURE__ */ __name(async (c) => {
+  try {
+    const type = c.req.param("type");
+    if (!VALID_REMITTANCE_TYPES.includes(type)) {
+      return c.json({ error: `type must be one of ${VALID_REMITTANCE_TYPES.join(", ")}` }, 400);
+    }
+    const service = new PayrollService(c.env.DB);
+    const file = await service.getRemittanceSchedule(c.get("companyId"), c.req.param("id"), type);
+    if (!file) return c.json({ error: "Not found" }, 404);
+    c.header("Content-Type", "text/csv");
+    c.header("Content-Disposition", `attachment; filename="${file.filename}"`);
+    return c.body(file.content);
+  } catch (error) {
+    return c.json({ error: error.message }, 500);
+  }
+}, "getRemittanceSchedule");
 var getComplianceTasks = /* @__PURE__ */ __name(async (c) => {
   try {
     const service = new PayrollService(c.env.DB);
@@ -17058,6 +17576,7 @@ payrollRoutes.post("/runs/:id/approve", adminOnly, requirePermission("payroll", 
 payrollRoutes.post("/runs/:id/reject", adminOnly, requirePermission("payroll", "edit"), rejectPayrollRun);
 payrollRoutes.post("/runs/:id/mark-paid", adminOnly, requirePermission("payroll", "edit"), markPayrollRunPaid);
 payrollRoutes.get("/runs/:id/bank-file", adminOnly, requirePermission("payroll", "view"), getBankFile);
+payrollRoutes.get("/runs/:id/remittance/:type", adminOnly, requirePermission("payroll", "view"), getRemittanceSchedule);
 payrollRoutes.get("/compliance", adminOnly, requirePermission("payroll", "view"), getComplianceTasks);
 payrollRoutes.put("/compliance/:id", adminOnly, requirePermission("payroll", "edit"), completeComplianceTask);
 payrollRoutes.get("/employee/:id/payslips", adminOnly, requirePermission("payroll", "view"), getEmployeePayslips);
@@ -17156,36 +17675,37 @@ var RequisitionService = class {
   constructor(dbBinding) {
     this.db = drizzle(dbBinding, { schema: schema_exports });
   }
-  // Attaches real, server-computed candidate-per-stage counts (from the ATS
+  // Real, server-computed candidate-per-stage counts (from the ATS
   // `candidates` table) instead of the zero-padded shape the frontend used
   // to fabricate client-side (src/api/client.ts's withEmptyPipeline) before
   // candidates existed. Queried directly here (both tables share the same
   // drizzle instance/schema) rather than via a separate AtsService instance,
   // to avoid re-deriving a raw D1Database binding out of an existing
   // drizzle wrapper.
-  async withPipelineCounts(companyId, rows) {
+  async getPipelineCounts(companyId, requisitionIds) {
     const empty = { applied: 0, screening: 0, interview: 0, offer: 0, hired: 0 };
-    if (rows.length === 0) return rows;
-    const requisitionIds = rows.map((r) => r.id);
+    const counts = /* @__PURE__ */ new Map();
+    if (requisitionIds.length === 0) return counts;
     const candidateRows = await this.db.query.candidates.findMany({
       where: and(eq(candidates.companyId, companyId), inArray(candidates.requisitionId, requisitionIds)),
       columns: { requisitionId: true, status: true }
     });
-    const counts = /* @__PURE__ */ new Map();
     for (const c of candidateRows) {
       if (!c.requisitionId) continue;
       const bucket = counts.get(c.requisitionId) || { ...empty };
       if (c.status in bucket) bucket[c.status] += 1;
       counts.set(c.requisitionId, bucket);
     }
-    return rows.map((r) => ({ ...r, applicantsByStage: counts.get(r.id) || empty }));
+    return counts;
   }
   async getAllByCompany(companyId) {
     const rows = await this.db.query.jobRequisitions.findMany({
       where: eq(jobRequisitions.companyId, companyId),
-      orderBy: /* @__PURE__ */ __name((jobRequisitions2, { desc: desc4 }) => [desc4(jobRequisitions2.createdAt)], "orderBy")
+      orderBy: /* @__PURE__ */ __name((jobRequisitions2, { desc: desc3 }) => [desc3(jobRequisitions2.createdAt)], "orderBy")
     });
-    return this.withPipelineCounts(companyId, rows.map(withComputedDaysOpen));
+    const empty = { applied: 0, screening: 0, interview: 0, offer: 0, hired: 0 };
+    const counts = await this.getPipelineCounts(companyId, rows.map((r) => r.id));
+    return rows.map((r) => ({ ...withComputedDaysOpen(r), applicantsByStage: counts.get(r.id) || empty }));
   }
   async getPendingByCompany(companyId) {
     const rows = await this.db.query.jobRequisitions.findMany({
@@ -17203,7 +17723,7 @@ var RequisitionService = class {
         eq(jobRequisitions.companyId, companyId),
         eq(jobRequisitions.requestedById, employeeId)
       ),
-      orderBy: /* @__PURE__ */ __name((jobRequisitions2, { desc: desc4 }) => [desc4(jobRequisitions2.createdAt)], "orderBy")
+      orderBy: /* @__PURE__ */ __name((jobRequisitions2, { desc: desc3 }) => [desc3(jobRequisitions2.createdAt)], "orderBy")
     });
     return rows.map(withComputedDaysOpen);
   }
@@ -17328,6 +17848,11 @@ var approveRequisition = /* @__PURE__ */ __name(async (c) => {
   const service = new RequisitionService(c.env.DB);
   const updated = await service.approve(companyId, id, reviewer);
   if (!updated) return c.json({ error: "Requisition not found" }, 404);
+  await new NotificationService(c.env.DB).notify(
+    companyId,
+    "requisition.approved",
+    `\u{1F389} New role approved: *${updated.title}* (${updated.department})`
+  );
   return c.json(updated);
 }, "approveRequisition");
 var rejectRequisition = /* @__PURE__ */ __name(async (c) => {
@@ -17389,7 +17914,7 @@ init_drizzle_orm();
 init_checked_fetch();
 init_modules_watch_stub();
 init_drizzle_orm();
-var genId3 = /* @__PURE__ */ __name((prefix) => `${prefix}-${crypto.randomUUID().split("-")[0].toUpperCase()}`, "genId");
+var genId4 = /* @__PURE__ */ __name((prefix) => `${prefix}-${crypto.randomUUID().split("-")[0].toUpperCase()}`, "genId");
 var VALID_CANDIDATE_STATUSES = ["applied", "screening", "interview", "offer", "hired", "rejected"];
 var AtsService = class {
   static {
@@ -17401,7 +17926,7 @@ var AtsService = class {
   }
   async logTimeline(companyId, candidateId, actor, event, note) {
     await this.db.insert(candidateTimelineEvents).values({
-      id: genId3("TL"),
+      id: genId4("TL"),
       candidateId,
       companyId,
       event,
@@ -17456,7 +17981,7 @@ var AtsService = class {
   }
   async createCandidate(companyId, actor, data, resumeFileKey) {
     if (!data.name || !data.email) throw new Error("name and email are required");
-    const id = genId3("CAND");
+    const id = genId4("CAND");
     const row = {
       id,
       companyId,
@@ -17518,7 +18043,7 @@ var AtsService = class {
       where: and(eq(candidates.id, data.candidateId), eq(candidates.companyId, companyId))
     });
     if (!candidate) throw new Error("Candidate not found");
-    const id = genId3("INT");
+    const id = genId4("INT");
     const row = {
       id,
       companyId,
@@ -17556,7 +18081,7 @@ var AtsService = class {
     });
     if (!interview) throw new Error("Interview not found");
     const row = {
-      id: genId3("SC"),
+      id: genId4("SC"),
       interviewId,
       companyId,
       interviewerId: actor?.id || null,
@@ -17597,7 +18122,7 @@ We are delighted to offer you the position of ${data.title}` + (data.department 
 Please review the terms and confirm your acceptance` + (data.expiryDate ? ` by ${data.expiryDate}` : "") + `.
 
 Congratulations!`;
-    const id = genId3("OFF");
+    const id = genId4("OFF");
     const row = {
       id,
       companyId,
@@ -17860,6 +18385,12 @@ var sendOffer = /* @__PURE__ */ __name(async (c) => {
     const service = new AtsService(c.env.DB);
     const updated = await service.sendOffer(companyId, actor, c.req.param("id"));
     if (!updated) return c.json({ error: "Not found" }, 404);
+    const candidate = await service.getCandidate(companyId, updated.candidateId);
+    await new NotificationService(c.env.DB).notify(
+      companyId,
+      "ats.offer_sent",
+      `\u{1F4E8} Offer sent to ${candidate?.name || "a candidate"} for *${updated.title}*`
+    );
     return c.json({ data: updated });
   } catch (error) {
     return c.json({ error: error.message }, 400);
@@ -17874,6 +18405,14 @@ var respondToOffer = /* @__PURE__ */ __name(async (c) => {
     const service = new AtsService(c.env.DB);
     const updated = await service.respondToOffer(companyId, actor, c.req.param("id"), decision);
     if (!updated) return c.json({ error: "Not found" }, 404);
+    if (decision === "accepted") {
+      const candidate = await service.getCandidate(companyId, updated.candidateId);
+      await new NotificationService(c.env.DB).notify(
+        companyId,
+        "ats.offer_accepted",
+        `\u{1F389} ${candidate?.name || "A candidate"} accepted the offer for *${updated.title}* \u2014 welcome to the team!`
+      );
+    }
     return c.json({ data: updated });
   } catch (error) {
     return c.json({ error: error.message }, 400);
@@ -18659,268 +19198,6 @@ var DashboardService = class {
   }
 };
 
-// src/services/controlCenter.service.ts
-init_checked_fetch();
-init_modules_watch_stub();
-init_drizzle_orm();
-var genId4 = /* @__PURE__ */ __name((prefix) => `${prefix}_${Math.random().toString(36).substring(2, 9)}`, "genId");
-var HolidayService = class {
-  static {
-    __name(this, "HolidayService");
-  }
-  db;
-  constructor(dbBinding) {
-    this.db = drizzle(dbBinding, { schema: schema_exports });
-  }
-  async list(companyId) {
-    return this.db.select().from(publicHolidays).where(eq(publicHolidays.companyId, companyId)).orderBy(publicHolidays.date).all();
-  }
-  async create(companyId, data) {
-    return this.db.insert(publicHolidays).values({ id: genId4("hol"), companyId, name: data.name, date: data.date, createdAt: (/* @__PURE__ */ new Date()).toISOString() }).returning().get();
-  }
-  async delete(companyId, id) {
-    return this.db.delete(publicHolidays).where(and(eq(publicHolidays.id, id), eq(publicHolidays.companyId, companyId))).returning().get();
-  }
-};
-var DEFAULT_EMAIL_TEMPLATES = [
-  {
-    key: "welcome_email",
-    name: "Welcome Email",
-    subject: "Welcome to {{company_name}}, {{employee_first_name}}!",
-    body: "Hi {{employee_first_name}},\n\nWelcome aboard! We're thrilled to have you join {{company_name}} as {{job_title}}, starting {{start_date}}.\n\nYour manager, {{manager_name}}, will be in touch shortly with your first-week schedule. In the meantime, please complete your onboarding checklist in ZenHR.\n\nWelcome to the team!\n{{company_name}} HR"
-  },
-  {
-    key: "offer_letter",
-    name: "Offer Letter",
-    subject: "Your Offer from {{company_name}}",
-    body: "Dear {{employee_first_name}},\n\nWe are delighted to offer you the position of {{job_title}} at {{company_name}}, reporting to {{manager_name}}, with a proposed start date of {{start_date}}.\n\nPlease review the attached offer details and confirm your acceptance by replying to this email.\n\nCongratulations!\n{{company_name}} HR"
-  },
-  {
-    key: "payslip_notification",
-    name: "Payslip Notification",
-    subject: "Your payslip for {{pay_period}} is ready",
-    body: "Hi {{employee_first_name}},\n\nYour payslip for {{pay_period}} has been generated and is now available in ZenHR under My Payroll.\n\nNet pay: {{net_pay}}\n\nIf you have any questions, reach out to payroll@{{company_domain}}."
-  },
-  {
-    key: "leave_approved",
-    name: "Leave Request Approved",
-    subject: "Your leave request has been approved",
-    body: "Hi {{employee_first_name}},\n\nGood news \u2014 your {{leave_type}} request from {{start_date}} to {{end_date}} has been approved by {{approver_name}}.\n\nEnjoy your time off!"
-  },
-  {
-    key: "leave_rejected",
-    name: "Leave Request Declined",
-    subject: "Update on your leave request",
-    body: "Hi {{employee_first_name}},\n\nYour {{leave_type}} request from {{start_date}} to {{end_date}} could not be approved at this time.\n\nReason: {{rejection_reason}}\n\nPlease reach out to {{approver_name}} if you have questions."
-  }
-];
-var EmailTemplateService = class {
-  static {
-    __name(this, "EmailTemplateService");
-  }
-  db;
-  constructor(dbBinding) {
-    this.db = drizzle(dbBinding, { schema: schema_exports });
-  }
-  async list(companyId) {
-    const existing = await this.db.select().from(emailTemplates).where(eq(emailTemplates.companyId, companyId)).all();
-    if (existing.length > 0) return existing;
-    const now = (/* @__PURE__ */ new Date()).toISOString();
-    const seeded = DEFAULT_EMAIL_TEMPLATES.map((t) => ({
-      id: genId4("tmpl"),
-      companyId,
-      key: t.key,
-      name: t.name,
-      subject: t.subject,
-      body: t.body,
-      createdAt: now
-    }));
-    for (const row of seeded) {
-      await this.db.insert(emailTemplates).values(row);
-    }
-    return this.db.select().from(emailTemplates).where(eq(emailTemplates.companyId, companyId)).all();
-  }
-  async update(companyId, key, data) {
-    return this.db.update(emailTemplates).set({ ...data, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).where(and(eq(emailTemplates.companyId, companyId), eq(emailTemplates.key, key))).returning().get();
-  }
-};
-var DEFAULT_INTEGRATIONS = [
-  { key: "google_calendar", name: "Google Calendar", category: "Scheduling", status: "connected" },
-  { key: "slack", name: "Slack Notifications", category: "Communication", status: "connected" },
-  { key: "paystack", name: "Paystack Bank", category: "Fintech", status: "connected" },
-  { key: "outlook", name: "Microsoft Outlook", category: "Communications", status: "available" },
-  { key: "zoom", name: "Zoom Conferencing", category: "Video", status: "available" },
-  { key: "quickbooks", name: "QuickBooks Accounting", category: "Finance", status: "available" }
-];
-var IntegrationService = class {
-  static {
-    __name(this, "IntegrationService");
-  }
-  db;
-  constructor(dbBinding) {
-    this.db = drizzle(dbBinding, { schema: schema_exports });
-  }
-  async list(companyId) {
-    const existing = await this.db.select().from(integrations).where(eq(integrations.companyId, companyId)).all();
-    if (existing.length > 0) return existing;
-    const now = (/* @__PURE__ */ new Date()).toISOString();
-    const seeded = DEFAULT_INTEGRATIONS.map((i) => ({
-      id: genId4("intg"),
-      companyId,
-      key: i.key,
-      name: i.name,
-      category: i.category,
-      status: i.status,
-      connectedAt: i.status === "connected" ? now : null,
-      createdAt: now
-    }));
-    for (const row of seeded) {
-      await this.db.insert(integrations).values(row);
-    }
-    return this.db.select().from(integrations).where(eq(integrations.companyId, companyId)).all();
-  }
-  async toggle(companyId, key) {
-    const current = await this.db.query.integrations.findFirst({
-      where: and(eq(integrations.companyId, companyId), eq(integrations.key, key))
-    });
-    if (!current) return null;
-    const nextStatus = current.status === "connected" ? "available" : "connected";
-    return this.db.update(integrations).set({
-      status: nextStatus,
-      connectedAt: nextStatus === "connected" ? (/* @__PURE__ */ new Date()).toISOString() : null,
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    }).where(and(eq(integrations.companyId, companyId), eq(integrations.key, key))).returning().get();
-  }
-};
-var DEFAULT_WORKFLOWS = [
-  {
-    key: "onboarding",
-    name: "Onboarding Pipeline",
-    description: "Automated steps, triggers, and assignees for new hires.",
-    steps: [
-      { id: "s1", name: "Send offer & welcome email", assignee: "HR Admin" },
-      { id: "s2", name: "Collect statutory documents (TIN, PFA, bank details)", assignee: "HR Admin" },
-      { id: "s3", name: "Provision system access & equipment", assignee: "IT Admin" },
-      { id: "s4", name: "Assign onboarding buddy & schedule orientation", assignee: "Manager" },
-      { id: "s5", name: "5-day access verification check-in", assignee: "Line Manager" }
-    ]
-  },
-  {
-    key: "offboarding",
-    name: "Offboarding Pipeline",
-    description: "Handover, access revocation, and final settlement steps for exits.",
-    steps: [
-      { id: "s1", name: "Confirm last working day & handover plan", assignee: "Manager" },
-      { id: "s2", name: "Conduct exit interview", assignee: "HR Admin" },
-      { id: "s3", name: "Revoke system access & collect assets", assignee: "IT Admin" },
-      { id: "s4", name: "Process final settlement & documentation", assignee: "Payroll Officer" }
-    ]
-  },
-  {
-    key: "leave_approvals",
-    name: "Leave Approvals",
-    description: "Routing and sign-off chain for employee leave requests.",
-    steps: [
-      { id: "s1", name: "Employee submits request", assignee: "Employee" },
-      { id: "s2", name: "Line manager reviews & approves", assignee: "Manager" },
-      { id: "s3", name: "HR verifies balance & confirms", assignee: "HR Admin" }
-    ]
-  },
-  {
-    key: "payroll_locking",
-    name: "Payroll Locking",
-    description: "Month-end lock sequence before a payroll run is disbursed.",
-    steps: [
-      { id: "s1", name: "Attendance & timesheets lock at month end", assignee: "System" },
-      { id: "s2", name: "Payroll officer reviews & submits run", assignee: "Payroll Officer" },
-      { id: "s3", name: "Admin approves before disbursement", assignee: "HR Admin" }
-    ]
-  }
-];
-var WorkflowService = class {
-  static {
-    __name(this, "WorkflowService");
-  }
-  db;
-  constructor(dbBinding) {
-    this.db = drizzle(dbBinding, { schema: schema_exports });
-  }
-  async list(companyId) {
-    const existing = await this.db.select().from(workflows).where(eq(workflows.companyId, companyId)).all();
-    if (existing.length > 0) return existing;
-    const now = (/* @__PURE__ */ new Date()).toISOString();
-    const seeded = DEFAULT_WORKFLOWS.map((w) => ({
-      id: genId4("wf"),
-      companyId,
-      key: w.key,
-      name: w.name,
-      description: w.description,
-      steps: w.steps,
-      enabled: true,
-      createdAt: now
-    }));
-    for (const row of seeded) {
-      await this.db.insert(workflows).values(row);
-    }
-    return this.db.select().from(workflows).where(eq(workflows.companyId, companyId)).all();
-  }
-  async update(companyId, key, data) {
-    return this.db.update(workflows).set({ ...data, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).where(and(eq(workflows.companyId, companyId), eq(workflows.key, key))).returning().get();
-  }
-};
-var DataExportService = class {
-  static {
-    __name(this, "DataExportService");
-  }
-  db;
-  constructor(dbBinding) {
-    this.db = drizzle(dbBinding, { schema: schema_exports });
-  }
-  async getStats(companyId) {
-    const [employees2, departments2, locations2, documents, payrollRuns2, requisitions] = await Promise.all([
-      this.db.select().from(employees).where(eq(employees.companyId, companyId)).all(),
-      this.db.select().from(departments).where(eq(departments.companyId, companyId)).all(),
-      this.db.select().from(locations).where(eq(locations.companyId, companyId)).all(),
-      this.db.select().from(employeeDocuments).where(eq(employeeDocuments.companyId, companyId)).all(),
-      this.db.select().from(payrollRuns).where(eq(payrollRuns.companyId, companyId)).all(),
-      this.db.select().from(jobRequisitions).where(eq(jobRequisitions.companyId, companyId)).all()
-    ]);
-    return {
-      employees: employees2.length,
-      activeEmployees: employees2.filter((e) => e.status === "active").length,
-      departments: departments2.length,
-      locations: locations2.length,
-      documents: documents.length,
-      payrollRuns: payrollRuns2.length,
-      jobRequisitions: requisitions.length
-    };
-  }
-  // Sanitized JSON snapshot of the company's core records — no password
-  // hashes/salts, no raw document file bytes (R2 keys only).
-  async exportAll(companyId) {
-    const [company, settings, employees2, departments2, locations2, roles2, payrollRuns2] = await Promise.all([
-      this.db.select().from(companies).where(eq(companies.id, companyId)).get(),
-      this.db.select().from(companySettings).where(eq(companySettings.companyId, companyId)).get(),
-      this.db.select().from(employees).where(eq(employees.companyId, companyId)).all(),
-      this.db.select().from(departments).where(eq(departments.companyId, companyId)).all(),
-      this.db.select().from(locations).where(eq(locations.companyId, companyId)).all(),
-      this.db.select().from(roles).where(eq(roles.companyId, companyId)).all(),
-      this.db.select().from(payrollRuns).where(eq(payrollRuns.companyId, companyId)).all()
-    ]);
-    const safeEmployees = employees2.map(({ passwordHash, passwordSalt, ...rest }) => rest);
-    return {
-      exportedAt: (/* @__PURE__ */ new Date()).toISOString(),
-      company,
-      settings,
-      employees: safeEmployees,
-      departments: departments2,
-      locations: locations2,
-      roles: roles2,
-      payrollRuns: payrollRuns2
-    };
-  }
-};
-
 // src/routes/admin.routes.ts
 init_drizzle_orm();
 
@@ -19501,15 +19778,67 @@ adminRoutes.get("/integrations", adminOnly5, view3("settings"), async (c) => {
 adminRoutes.put("/integrations/:key/toggle", adminOnly5, edit2("settings"), async (c) => {
   const companyId = c.get("companyId");
   const service = new IntegrationService(c.env.DB);
-  const integration = await service.toggle(companyId, c.req.param("key"));
-  if (!integration) return c.json({ error: "Not found" }, 404);
+  try {
+    const integration = await service.toggle(companyId, c.req.param("key"));
+    if (!integration) return c.json({ error: "Not found" }, 404);
+    await new AuditService(c.env.DB).log(companyId, {
+      actorId: c.get("employeeId"),
+      action: `${integration.status === "connected" ? "Connected" : "Disconnected"} ${integration.name}`,
+      module: "integrations",
+      ip: c.req.header("cf-connecting-ip")
+    });
+    return c.json(integration);
+  } catch (error) {
+    return c.json({ error: error.message }, 400);
+  }
+});
+adminRoutes.put("/integrations/slack/connect", adminOnly5, edit2("settings"), async (c) => {
+  const companyId = c.get("companyId");
+  const { webhookUrl } = await c.req.json();
+  const service = new IntegrationService(c.env.DB);
+  try {
+    const integration = await service.connectSlack(companyId, webhookUrl);
+    await new AuditService(c.env.DB).log(companyId, {
+      actorId: c.get("employeeId"),
+      action: "Connected Slack Notifications",
+      module: "integrations",
+      ip: c.req.header("cf-connecting-ip")
+    });
+    return c.json(integration);
+  } catch (error) {
+    return c.json({ error: error.message }, 400);
+  }
+});
+adminRoutes.post("/integrations/slack/disconnect", adminOnly5, edit2("settings"), async (c) => {
+  const companyId = c.get("companyId");
+  const service = new IntegrationService(c.env.DB);
+  const integration = await service.disconnect(companyId, "slack");
   await new AuditService(c.env.DB).log(companyId, {
     actorId: c.get("employeeId"),
-    action: `${integration.status === "connected" ? "Connected" : "Disconnected"} ${integration.name}`,
+    action: "Disconnected Slack Notifications",
     module: "integrations",
     ip: c.req.header("cf-connecting-ip")
   });
   return c.json(integration);
+});
+adminRoutes.post("/integrations/slack/test", adminOnly5, edit2("settings"), async (c) => {
+  const companyId = c.get("companyId");
+  const integrationService = new IntegrationService(c.env.DB);
+  const integrations2 = await integrationService.list(companyId);
+  const slack = integrations2.find((i) => i.key === "slack");
+  if (slack?.status !== "connected") return c.json({ error: "Slack isn't connected yet" }, 400);
+  const beforeCount = (await integrationService.getEvents(companyId, "slack", 1))[0]?.id;
+  await new NotificationService(c.env.DB).notify(companyId, "test", "\u{1F44B} This is a test message from ZenHR \u2014 your Slack integration is working.");
+  const events = await integrationService.getEvents(companyId, "slack", 1);
+  const lastEvent = events[0];
+  if (!lastEvent || lastEvent.id === beforeCount) return c.json({ error: "No delivery was recorded" }, 502);
+  if (lastEvent.status === "failed") return c.json({ error: "Failed to deliver test message \u2014 check the webhook URL" }, 502);
+  return c.json({ success: true });
+});
+adminRoutes.get("/integrations/:key/events", adminOnly5, view3("settings"), async (c) => {
+  const companyId = c.get("companyId");
+  const service = new IntegrationService(c.env.DB);
+  return c.json(await service.getEvents(companyId, c.req.param("key")));
 });
 adminRoutes.get("/workflows", adminOnly5, view3("settings"), async (c) => {
   const companyId = c.get("companyId");
@@ -19600,7 +19929,7 @@ var listOpenPositions = /* @__PURE__ */ __name(async (c) => {
         eq(jobRequisitions.status, "Open"),
         eq(jobRequisitions.isPubliclyListed, true)
       ),
-      orderBy: /* @__PURE__ */ __name((jobRequisitions2, { desc: desc4 }) => [desc4(jobRequisitions2.dateOpened)], "orderBy")
+      orderBy: /* @__PURE__ */ __name((jobRequisitions2, { desc: desc3 }) => [desc3(jobRequisitions2.dateOpened)], "orderBy")
     });
     return c.json({
       data: {
@@ -19763,7 +20092,286 @@ var auth_routes_default = router;
 // src/routes/ai.routes.ts
 init_checked_fetch();
 init_modules_watch_stub();
+
+// src/controllers/ai.controller.ts
+init_checked_fetch();
+init_modules_watch_stub();
+
+// src/services/ai.service.ts
+init_checked_fetch();
+init_modules_watch_stub();
+init_drizzle_orm();
+var genId5 = /* @__PURE__ */ __name((prefix) => `${prefix}-${crypto.randomUUID().split("-")[0].toUpperCase()}`, "genId");
+var MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+var MAX_TOOL_ITERATIONS = 4;
+var PRIVILEGED_ROLES = ["SUPER_ADMIN", "HR_ADMIN"];
+var isPrivileged = /* @__PURE__ */ __name((role) => PRIVILEGED_ROLES.includes(role), "isPrivileged");
+var TOOL_SCHEMAS = [
+  {
+    name: "getEmployee",
+    description: "Look up a single employee's profile (title, department, manager, hire date, status). Admins/HR can look up anyone; managers can look up themselves or their direct reports; everyone else can only look up themselves.",
+    parameters: {
+      type: "object",
+      properties: { employeeId: { type: "string", description: 'The employee id to look up. Omit to mean "me".' } }
+    }
+  },
+  {
+    name: "searchEmployees",
+    description: "Search employees company-wide by name, optionally filtered by department. HR Admin / Super Admin only.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Name (or partial name) to search for." },
+        departmentId: { type: "string" }
+      }
+    }
+  },
+  {
+    name: "getLeaveBalance",
+    description: "Get an employee's leave balances by type (total entitlement and days already taken this year).",
+    parameters: {
+      type: "object",
+      properties: { employeeId: { type: "string", description: 'Omit to mean "me".' } }
+    }
+  },
+  {
+    name: "getPendingLeaveRequests",
+    description: "List pending leave requests awaiting approval. Managers see only their own team; HR Admin/Super Admin see everyone.",
+    parameters: { type: "object", properties: {} }
+  },
+  {
+    name: "getHeadcount",
+    description: "Active employee headcount. Managers get their own team size; HR Admin/Super Admin get the whole company (optionally one department).",
+    parameters: { type: "object", properties: { departmentId: { type: "string" } } }
+  },
+  {
+    name: "getPayrollSummary",
+    description: "Aggregate payroll totals (gross, net, tax, pension, employee count) for a given month \u2014 never individual salaries. HR Admin / Super Admin only.",
+    parameters: {
+      type: "object",
+      properties: { month: { type: "number", description: "1-12" }, year: { type: "number" } }
+    }
+  },
+  {
+    name: "getOpenRequisitions",
+    description: "List currently open job requisitions (title, department, location, days open).",
+    parameters: { type: "object", properties: {} }
+  },
+  {
+    name: "getComplianceTasksDue",
+    description: "List pending statutory compliance/remittance tasks (PAYE, pension, NHF, NSITF, ITF) with due dates and amounts. HR Admin / Super Admin only.",
+    parameters: { type: "object", properties: {} }
+  }
+];
+var SYSTEM_PROMPT = /* @__PURE__ */ __name((caller) => `You are the ZenHR assistant, embedded in a Nigerian HRMS & payroll platform. The person asking is employee ${caller.employeeId} with role ${caller.role}. Answer using the provided tools \u2014 never invent numbers or facts about employees, leave, payroll, or compliance. If a tool result contains an "error" field, that means the question is outside what this person is allowed to see \u2014 explain that plainly and don't try another tool to work around it. Keep answers concise and concrete.`, "SYSTEM_PROMPT");
+var AiService = class {
+  static {
+    __name(this, "AiService");
+  }
+  db;
+  ai;
+  constructor(dbBinding, aiBinding) {
+    this.db = drizzle(dbBinding, { schema: schema_exports });
+    this.ai = aiBinding;
+  }
+  // ---------------- Role-scoping helpers ----------------
+  async getManagedEmployeeIds(managerId) {
+    const reports = await this.db.query.employees.findMany({ where: eq(employees.managerId, managerId) });
+    return new Set(reports.map((r) => r.id));
+  }
+  // ---------------- Tool implementations ----------------
+  // Every tool re-derives its own scoping from `caller` — arguments the
+  // model supplies (like employeeId) are treated as a request to narrow,
+  // never as authorization. This is the only place access control lives;
+  // the model is never trusted to enforce it.
+  async getEmployee(caller, args) {
+    const targetId = args.employeeId || caller.employeeId;
+    if (!isPrivileged(caller.role) && targetId !== caller.employeeId) {
+      if (caller.role === "MANAGER") {
+        const reports = await this.getManagedEmployeeIds(caller.employeeId);
+        if (!reports.has(targetId)) return { error: "You can only look up your own profile or your direct reports'." };
+      } else {
+        return { error: "You can only look up your own profile." };
+      }
+    }
+    const emp = await this.db.query.employees.findFirst({
+      where: and(eq(employees.id, targetId), eq(employees.companyId, caller.companyId))
+    });
+    if (!emp) return { error: "Employee not found." };
+    return {
+      id: emp.id,
+      name: `${emp.name} ${emp.lastName || ""}`.trim(),
+      department: emp.department,
+      role: emp.role,
+      status: emp.status,
+      hireDate: emp.hireDate,
+      managerName: emp.managerName
+    };
+  }
+  async searchEmployees(caller, args) {
+    if (!isPrivileged(caller.role)) return { error: "Only HR Admin/Super Admin can search across all employees." };
+    const conditions = [eq(employees.companyId, caller.companyId)];
+    if (args.query) conditions.push(like(employees.name, `%${args.query}%`));
+    if (args.departmentId) conditions.push(eq(employees.departmentId, args.departmentId));
+    const rows = await this.db.query.employees.findMany({ where: and(...conditions), limit: 10 });
+    return rows.map((e) => ({ id: e.id, name: `${e.name} ${e.lastName || ""}`.trim(), department: e.department, status: e.status }));
+  }
+  async getLeaveBalance(caller, args) {
+    const targetId = args.employeeId || caller.employeeId;
+    if (!isPrivileged(caller.role) && targetId !== caller.employeeId) {
+      if (caller.role === "MANAGER") {
+        const reports = await this.getManagedEmployeeIds(caller.employeeId);
+        if (!reports.has(targetId)) return { error: "You can only view your own leave balance or your direct reports'." };
+      } else {
+        return { error: "You can only view your own leave balance." };
+      }
+    }
+    const [balances, requests] = await Promise.all([
+      this.db.query.leaveBalances.findMany({ where: eq(leaveBalances.employeeId, targetId) }),
+      this.db.query.leaveRequests.findMany({ where: and(eq(leaveRequests.employeeId, targetId), eq(leaveRequests.status, "approved")) })
+    ]);
+    const takenByType = /* @__PURE__ */ new Map();
+    for (const r of requests) takenByType.set(r.type, (takenByType.get(r.type) || 0) + r.days);
+    return balances.map((b) => ({ type: b.type, total: b.total, taken: takenByType.get(b.type) || 0 }));
+  }
+  async getPendingLeaveRequests(caller) {
+    if (!isPrivileged(caller.role) && caller.role !== "MANAGER") {
+      return { error: "Only managers and HR Admin/Super Admin can view pending leave requests." };
+    }
+    let rows = await this.db.query.leaveRequests.findMany({
+      where: and(eq(leaveRequests.companyId, caller.companyId), eq(leaveRequests.status, "pending"))
+    });
+    if (caller.role === "MANAGER") {
+      const reports = await this.getManagedEmployeeIds(caller.employeeId);
+      rows = rows.filter((r) => reports.has(r.employeeId));
+    }
+    return rows.map((r) => ({ employeeId: r.employeeId, type: r.type, startDate: r.startDate, endDate: r.endDate, days: r.days }));
+  }
+  async getHeadcount(caller, args) {
+    if (!isPrivileged(caller.role) && caller.role !== "MANAGER") {
+      return { error: "Only managers and HR Admin/Super Admin can view headcount." };
+    }
+    let employees2 = await this.db.query.employees.findMany({
+      where: and(eq(employees.companyId, caller.companyId), eq(employees.status, "active"))
+    });
+    if (caller.role === "MANAGER") {
+      const reports = await this.getManagedEmployeeIds(caller.employeeId);
+      employees2 = employees2.filter((e) => reports.has(e.id));
+    } else if (args.departmentId) {
+      employees2 = employees2.filter((e) => e.departmentId === args.departmentId);
+    }
+    return { count: employees2.length };
+  }
+  async getPayrollSummary(caller, args) {
+    if (!isPrivileged(caller.role)) return { error: "Only HR Admin/Super Admin can access payroll data." };
+    const now = /* @__PURE__ */ new Date();
+    const month = args.month || now.getMonth() + 1;
+    const year = args.year || now.getFullYear();
+    const payroll = new PayrollService({});
+    payroll.db = this.db;
+    const dashboard = await payroll.getDashboard(caller.companyId, month, year);
+    return {
+      periodMonth: month,
+      periodYear: year,
+      totalGross: dashboard.totalGross,
+      totalNet: dashboard.totalNet,
+      totalTaxes: dashboard.totalTaxes,
+      totalPension: dashboard.totalPension,
+      employeeCount: dashboard.employeeCount
+    };
+  }
+  async getOpenRequisitions(caller) {
+    const rows = await this.db.query.jobRequisitions.findMany({
+      where: and(eq(jobRequisitions.companyId, caller.companyId), eq(jobRequisitions.status, "Open"))
+    });
+    return rows.map((r) => ({ title: r.title, department: r.department, location: r.location, daysOpen: r.daysOpen }));
+  }
+  async getComplianceTasksDue(caller) {
+    if (!isPrivileged(caller.role)) return { error: "Only HR Admin/Super Admin can access compliance data." };
+    const rows = await this.db.query.complianceTasks.findMany({
+      where: and(eq(complianceTasks.companyId, caller.companyId), eq(complianceTasks.status, "pending"))
+    });
+    return rows.map((t) => ({ title: t.title, type: t.type, dueDate: t.dueDate, amount: t.amount }));
+  }
+  tools = {
+    getEmployee: this.getEmployee.bind(this),
+    searchEmployees: this.searchEmployees.bind(this),
+    getLeaveBalance: this.getLeaveBalance.bind(this),
+    getPendingLeaveRequests: /* @__PURE__ */ __name((caller) => this.getPendingLeaveRequests(caller), "getPendingLeaveRequests"),
+    getHeadcount: this.getHeadcount.bind(this),
+    getPayrollSummary: this.getPayrollSummary.bind(this),
+    getOpenRequisitions: /* @__PURE__ */ __name((caller) => this.getOpenRequisitions(caller), "getOpenRequisitions"),
+    getComplianceTasksDue: /* @__PURE__ */ __name((caller) => this.getComplianceTasksDue(caller), "getComplianceTasksDue")
+  };
+  async logQuery(caller, question, toolsUsed) {
+    await this.db.insert(aiQueryLogs).values({
+      id: genId5("AIQ"),
+      companyId: caller.companyId,
+      employeeId: caller.employeeId,
+      role: caller.role,
+      question,
+      toolsUsed
+    });
+  }
+  // ---------------- Main entry point ----------------
+  async ask(caller, question) {
+    const messages = [
+      { role: "system", content: SYSTEM_PROMPT(caller) },
+      { role: "user", content: question }
+    ];
+    const toolsUsed = [];
+    for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
+      const result = await this.ai.run(MODEL, { messages, tools: TOOL_SCHEMAS });
+      const calls = result?.tool_calls || [];
+      if (calls.length === 0) {
+        const answer = result?.response || "I wasn't able to come up with an answer.";
+        await this.logQuery(caller, question, toolsUsed);
+        return { answer, toolsUsed };
+      }
+      messages.push({ role: "assistant", content: result.response || "", tool_calls: calls });
+      for (const call of calls) {
+        toolsUsed.push(call.name);
+        const fn = this.tools[call.name];
+        const output = fn ? await fn(caller, call.arguments || {}).catch((err) => ({ error: err.message })) : { error: `Unknown tool "${call.name}"` };
+        messages.push({ role: "tool", name: call.name, content: JSON.stringify(output) });
+      }
+    }
+    await this.logQuery(caller, question, toolsUsed);
+    return { answer: "That question needed more steps than I'm allowed to take \u2014 try breaking it into something narrower.", toolsUsed };
+  }
+};
+
+// src/controllers/ai.controller.ts
+var askAi = /* @__PURE__ */ __name(async (c) => {
+  try {
+    const companyId = c.get("companyId");
+    const employeeId = c.get("employeeId");
+    const role = c.get("role");
+    if (!companyId || !employeeId || !role) {
+      return c.json({ error: "A valid session is required to use the assistant." }, 401);
+    }
+    const { question } = await c.req.json();
+    if (!question || typeof question !== "string" || !question.trim()) {
+      return c.json({ error: "question is required" }, 400);
+    }
+    if (question.length > 2e3) {
+      return c.json({ error: "question is too long (max 2000 characters)" }, 400);
+    }
+    if (!c.env.AI) {
+      return c.json({ error: "The AI assistant is not configured for this environment yet." }, 503);
+    }
+    const service = new AiService(c.env.DB, c.env.AI);
+    const result = await service.ask({ companyId, employeeId, role }, question.trim());
+    return c.json({ data: result });
+  } catch (error) {
+    return c.json({ error: error.message }, 500);
+  }
+}, "askAi");
+
+// src/routes/ai.routes.ts
 var aiRoutes = new Hono2();
+aiRoutes.use("*", authMiddleware);
+aiRoutes.post("/ask", askAi);
 var ai_routes_default = aiRoutes;
 
 // src/routes/support.routes.ts
@@ -19927,7 +20535,7 @@ app.route("/ai", ai_routes_default);
 app.route("/support", support_routes_default);
 var src_default = app;
 
-// node_modules/wrangler/templates/middleware/middleware-ensure-req-body-drained.ts
+// ../../../../../../opt/homebrew/lib/node_modules/wrangler/templates/middleware/middleware-ensure-req-body-drained.ts
 init_checked_fetch();
 init_modules_watch_stub();
 var drainBody = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx) => {
@@ -19947,7 +20555,7 @@ var drainBody = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx)
 }, "drainBody");
 var middleware_ensure_req_body_drained_default = drainBody;
 
-// node_modules/wrangler/templates/middleware/middleware-miniflare3-json-error.ts
+// ../../../../../../opt/homebrew/lib/node_modules/wrangler/templates/middleware/middleware-miniflare3-json-error.ts
 init_checked_fetch();
 init_modules_watch_stub();
 function reduceError(e) {
@@ -19972,14 +20580,14 @@ var jsonError = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx)
 }, "jsonError");
 var middleware_miniflare3_json_error_default = jsonError;
 
-// .wrangler/tmp/bundle-MRdSYo/middleware-insertion-facade.js
+// .wrangler/tmp/bundle-NWxQhk/middleware-insertion-facade.js
 var __INTERNAL_WRANGLER_MIDDLEWARE__ = [
   middleware_ensure_req_body_drained_default,
   middleware_miniflare3_json_error_default
 ];
 var middleware_insertion_facade_default = src_default;
 
-// node_modules/wrangler/templates/middleware/common.ts
+// ../../../../../../opt/homebrew/lib/node_modules/wrangler/templates/middleware/common.ts
 init_checked_fetch();
 init_modules_watch_stub();
 var __facade_middleware__ = [];
@@ -20006,7 +20614,7 @@ function __facade_invoke__(request, env, ctx, dispatch, finalMiddleware) {
 }
 __name(__facade_invoke__, "__facade_invoke__");
 
-// .wrangler/tmp/bundle-MRdSYo/middleware-loader.entry.ts
+// .wrangler/tmp/bundle-NWxQhk/middleware-loader.entry.ts
 var __Facade_ScheduledController__ = class ___Facade_ScheduledController__ {
   constructor(scheduledTime, cron, noRetry) {
     this.scheduledTime = scheduledTime;
