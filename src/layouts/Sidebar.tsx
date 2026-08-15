@@ -31,6 +31,7 @@ import {
   Network,
   MessageSquare,
   Building2,
+  GraduationCap,
 } from "lucide-react";
 import { useNavigation } from "../context/NavigationContext";
 import { useAuth } from "../context/AuthContext";
@@ -137,6 +138,7 @@ const Sidebar: React.FC = () => {
     { name: "Directory & Org Chart", icon: <Network size={20} />, path: "directory" }, // Added
     { name: "Performance", icon: <Trophy size={20} />, path: "performance" },
     { name: "Surveys", icon: <MessageSquare size={20} />, path: "surveys" },
+    { name: "Learning (LMS)", icon: <GraduationCap size={20} />, path: "lms" },
     { name: "Benefits Admin", icon: <Heart size={20} />, path: "benefits" },
     {
       name: "Reports & Analytics",

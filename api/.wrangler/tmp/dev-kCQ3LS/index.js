@@ -11845,6 +11845,124 @@ var EmployeeSurveyController = class {
   }
 };
 
+// src/controllers/employee/learning.controller.ts
+init_checked_fetch();
+init_modules_watch_stub();
+
+// src/services/learning.service.ts
+init_checked_fetch();
+init_modules_watch_stub();
+init_drizzle_orm();
+var LearningService = class {
+  static {
+    __name(this, "LearningService");
+  }
+  db;
+  constructor(dbBinding) {
+    this.db = drizzle(dbBinding, { schema: schema_exports });
+  }
+  // --- Admin Methods ---
+  async createCourse(data) {
+    const courseId = `CRS-${crypto.randomUUID().split("-")[0].toUpperCase()}`;
+    await this.db.insert(courses).values({
+      id: courseId,
+      companyId: data.companyId,
+      title: data.title,
+      description: data.description,
+      url: data.url,
+      duration: data.duration,
+      status: data.status || "active",
+      createdAt: (/* @__PURE__ */ new Date()).toISOString()
+    });
+    return this.getCourseById(courseId, data.companyId);
+  }
+  async getAllCourses(companyId) {
+    return await this.db.select().from(courses).where(eq(courses.companyId, companyId));
+  }
+  async getCourseById(courseId, companyId) {
+    const arr = await this.db.select().from(courses).where(and(eq(courses.id, courseId), eq(courses.companyId, companyId)));
+    return arr.length > 0 ? arr[0] : null;
+  }
+  async updateCourse(courseId, companyId, data) {
+    await this.db.update(courses).set(data).where(and(eq(courses.id, courseId), eq(courses.companyId, companyId)));
+    return this.getCourseById(courseId, companyId);
+  }
+  async deleteCourse(courseId, companyId) {
+    const course = await this.getCourseById(courseId, companyId);
+    if (!course) return false;
+    await this.db.delete(courseEnrollments).where(eq(courseEnrollments.courseId, courseId));
+    await this.db.delete(courses).where(and(eq(courses.id, courseId), eq(courses.companyId, companyId)));
+    return true;
+  }
+  async assignCourse(courseId, employeeIds) {
+    if (employeeIds.length === 0) return { success: true };
+    const records = employeeIds.map((empId) => ({
+      id: `CEN-${crypto.randomUUID().split("-")[0].toUpperCase()}`,
+      courseId,
+      employeeId: empId,
+      status: "assigned",
+      enrolledAt: (/* @__PURE__ */ new Date()).toISOString(),
+      progress: 0
+    }));
+    await this.db.insert(courseEnrollments).values(records);
+    return { success: true, count: records.length };
+  }
+  async getCourseEnrollments(courseId) {
+    const results = await this.db.select({
+      enrollment: courseEnrollments,
+      employee: {
+        id: employees.id,
+        name: employees.name,
+        lastName: employees.lastName,
+        email: employees.email
+      }
+    }).from(courseEnrollments).leftJoin(employees, eq(courseEnrollments.employeeId, employees.id)).where(eq(courseEnrollments.courseId, courseId));
+    return results;
+  }
+  // --- Employee Methods ---
+  async getMyCourses(employeeId) {
+    const results = await this.db.select({
+      enrollment: courseEnrollments,
+      course: courses
+    }).from(courseEnrollments).innerJoin(courses, eq(courseEnrollments.courseId, courses.id)).where(eq(courseEnrollments.employeeId, employeeId));
+    return results;
+  }
+  async updateProgress(enrollmentId, employeeId, progress) {
+    const status = progress >= 100 ? "completed" : progress > 0 ? "in_progress" : "assigned";
+    const completedAt = progress >= 100 ? (/* @__PURE__ */ new Date()).toISOString() : null;
+    await this.db.update(courseEnrollments).set({ progress, status, completedAt }).where(and(eq(courseEnrollments.id, enrollmentId), eq(courseEnrollments.employeeId, employeeId)));
+    const arr = await this.db.select().from(courseEnrollments).where(eq(courseEnrollments.id, enrollmentId));
+    return arr.length > 0 ? arr[0] : null;
+  }
+};
+
+// src/controllers/employee/learning.controller.ts
+var EmployeeLearningController = class {
+  static {
+    __name(this, "EmployeeLearningController");
+  }
+  static async getMyCourses(c) {
+    const employeeId = c.get("user")?.sub || c.get("employeeId");
+    if (!employeeId) return c.json({ error: "Employee not found" }, 400);
+    const learningService = new LearningService(c.env.DB);
+    const courses2 = await learningService.getMyCourses(employeeId);
+    return c.json({ data: courses2 });
+  }
+  static async updateCourseProgress(c) {
+    const employeeId = c.get("user")?.sub || c.get("employeeId");
+    if (!employeeId) return c.json({ error: "Employee not found" }, 400);
+    const enrollmentId = c.req.param("id");
+    const body = await c.req.json();
+    if (body.progress === void 0) {
+      return c.json({ error: "progress is required" }, 400);
+    }
+    const learningService = new LearningService(c.env.DB);
+    const enrollment = await learningService.updateProgress(enrollmentId, employeeId, body.progress);
+    if (!enrollment) return c.json({ error: "Enrollment not found" }, 404);
+    return c.json({ data: enrollment });
+  }
+};
+
 // src/controllers/employee/leave.controller.ts
 init_checked_fetch();
 init_modules_watch_stub();
@@ -15139,6 +15257,8 @@ employeeRoutes.get("/my-assets", EmployeeAssetController.getMyAssets);
 employeeRoutes.get("/surveys", EmployeeSurveyController.getActiveSurveys);
 employeeRoutes.get("/surveys/:id", EmployeeSurveyController.getSurveyDetails);
 employeeRoutes.post("/surveys/:id/responses", EmployeeSurveyController.submitSurveyResponse);
+employeeRoutes.get("/courses", EmployeeLearningController.getMyCourses);
+employeeRoutes.put("/courses/enrollments/:id/progress", EmployeeLearningController.updateCourseProgress);
 employeeRoutes.get("/team/members", getMyDirectReports);
 employeeRoutes.get("/me", getMyProfile);
 employeeRoutes.get("/me/compensation", getMyCompensation);
@@ -15522,6 +15642,86 @@ var AdminSurveyController = class {
     const success = await surveyService.deleteSurvey(surveyId, companyId);
     if (!success) return c.json({ error: "Survey not found" }, 404);
     return c.json({ success: true });
+  }
+};
+
+// src/controllers/admin/learning.controller.ts
+init_checked_fetch();
+init_modules_watch_stub();
+var AdminLearningController = class {
+  static {
+    __name(this, "AdminLearningController");
+  }
+  static async createCourse(c) {
+    const companyId = c.get("tenantId") || c.get("companyId");
+    if (!companyId) return c.json({ error: "Tenant not found" }, 400);
+    const body = await c.req.json();
+    if (!body.title || body.duration === void 0) {
+      return c.json({ error: "Missing required fields" }, 400);
+    }
+    const learningService = new LearningService(c.env.DB);
+    const course = await learningService.createCourse({
+      companyId,
+      ...body
+    });
+    return c.json({ data: course }, 201);
+  }
+  static async getAllCourses(c) {
+    const companyId = c.get("tenantId") || c.get("companyId");
+    if (!companyId) return c.json({ error: "Tenant not found" }, 400);
+    const learningService = new LearningService(c.env.DB);
+    const courses2 = await learningService.getAllCourses(companyId);
+    return c.json({ data: courses2 });
+  }
+  static async getCourseById(c) {
+    const companyId = c.get("tenantId") || c.get("companyId");
+    if (!companyId) return c.json({ error: "Tenant not found" }, 400);
+    const courseId = c.req.param("id");
+    const learningService = new LearningService(c.env.DB);
+    const course = await learningService.getCourseById(courseId, companyId);
+    if (!course) return c.json({ error: "Course not found" }, 404);
+    return c.json({ data: course });
+  }
+  static async updateCourse(c) {
+    const companyId = c.get("tenantId") || c.get("companyId");
+    if (!companyId) return c.json({ error: "Tenant not found" }, 400);
+    const courseId = c.req.param("id");
+    const body = await c.req.json();
+    const learningService = new LearningService(c.env.DB);
+    const course = await learningService.updateCourse(courseId, companyId, body);
+    if (!course) return c.json({ error: "Course not found" }, 404);
+    return c.json({ data: course });
+  }
+  static async deleteCourse(c) {
+    const companyId = c.get("tenantId") || c.get("companyId");
+    if (!companyId) return c.json({ error: "Tenant not found" }, 400);
+    const courseId = c.req.param("id");
+    const learningService = new LearningService(c.env.DB);
+    const success = await learningService.deleteCourse(courseId, companyId);
+    if (!success) return c.json({ error: "Course not found" }, 404);
+    return c.json({ success: true });
+  }
+  static async assignCourse(c) {
+    const companyId = c.get("tenantId") || c.get("companyId");
+    if (!companyId) return c.json({ error: "Tenant not found" }, 400);
+    const courseId = c.req.param("id");
+    const body = await c.req.json();
+    if (!body.employeeIds || !Array.isArray(body.employeeIds)) {
+      return c.json({ error: "employeeIds array is required" }, 400);
+    }
+    const learningService = new LearningService(c.env.DB);
+    const course = await learningService.getCourseById(courseId, companyId);
+    if (!course) return c.json({ error: "Course not found" }, 404);
+    const result = await learningService.assignCourse(courseId, body.employeeIds);
+    return c.json({ data: result }, 201);
+  }
+  static async getCourseEnrollments(c) {
+    const companyId = c.get("tenantId") || c.get("companyId");
+    if (!companyId) return c.json({ error: "Tenant not found" }, 400);
+    const courseId = c.req.param("id");
+    const learningService = new LearningService(c.env.DB);
+    const enrollments = await learningService.getCourseEnrollments(courseId);
+    return c.json({ data: enrollments });
   }
 };
 
@@ -18971,6 +19171,13 @@ adminRoutes.post("/surveys", adminOnly5, edit2("company"), AdminSurveyController
 adminRoutes.get("/surveys/:id", adminOnly5, view3("company"), AdminSurveyController.getSurveyById);
 adminRoutes.get("/surveys/:id/results", adminOnly5, view3("company"), AdminSurveyController.getSurveyResults);
 adminRoutes.delete("/surveys/:id", adminOnly5, edit2("company"), AdminSurveyController.deleteSurvey);
+adminRoutes.get("/courses", adminOnly5, view3("company"), AdminLearningController.getAllCourses);
+adminRoutes.post("/courses", adminOnly5, edit2("company"), AdminLearningController.createCourse);
+adminRoutes.get("/courses/:id", adminOnly5, view3("company"), AdminLearningController.getCourseById);
+adminRoutes.put("/courses/:id", adminOnly5, edit2("company"), AdminLearningController.updateCourse);
+adminRoutes.delete("/courses/:id", adminOnly5, edit2("company"), AdminLearningController.deleteCourse);
+adminRoutes.post("/courses/:id/assign", adminOnly5, edit2("company"), AdminLearningController.assignCourse);
+adminRoutes.get("/courses/:id/enrollments", adminOnly5, view3("company"), AdminLearningController.getCourseEnrollments);
 adminRoutes.get("/transitions", adminOnly5, view3("workforce"), getTransitions);
 adminRoutes.get("/transitions/:id", adminOnly5, view3("workforce"), getTransition);
 adminRoutes.post("/transitions", adminOnly5, create("workforce"), createTransition);

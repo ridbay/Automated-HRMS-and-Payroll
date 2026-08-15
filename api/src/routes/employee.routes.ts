@@ -12,6 +12,7 @@ import {
 } from '../controllers/employee/profile.controller';
 import { EmployeeAssetController } from '../controllers/employee/asset.controller';
 import { EmployeeSurveyController } from '../controllers/employee/survey.controller';
+import { EmployeeLearningController } from '../controllers/employee/learning.controller';
 import { getMyLeaveData, applyForLeave, getTeamLeaves, getMyTeamPendingLeaves, updateTeamLeaveStatus } from '../controllers/employee/leave.controller';
 import {
   getAttendanceData,
@@ -68,6 +69,10 @@ employeeRoutes.get('/my-assets', EmployeeAssetController.getMyAssets);
 employeeRoutes.get('/surveys', EmployeeSurveyController.getActiveSurveys);
 employeeRoutes.get('/surveys/:id', EmployeeSurveyController.getSurveyDetails);
 employeeRoutes.post('/surveys/:id/responses', EmployeeSurveyController.submitSurveyResponse);
+
+// --- Learning Management System (LMS) ---
+employeeRoutes.get('/courses', EmployeeLearningController.getMyCourses);
+employeeRoutes.put('/courses/enrollments/:id/progress', EmployeeLearningController.updateCourseProgress);
 
 // Manager-scoped: the caller's own direct reports (id/name/avatar/role/dept
 // only) — used by team goal & review UIs. Naturally self-scoped by

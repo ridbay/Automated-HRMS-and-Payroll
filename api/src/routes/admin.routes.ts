@@ -18,6 +18,7 @@ import {
 } from "../controllers/admin/employee.controller";
 import { AdminAssetController } from "../controllers/admin/asset.controller";
 import { AdminSurveyController } from "../controllers/admin/survey.controller";
+import { AdminLearningController } from "../controllers/admin/learning.controller";
 import {
   getTransitions,
   getTransition,
@@ -205,6 +206,15 @@ adminRoutes.post("/surveys", adminOnly, edit("company"), AdminSurveyController.c
 adminRoutes.get("/surveys/:id", adminOnly, view("company"), AdminSurveyController.getSurveyById);
 adminRoutes.get("/surveys/:id/results", adminOnly, view("company"), AdminSurveyController.getSurveyResults);
 adminRoutes.delete("/surveys/:id", adminOnly, edit("company"), AdminSurveyController.deleteSurvey);
+
+// --- Learning Management System (LMS) ---
+adminRoutes.get("/courses", adminOnly, view("company"), AdminLearningController.getAllCourses);
+adminRoutes.post("/courses", adminOnly, edit("company"), AdminLearningController.createCourse);
+adminRoutes.get("/courses/:id", adminOnly, view("company"), AdminLearningController.getCourseById);
+adminRoutes.put("/courses/:id", adminOnly, edit("company"), AdminLearningController.updateCourse);
+adminRoutes.delete("/courses/:id", adminOnly, edit("company"), AdminLearningController.deleteCourse);
+adminRoutes.post("/courses/:id/assign", adminOnly, edit("company"), AdminLearningController.assignCourse);
+adminRoutes.get("/courses/:id/enrollments", adminOnly, view("company"), AdminLearningController.getCourseEnrollments);
 
 // Transitions (Onboarding / Offboarding journeys) — lives under the same
 // "workforce" permission module as Employees/Assets since it's the same

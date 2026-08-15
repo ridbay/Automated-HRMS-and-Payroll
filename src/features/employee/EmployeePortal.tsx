@@ -24,6 +24,8 @@ import {
   ThumbsUp,
   Laptop,
   MessageSquare,
+  GraduationCap,
+  PlayCircle,
 } from "lucide-react";
 import Celebration from "../../components/Celebration";
 import { useNavigation } from "../../context/NavigationContext";
@@ -40,6 +42,8 @@ import {
 import { useMyAssets } from "../../api/asset.client";
 import { useActiveSurveys } from "../../api/survey.client";
 import { TakeSurveyModal } from "./TakeSurveyModal";
+import { useMyCourses } from "../../api/learning.client";
+import { TakeCourseModal } from "./TakeCourseModal";
 
 const QuickActionBtn = ({
   icon: Icon,
@@ -100,8 +104,10 @@ const EmployeePortal: React.FC = () => {
   const { data: shoutouts = [] } = useShoutouts();
   const { data: myAssets = [], isLoading: assetsLoading } = useMyAssets();
   const { data: activeSurveys = [], isLoading: surveysLoading } = useActiveSurveys();
+  const { data: myCourses = [], isLoading: coursesLoading } = useMyCourses();
   
   const [selectedSurveyId, setSelectedSurveyId] = useState<string | null>(null);
+  const [selectedCourse, setSelectedCourse] = useState<any>(null);
 
   const clockIn = useClockIn();
   const clockOut = useClockOut();
@@ -696,6 +702,59 @@ const EmployeePortal: React.FC = () => {
               </div>
             )}
           </section>
+
+          {/* Active Courses */}
+          <section className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm mt-8">
+            <div className="flex items-center gap-6 mb-8 border-b border-slate-100 pb-4 overflow-x-auto">
+              <span className="text-xs font-black text-indigo-600 uppercase tracking-widest pb-2 border-b-2 border-indigo-600 whitespace-nowrap">
+                My Learning
+              </span>
+            </div>
+
+            {coursesLoading ? (
+              <div className="py-8 flex justify-center">
+                <Loader2 className="animate-spin text-indigo-400" size={24} />
+              </div>
+            ) : myCourses.length === 0 ? (
+              <div className="py-8 text-center text-slate-400">
+                <GraduationCap size={28} className="mx-auto mb-2 opacity-40" />
+                <p className="text-xs font-bold">No courses assigned.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {myCourses.map((item: any) => (
+                  <div
+                    key={item.enrollment.id}
+                    onClick={() => setSelectedCourse(item)}
+                    className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 cursor-pointer hover:bg-indigo-50 hover:border-indigo-100 transition-colors group"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-indigo-600 shadow-sm group-hover:scale-110 transition-transform">
+                        <PlayCircle size={18} />
+                      </div>
+                      <div>
+                        <p className="text-sm font-black text-slate-800 group-hover:text-indigo-900 transition-colors">{item.course.title}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <div className="w-16 h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                            <div 
+                              className={`h-full ${item.enrollment.progress === 100 ? 'bg-emerald-500' : 'bg-indigo-500'}`} 
+                              style={{ width: `${item.enrollment.progress}%` }} 
+                            />
+                          </div>
+                          <p className="text-[9px] font-bold text-slate-400 uppercase">
+                            {item.enrollment.progress}% Complete
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    <button className="text-xs font-black text-slate-500 group-hover:text-indigo-600 uppercase tracking-widest bg-white px-3 py-1.5 rounded-lg shadow-sm transition-colors">
+                      {item.enrollment.progress === 100 ? 'Review' : item.enrollment.progress > 0 ? 'Resume' : 'Start'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
         </div>
       </div>
       
@@ -703,6 +762,12 @@ const EmployeePortal: React.FC = () => {
         isOpen={!!selectedSurveyId}
         onClose={() => setSelectedSurveyId(null)}
         surveyId={selectedSurveyId}
+      />
+
+      <TakeCourseModal 
+        isOpen={!!selectedCourse}
+        onClose={() => setSelectedCourse(null)}
+        enrollment={selectedCourse}
       />
     </div>
   );
