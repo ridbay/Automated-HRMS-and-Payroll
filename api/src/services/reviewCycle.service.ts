@@ -1,11 +1,12 @@
 import { D1Database } from '@cloudflare/workers-types';
 import { drizzle } from 'drizzle-orm/d1';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, asc } from 'drizzle-orm';
 import * as schema from '../db/schema';
 
 // The canonical 5-point rating scale used across self-assessments, manager
-// reviews, and company-wide analytics — keeping this in one place is what
-// lets the distribution chart bucket ratings consistently everywhere.
+// reviews, peer/upward reviews, and company-wide analytics — keeping this in
+// one place is what lets the distribution chart bucket ratings consistently
+// everywhere.
 export const RATING_SCALE = [
   { value: 'unsatisfactory', label: 'Unsatisfactory', score: 1 },
   { value: 'needs_improvement', label: 'Needs Improvement', score: 2 },
@@ -19,6 +20,31 @@ export const ratingScore = (rating?: string | null): number | null => {
   const found = RATING_SCALE.find((r) => r.value === rating);
   return found ? found.score : null;
 };
+
+// The standard named-stage timeline every cycle gets by default, modeled on
+// a real multi-stage appraisal window: KPI/evidence + self-review happen
+// first, then peer/upward reviews, then manager review, then a distinct
+// "release" step that gates when employees can see their manager's rating.
+export type StageKey =
+  | 'kickoff'
+  | 'select_peers'
+  | 'peer_approval'
+  | 'self_review'
+  | 'peer_upward_review'
+  | 'manager_review'
+  | 'manager_review_release'
+  | 'final_submission';
+
+export const STAGE_DEFS: { key: StageKey; name: string }[] = [
+  { key: 'kickoff', name: 'Kickoff' },
+  { key: 'select_peers', name: 'Select Peer Reviewers' },
+  { key: 'peer_approval', name: 'Manager Approves Peer Reviewers' },
+  { key: 'self_review', name: 'Self-Review' },
+  { key: 'peer_upward_review', name: 'Peer & Upward Reviews' },
+  { key: 'manager_review', name: 'Manager Review' },
+  { key: 'manager_review_release', name: 'Manager Reviews Available' },
+  { key: 'final_submission', name: 'Review & Final Submission' },
+];
 
 export class ReviewCycleService {
   private db;
@@ -74,6 +100,8 @@ export class ReviewCycleService {
         managerReviewDueDate: data.managerReviewDueDate || null,
       })
       .returning();
+
+    await this.createDefaultStages(companyId, id);
 
     // Enforce a single active cycle per company.
     if (result[0].status === 'active') {
@@ -137,10 +165,92 @@ export class ReviewCycleService {
     if (inUse) {
       throw new Error('Cannot delete a cycle that already has assessments logged against it — close it instead');
     }
+    await this.db.delete(schema.cycleStages).where(and(eq(schema.cycleStages.cycleId, id), eq(schema.cycleStages.companyId, companyId)));
     const result = await this.db
       .delete(schema.reviewCycles)
       .where(and(eq(schema.reviewCycles.id, id), eq(schema.reviewCycles.companyId, companyId)))
       .returning();
     return result[0];
+  }
+
+  // ---------------------------------------------------------------------
+  // Stage timeline
+  // ---------------------------------------------------------------------
+
+  async createDefaultStages(companyId: string, cycleId: string) {
+    const rows = STAGE_DEFS.map((def, idx) => ({
+      id: `STG-${crypto.randomUUID().split('-')[0].toUpperCase()}`,
+      companyId,
+      cycleId,
+      key: def.key,
+      name: def.name,
+      order: idx,
+      startDate: null as string | null,
+      dueDate: null as string | null,
+    }));
+    await this.db.insert(schema.cycleStages).values(rows);
+    return rows;
+  }
+
+  async getStages(companyId: string, cycleId: string) {
+    return this.db.query.cycleStages.findMany({
+      where: and(eq(schema.cycleStages.companyId, companyId), eq(schema.cycleStages.cycleId, cycleId)),
+      orderBy: [asc(schema.cycleStages.order)],
+    });
+  }
+
+  async getStageByKey(companyId: string, cycleId: string, key: string) {
+    return this.db.query.cycleStages.findFirst({
+      where: and(
+        eq(schema.cycleStages.companyId, companyId),
+        eq(schema.cycleStages.cycleId, cycleId),
+        eq(schema.cycleStages.key, key)
+      ),
+    });
+  }
+
+  async updateStage(companyId: string, cycleId: string, stageId: string, data: { startDate?: string | null; dueDate?: string | null }) {
+    const updateData: any = { updatedAt: new Date().toISOString() };
+    if (data.startDate !== undefined) updateData.startDate = data.startDate || null;
+    if (data.dueDate !== undefined) updateData.dueDate = data.dueDate || null;
+
+    const result = await this.db
+      .update(schema.cycleStages)
+      .set(updateData)
+      .where(and(
+        eq(schema.cycleStages.id, stageId),
+        eq(schema.cycleStages.cycleId, cycleId),
+        eq(schema.cycleStages.companyId, companyId)
+      ))
+      .returning();
+
+    return result[0];
+  }
+
+  private todayStr() {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  // Whether writes for a given stage should be accepted right now. No dates
+  // configured on the stage (or the stage/cycle doesn't have one) => open,
+  // so cycles that don't use the granular timeline behave exactly as they
+  // did before this existed.
+  async isStageOpen(companyId: string, cycleId: string, key: StageKey): Promise<boolean> {
+    const stage = await this.getStageByKey(companyId, cycleId, key);
+    if (!stage || (!stage.startDate && !stage.dueDate)) return true;
+    const today = this.todayStr();
+    if (stage.startDate && today < stage.startDate) return false;
+    if (stage.dueDate && today > stage.dueDate) return false;
+    return true;
+  }
+
+  // Whether a manager's rating should be visible to the employee it belongs
+  // to yet. Released once the "manager_review_release" stage has started;
+  // if that stage has no start date configured, treat it as released
+  // immediately (matches behavior before release-gating existed).
+  async isManagerReviewReleased(companyId: string, cycleId: string): Promise<boolean> {
+    const stage = await this.getStageByKey(companyId, cycleId, 'manager_review_release');
+    if (!stage || !stage.startDate) return true;
+    return this.todayStr() >= stage.startDate;
   }
 }

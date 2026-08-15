@@ -30,6 +30,8 @@ import {
   activateCycle,
   closeCycle,
   deleteCycle,
+  getCycleStages,
+  updateCycleStage,
 } from "../controllers/admin/reviewCycle.controller";
 import { authMiddleware } from "../middlewares/auth.middleware";
 import { requireRole, requirePermission } from "../middlewares/role.middleware";
@@ -172,6 +174,7 @@ import {
   getCompanyAnalytics,
   getCompanyGoals,
   createCompanyGoal,
+  getCompanyPeerReviews,
 } from "../controllers/admin/performance.controller";
 import { getEmployeeTrainings, addEmployeeTraining } from "../controllers/admin/training.controller";
 
@@ -205,11 +208,14 @@ adminRoutes.put("/performance/cycles/:id", adminOnly, edit("performance"), updat
 adminRoutes.post("/performance/cycles/:id/activate", adminOnly, edit("performance"), activateCycle);
 adminRoutes.post("/performance/cycles/:id/close", adminOnly, edit("performance"), closeCycle);
 adminRoutes.delete("/performance/cycles/:id", adminOnly, edit("performance"), deleteCycle);
+adminRoutes.get("/performance/cycles/:id/stages", adminOnly, view("performance"), getCycleStages);
+adminRoutes.put("/performance/cycles/:id/stages/:stageId", adminOnly, edit("performance"), updateCycleStage);
 
 adminRoutes.get("/performance/analytics", adminOnly, view("performance"), getCompanyAnalytics);
 adminRoutes.get("/performance/assessments", adminOnly, view("performance"), getCompanyAssessments);
 adminRoutes.get("/performance/goals", adminOnly, view("performance"), getCompanyGoals);
 adminRoutes.post("/performance/goals", adminOnly, create("performance"), createCompanyGoal);
+adminRoutes.get("/performance/peer-reviews", adminOnly, view("performance"), getCompanyPeerReviews);
 
 adminRoutes.get("/training/employee/:id", adminOnly, view("performance"), getEmployeeTrainings);
 adminRoutes.post("/training/employee/:id", adminOnly, create("performance"), addEmployeeTraining);

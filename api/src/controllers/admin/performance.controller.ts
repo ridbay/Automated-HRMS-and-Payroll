@@ -5,6 +5,7 @@ import { assessments } from '../../db/schema';
 import { AssessmentService } from '../../services/assessment.service';
 import { ReviewCycleService, RATING_SCALE } from '../../services/reviewCycle.service';
 import { GoalService } from '../../services/goal.service';
+import { PeerReviewService } from '../../services/peerReview.service';
 import { AppEnv } from '../../types';
 
 export const getEmployeeAssessments = async (c: Context<AppEnv>) => {
@@ -116,12 +117,15 @@ export const getCompanyAnalytics = async (c: Context<AppEnv>) => {
 export const getCompanyGoals = async (c: Context<AppEnv>) => {
   const companyId = c.get('companyId');
   const scope = c.req.query('scope') || undefined;
+  const departmentId = c.req.query('departmentId') || undefined;
   const service = new GoalService(c.env.DB);
-  const rows = await service.getCompanyGoals(companyId, scope);
+  const rows = await service.getCompanyGoals(companyId, scope, departmentId);
   return c.json(rows.map((g: any) => ({ ...g, keyResults: g.keyResults ? JSON.parse(g.keyResults) : [] })));
 };
 
-// HR/Admin setting a top-level company or department objective for teams to align under.
+// HR/Admin setting a top-level company or department objective for teams to
+// align under. Department-scoped objectives must name which department they
+// belong to — different departments can carry entirely different goals.
 export const createCompanyGoal = async (c: Context<AppEnv>) => {
   const companyId = c.get('companyId');
   const creatorId = c.get('employeeId');
@@ -130,13 +134,26 @@ export const createCompanyGoal = async (c: Context<AppEnv>) => {
   if (!body.employeeOwnerId || !body.title) {
     return c.json({ error: 'employeeOwnerId and title are required' }, 400);
   }
+  const scope = body.scope || 'company';
+  if (scope === 'department' && !body.departmentId) {
+    return c.json({ error: 'departmentId is required for a department-scoped objective' }, 400);
+  }
 
   const service = new GoalService(c.env.DB);
   const { id } = await service.createGoal(
     companyId,
     body.employeeOwnerId,
-    { ...body, scope: body.scope || 'company' },
+    { ...body, scope },
     creatorId
   );
   return c.json({ id, message: 'Objective created' }, 201);
+};
+
+// Company-wide browse of 360 (peer + upward) reviews for HR/Admin.
+export const getCompanyPeerReviews = async (c: Context<AppEnv>) => {
+  const companyId = c.get('companyId');
+  const cycleId = c.req.query('cycleId') || undefined;
+  const service = new PeerReviewService(c.env.DB);
+  const reviews = await service.getCompanyReviews(companyId, cycleId);
+  return c.json({ reviews, ratingScale: RATING_SCALE });
 };

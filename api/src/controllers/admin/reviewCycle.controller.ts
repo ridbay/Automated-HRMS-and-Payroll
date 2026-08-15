@@ -61,3 +61,22 @@ export const deleteCycle = async (c: Context<AppEnv>) => {
     return c.json({ error: error.message }, 400);
   }
 };
+
+export const getCycleStages = async (c: Context<AppEnv>) => {
+  const companyId = c.get('companyId');
+  const cycleId = c.req.param('id') as string;
+  const service = new ReviewCycleService(c.env.DB);
+  const stages = await service.getStages(companyId, cycleId);
+  return c.json(stages);
+};
+
+export const updateCycleStage = async (c: Context<AppEnv>) => {
+  const companyId = c.get('companyId');
+  const cycleId = c.req.param('id') as string;
+  const stageId = c.req.param('stageId') as string;
+  const data = await c.req.json();
+  const service = new ReviewCycleService(c.env.DB);
+  const stage = await service.updateStage(companyId, cycleId, stageId, data);
+  if (!stage) return c.json({ error: 'Stage not found' }, 404);
+  return c.json(stage);
+};

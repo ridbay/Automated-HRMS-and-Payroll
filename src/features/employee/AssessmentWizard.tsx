@@ -13,7 +13,9 @@ import {
   AlertCircle,
   Sparkles,
   Save,
-  Send
+  Send,
+  FileText,
+  Upload,
 } from 'lucide-react';
 
 interface AssessmentWizardProps {
@@ -22,6 +24,9 @@ interface AssessmentWizardProps {
   cycleName: string;
   existingAssessment?: any;
   goals?: { id: string; title: string; progress: number }[];
+  evidence?: { id: string; name: string; type: string }[];
+  onUploadEvidence?: (file: File, name: string, type: string) => void;
+  uploadingEvidence?: boolean;
   onSave: (data: any) => void;
   onSubmit: (id: string) => void;
 }
@@ -32,6 +37,9 @@ const AssessmentWizard: React.FC<AssessmentWizardProps> = ({
   cycleName,
   existingAssessment,
   goals = [],
+  evidence = [],
+  onUploadEvidence,
+  uploadingEvidence,
   onSave,
   onSubmit
 }) => {
@@ -55,6 +63,7 @@ const AssessmentWizard: React.FC<AssessmentWizardProps> = ({
 
   const steps = [
     { id: 'achievements', title: 'Achievements', icon: <Award size={20} /> },
+    { id: 'evidence', title: 'Evidence', icon: <FileText size={20} /> },
     { id: 'challenges', title: 'Challenges', icon: <AlertCircle size={20} /> },
     { id: 'goals', title: 'Goals Progress', icon: <Target size={20} /> },
     { id: 'skills', title: 'Skill Ratings', icon: <Star size={20} /> },
@@ -162,6 +171,56 @@ const AssessmentWizard: React.FC<AssessmentWizardProps> = ({
         return (
           <div className="space-y-6">
             <div>
+              <h3 className="text-xl font-black text-slate-800 mb-2">KPI Evidence</h3>
+              <p className="text-slate-500 text-sm">Attach supporting documents for your achievements — your manager uses these to validate your score.</p>
+            </div>
+            {!existingAssessment?.id ? (
+              <div className="bg-amber-50 border border-amber-100 rounded-2xl p-6 text-center">
+                <p className="text-sm text-amber-700 font-medium">
+                  Save a draft first (button below) — evidence can be attached once your assessment exists.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="space-y-3">
+                  {evidence.length === 0 ? (
+                    <p className="text-sm text-slate-400 font-medium">No evidence uploaded yet.</p>
+                  ) : (
+                    evidence.map((doc) => (
+                      <div key={doc.id} className="flex items-center justify-between bg-slate-50 px-5 py-4 rounded-2xl">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <FileText size={18} className="text-indigo-500 shrink-0" />
+                          <span className="text-sm font-bold text-slate-700 truncate">{doc.name}</span>
+                        </div>
+                        <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest shrink-0">{doc.type}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <label className="flex items-center justify-center gap-2 py-4 border-2 border-dashed border-slate-200 rounded-2xl text-indigo-600 font-bold text-sm cursor-pointer hover:border-indigo-300 hover:bg-indigo-50/50 transition-all">
+                  <Upload size={18} />
+                  {uploadingEvidence ? 'Uploading…' : 'Upload Evidence'}
+                  <input
+                    type="file"
+                    className="hidden"
+                    disabled={uploadingEvidence}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file || !onUploadEvidence) return;
+                      onUploadEvidence(file, file.name, 'KPI Evidence');
+                      e.target.value = '';
+                    }}
+                  />
+                </label>
+              </div>
+            )}
+          </div>
+        );
+
+      case 2:
+        return (
+          <div className="space-y-6">
+            <div>
               <h3 className="text-xl font-black text-slate-800 mb-2">Challenges Faced</h3>
               <p className="text-slate-500 text-sm">What obstacles did you encounter and how did you overcome them?</p>
             </div>
@@ -194,7 +253,7 @@ const AssessmentWizard: React.FC<AssessmentWizardProps> = ({
           </div>
         );
 
-      case 2:
+      case 3:
         return (
           <div className="space-y-6">
             <div>
@@ -236,7 +295,7 @@ const AssessmentWizard: React.FC<AssessmentWizardProps> = ({
           </div>
         );
 
-      case 3:
+      case 4:
         return (
           <div className="space-y-6">
             <div>
@@ -272,7 +331,7 @@ const AssessmentWizard: React.FC<AssessmentWizardProps> = ({
           </div>
         );
 
-      case 4:
+      case 5:
         return (
           <div className="space-y-6">
             <div>
@@ -311,7 +370,7 @@ const AssessmentWizard: React.FC<AssessmentWizardProps> = ({
           </div>
         );
 
-      case 5:
+      case 6:
         return (
           <div className="space-y-6">
             <div>

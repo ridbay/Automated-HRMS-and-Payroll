@@ -47,12 +47,15 @@ export const getTeamGoals = async (c: Context<AppEnv>) => {
   return c.json(rows.map(parseGoal));
 };
 
-// Read-only: the company/department-level objectives HR/Admin have set, so
-// employees can see what their own goals should align to.
-export const getCompanyObjectives = async (c: Context<AppEnv>) => {
+// Read-only: the strategic objectives HR/Admin have set that apply to this
+// employee — every company-wide objective, plus their own department's (if
+// they belong to one and it has one) — so employees see what their goals
+// should align to without seeing every other department's objectives.
+export const getMyObjectives = async (c: Context<AppEnv>) => {
   const companyId = c.get('companyId');
+  const employeeId = c.get('employeeId')!;
   const service = new GoalService(c.env.DB);
-  const rows = await service.getCompanyGoals(companyId, 'company');
+  const rows = await service.getObjectivesForEmployee(companyId, employeeId);
   return c.json(rows.map(parseGoal));
 };
 

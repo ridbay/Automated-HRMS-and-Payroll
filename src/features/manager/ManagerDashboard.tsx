@@ -89,9 +89,14 @@ import {
   useTeamPendingAssessments,
   useSubmitManagerReview,
   useTeamPerformanceAnalytics,
+  useTeamPendingPeerApprovals,
+  useApprovePeerNomination,
+  useAssessmentEvidence,
+  useActiveCycleAssessment,
 } from "../../api/client";
 import EmployeeDetailModal from "./components/EmployeeDetailModal";
 import ApprovalCenter from "./components/ApprovalCenter";
+import { StageTimeline, DeadlineBanner } from "../../components/StageTimeline";
 
 const ManagerDashboard: React.FC = () => {
   // -------------------------------------------------------------------------
@@ -131,6 +136,14 @@ const ManagerDashboard: React.FC = () => {
   const submitManagerReview = useSubmitManagerReview();
   const { data: teamAnalytics } = useTeamPerformanceAnalytics();
 
+  // 360 reviews: peer nominees awaiting this manager's approval, and the
+  // cycle timeline (reused from the employee-facing "my active cycle" call
+  // — a manager is also an employee with their own self-review to do).
+  const { data: pendingPeerApprovals = [] } = useTeamPendingPeerApprovals();
+  const approvePeerNomination = useApprovePeerNomination();
+  const { data: cycleData } = useActiveCycleAssessment();
+  const activeCycle = cycleData?.activeCycle;
+
   const [showAssignGoalModal, setShowAssignGoalModal] = useState(false);
   const emptyAssignGoalForm = { employeeId: "", title: "", description: "", priority: "medium", dueDate: "" };
   const [assignGoalForm, setAssignGoalForm] = useState(emptyAssignGoalForm);
@@ -138,6 +151,7 @@ const ManagerDashboard: React.FC = () => {
   const [reviewingAssessment, setReviewingAssessment] = useState<any>(null);
   const [reviewRating, setReviewRating] = useState("");
   const [reviewComment, setReviewComment] = useState("");
+  const { data: reviewingEvidence = [] } = useAssessmentEvidence(reviewingAssessment?.id);
 
   const handleAssignGoal = () => {
     if (!assignGoalForm.employeeId || !assignGoalForm.title.trim()) return;
@@ -632,6 +646,15 @@ const ManagerDashboard: React.FC = () => {
 
   const renderPerformance = () => (
     <div className="space-y-10 pb-20">
+      {activeCycle?.stages?.length > 0 && (
+        <div className="space-y-4">
+          <DeadlineBanner stages={activeCycle.stages} cycleName={activeCycle.name} />
+          <div className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm">
+            <StageTimeline stages={activeCycle.stages} />
+          </div>
+        </div>
+      )}
+
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-black text-slate-800 tracking-tighter">
@@ -751,6 +774,42 @@ const ManagerDashboard: React.FC = () => {
                   <div className="h-full bg-indigo-600" style={{ width: `${g.progress}%` }} />
                 </div>
                 <p className="text-right text-xs font-black text-slate-600 mt-2">{g.progress}%</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="bg-white p-10 rounded-[3.5rem] border border-slate-200 shadow-sm">
+        <h3 className="text-xl font-black text-slate-800 mb-8">
+          Peer Reviewer Approvals {pendingPeerApprovals.length > 0 && <span className="text-indigo-600">({pendingPeerApprovals.length})</span>}
+        </h3>
+        {pendingPeerApprovals.length === 0 ? (
+          <p className="text-sm text-slate-400 font-medium">
+            No peer reviewer nominations waiting on your approval.
+          </p>
+        ) : (
+          <div className="space-y-4">
+            {pendingPeerApprovals.map((n: any) => (
+              <div key={n.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
+                <p className="text-sm font-medium text-slate-700">
+                  <span className="font-black text-slate-800">{n.revieweeName} {n.revieweeLastName}</span> nominated{" "}
+                  <span className="font-black text-slate-800">{n.reviewerName} {n.reviewerLastName}</span> as a peer reviewer
+                </p>
+                <div className="flex gap-2 shrink-0">
+                  <button
+                    onClick={() => approvePeerNomination.mutate({ id: n.id, approve: false })}
+                    className="p-2.5 bg-white border border-slate-200 text-rose-500 hover:bg-rose-50 rounded-xl transition-all"
+                  >
+                    <X size={16} />
+                  </button>
+                  <button
+                    onClick={() => approvePeerNomination.mutate({ id: n.id, approve: true })}
+                    className="p-2.5 bg-indigo-600 text-white hover:bg-indigo-700 rounded-xl transition-all"
+                  >
+                    <Check size={16} />
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -1180,6 +1239,24 @@ const ManagerDashboard: React.FC = () => {
                     <p className="text-sm font-bold text-slate-700">{reviewingAssessment.selfRating.replace(/_/g, " ")}</p>
                   </div>
                 )}
+                <div className="p-4 bg-slate-50 rounded-2xl">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">KPI Evidence</p>
+                  {reviewingEvidence.length === 0 ? (
+                    <p className="text-xs text-slate-400 font-medium">No evidence documents were submitted for this assessment.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {reviewingEvidence.map((doc: any) => (
+                        <div key={doc.id} className="flex items-center justify-between bg-white px-4 py-3 rounded-xl">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <FileText size={14} className="text-indigo-500 shrink-0" />
+                            <span className="text-xs font-bold text-slate-700 truncate">{doc.name}</span>
+                          </div>
+                          <span className="text-[9px] text-slate-400 font-bold uppercase shrink-0">{doc.type}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Your Rating</label>
                   <select

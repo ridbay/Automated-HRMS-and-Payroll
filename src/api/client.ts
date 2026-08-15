@@ -2973,12 +2973,14 @@ export const useUpdateGoal = () => {
   });
 };
 
-export const useCompanyObjectives = () => {
+// Every company-wide objective, plus the caller's own department's (if they
+// belong to one that has one) — not every department's objectives.
+export const useMyObjectives = () => {
   return useQuery({
-    queryKey: ['companyObjectives'],
+    queryKey: ['myObjectives'],
     queryFn: async () => {
-      const res = await fetchWithTenant(`${API_URL}/employee/goals/company`);
-      if (!res.ok) throw new Error('Failed to fetch company objectives');
+      const res = await fetchWithTenant(`${API_URL}/employee/goals/objectives`);
+      if (!res.ok) throw new Error('Failed to fetch objectives');
       return res.json();
     },
   });
@@ -3195,12 +3197,15 @@ export const useAdminAssessments = (filters: { cycleId?: string; status?: string
   });
 };
 
-export const useAdminGoals = (scope?: string) => {
+export const useAdminGoals = (scope?: string, departmentId?: string) => {
   return useQuery({
-    queryKey: ['adminGoals', scope],
+    queryKey: ['adminGoals', scope, departmentId],
     queryFn: async () => {
-      const query = scope ? `?scope=${scope}` : '';
-      const res = await fetchWithTenant(`${API_URL}/admin/performance/goals${query}`);
+      const params = new URLSearchParams();
+      if (scope) params.set('scope', scope);
+      if (departmentId) params.set('departmentId', departmentId);
+      const query = params.toString();
+      const res = await fetchWithTenant(`${API_URL}/admin/performance/goals${query ? `?${query}` : ''}`);
       if (!res.ok) throw new Error('Failed to fetch goals');
       return res.json();
     },
@@ -3220,5 +3225,201 @@ export const useCreateCompanyGoal = () => {
       return res.json();
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['adminGoals'] }),
+  });
+};
+
+// =============================================================================
+// Appraisal: stage-gated cycle timeline, 360 (peer + upward) reviews, evidence
+// =============================================================================
+
+// --- Cycle stage timeline (admin) ---
+
+export const useCycleStages = (cycleId?: string) => {
+  return useQuery({
+    queryKey: ['cycleStages', cycleId],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/admin/performance/cycles/${cycleId}/stages`);
+      if (!res.ok) throw new Error('Failed to fetch cycle stages');
+      return res.json();
+    },
+    enabled: !!cycleId,
+  });
+};
+
+export const useUpdateCycleStage = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ cycleId, stageId, data }: { cycleId: string; stageId: string; data: { startDate?: string | null; dueDate?: string | null } }) => {
+      const res = await fetchWithTenant(`${API_URL}/admin/performance/cycles/${cycleId}/stages/${stageId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('Failed to update stage');
+      return res.json();
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['cycleStages', variables.cycleId] });
+      queryClient.invalidateQueries({ queryKey: ['activeCycleAssessment'] });
+    },
+  });
+};
+
+// --- 360 (peer + upward) reviews ---
+
+export const useNominatePeers = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (peerIds: string[]) => {
+      const res = await fetchWithTenant(`${API_URL}/employee/peer-reviews/nominate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ peerIds }),
+      });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || 'Failed to nominate peer reviewers'); }
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['myNominations'] }),
+  });
+};
+
+export const useMyNominations = () => {
+  return useQuery({
+    queryKey: ['myNominations'],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/employee/peer-reviews/my-nominations`);
+      if (!res.ok) throw new Error('Failed to fetch nominations');
+      return res.json();
+    },
+  });
+};
+
+export const useTeamPendingPeerApprovals = () => {
+  return useQuery({
+    queryKey: ['teamPendingPeerApprovals'],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/employee/peer-reviews/team-pending-approval`);
+      if (!res.ok) throw new Error('Failed to fetch pending peer approvals');
+      return res.json();
+    },
+  });
+};
+
+export const useApprovePeerNomination = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, approve }: { id: string; approve: boolean }) => {
+      const res = await fetchWithTenant(`${API_URL}/employee/peer-reviews/${id}/approve`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approve }),
+      });
+      if (!res.ok) throw new Error('Failed to update nomination');
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['teamPendingPeerApprovals'] }),
+  });
+};
+
+export const useReviewsAssignedToMe = () => {
+  return useQuery({
+    queryKey: ['reviewsAssignedToMe'],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/employee/peer-reviews/assigned-to-me`);
+      if (!res.ok) throw new Error('Failed to fetch assigned reviews');
+      return res.json();
+    },
+  });
+};
+
+export const useSubmitPeerReview = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, rating, strengths, improvements, comment }: { id: string; rating: string; strengths?: string; improvements?: string; comment?: string }) => {
+      const res = await fetchWithTenant(`${API_URL}/employee/peer-reviews/${id}/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rating, strengths, improvements, comment }),
+      });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || 'Failed to submit review'); }
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['reviewsAssignedToMe'] }),
+  });
+};
+
+export const useSubmitUpwardReview = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: { rating: string; strengths?: string; improvements?: string; comment?: string }) => {
+      const res = await fetchWithTenant(`${API_URL}/employee/peer-reviews/upward`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || 'Failed to submit upward review'); }
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['reviewsAssignedToMe'] }),
+  });
+};
+
+export const useMyReceivedReviews = () => {
+  return useQuery({
+    queryKey: ['myReceivedReviews'],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/employee/peer-reviews/received`);
+      if (!res.ok) throw new Error('Failed to fetch received reviews');
+      return res.json();
+    },
+  });
+};
+
+export const useAdminPeerReviews = (cycleId?: string) => {
+  return useQuery({
+    queryKey: ['adminPeerReviews', cycleId],
+    queryFn: async () => {
+      const query = cycleId ? `?cycleId=${cycleId}` : '';
+      const res = await fetchWithTenant(`${API_URL}/admin/performance/peer-reviews${query}`);
+      if (!res.ok) throw new Error('Failed to fetch peer reviews');
+      return res.json();
+    },
+  });
+};
+
+// --- KPI/appraisal evidence ---
+
+export const useAssessmentEvidence = (assessmentId?: string) => {
+  return useQuery({
+    queryKey: ['assessmentEvidence', assessmentId],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/employee/assessments/${assessmentId}/evidence`);
+      if (!res.ok) throw new Error('Failed to fetch evidence');
+      return res.json();
+    },
+    enabled: !!assessmentId,
+  });
+};
+
+export const useUploadEvidence = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ assessmentId, file, name, type }: { assessmentId: string; file: File; name: string; type: string }) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('name', name);
+      formData.append('type', type);
+      formData.append('assessmentId', assessmentId);
+
+      const res = await fetchWithTenant(`${API_URL}/employee/me/documents`, {
+        method: 'POST',
+        body: formData,
+      });
+      if (!res.ok) throw new Error('Failed to upload evidence');
+      return res.json();
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['assessmentEvidence', variables.assessmentId] });
+    },
   });
 };

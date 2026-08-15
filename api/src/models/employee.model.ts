@@ -111,6 +111,9 @@ export const employeeDocuments = sqliteTable('employee_documents', {
   type: text('type').notNull(),
   fileKey: text('file_key').notNull(),
   status: text('status').notNull().default('Active'),
+  // Set when uploaded as KPI/appraisal evidence attached to a specific
+  // self-assessment, rather than the general personal document vault.
+  linkedAssessmentId: text('linked_assessment_id'),
   createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text('updated_at').$onUpdate(() => new Date().toISOString()),
 });

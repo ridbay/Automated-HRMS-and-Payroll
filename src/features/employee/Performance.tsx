@@ -12,13 +12,22 @@ import {
   useCreateGoal,
   useUpdateGoal,
   useMyPerformanceSummary,
-  useCompanyObjectives,
+  useMyObjectives,
   useDirectory,
   useMyProfile,
   useMyAssessments,
+  useMyNominations,
+  useNominatePeers,
+  useReviewsAssignedToMe,
+  useSubmitPeerReview,
+  useSubmitUpwardReview,
+  useMyReceivedReviews,
+  useAssessmentEvidence,
+  useUploadEvidence,
 } from "../../api/client";
 import { motion, AnimatePresence } from "framer-motion";
 import AssessmentWizard from "./AssessmentWizard";
+import { StageTimeline, DeadlineBanner } from "../../components/StageTimeline";
 import {
   Trophy,
   Target,
@@ -63,7 +72,7 @@ const Performance: React.FC = () => {
   const activeCycle = cycleData?.activeCycle;
   const { data: summary } = useMyPerformanceSummary();
   const { data: myGoals = [] } = useMyGoals();
-  const { data: companyObjectives = [] } = useCompanyObjectives();
+  const { data: myObjectives = [] } = useMyObjectives();
   const { data: profile } = useMyProfile();
   const { data: myAssessments = [] } = useMyAssessments();
   const { data: directory = [] } = useDirectory();
@@ -81,6 +90,55 @@ const Performance: React.FC = () => {
   const managerRecord = directory.find((e: any) => e.id === profile?.managerId);
   const createGoalMutation = useCreateGoal();
   const updateGoalMutation = useUpdateGoal();
+
+  // 360 (peer + upward) reviews
+  const { data: myNominations = [] } = useMyNominations();
+  const nominatePeers = useNominatePeers();
+  const { data: reviewsAssignedToMe = [] } = useReviewsAssignedToMe();
+  const submitPeerReview = useSubmitPeerReview();
+  const submitUpwardReview = useSubmitUpwardReview();
+  const { data: receivedReviewsData } = useMyReceivedReviews();
+  const receivedReviews = receivedReviewsData?.reviews || [];
+
+  const [nominateQuery, setNominateQuery] = useState("");
+  const [selectedPeers, setSelectedPeers] = useState<{ id: string; name: string; lastName: string }[]>([]);
+  const nominatedIds = new Set(myNominations.map((n: any) => n.reviewerId));
+  const nominateResults = nominateQuery.trim()
+    ? directory.filter((e: any) =>
+      e.id !== user?.id &&
+      !nominatedIds.has(e.id) &&
+      !selectedPeers.some((p) => p.id === e.id) &&
+      `${e.name || ""} ${e.lastName || ""}`.toLowerCase().includes(nominateQuery.trim().toLowerCase())
+    ).slice(0, 6)
+    : [];
+
+  const handleSubmitNominations = () => {
+    if (selectedPeers.length === 0) return;
+    nominatePeers.mutate(selectedPeers.map((p) => p.id), {
+      onSuccess: () => setSelectedPeers([]),
+    });
+  };
+
+  const [writingReview, setWritingReview] = useState<any>(null);
+  const emptyReviewForm = { rating: "", strengths: "", improvements: "", comment: "" };
+  const [reviewWriteForm, setReviewWriteForm] = useState(emptyReviewForm);
+
+  const handleSubmitWrittenReview = () => {
+    if (!writingReview || !reviewWriteForm.rating) return;
+    if (writingReview.direction === "upward") {
+      submitUpwardReview.mutate(reviewWriteForm, { onSuccess: () => setWritingReview(null) });
+    } else {
+      submitPeerReview.mutate({ id: writingReview.id, ...reviewWriteForm }, { onSuccess: () => setWritingReview(null) });
+    }
+  };
+
+  // Evidence attached to the active self-assessment.
+  const { data: myEvidence = [] } = useAssessmentEvidence(activeAssessment?.id);
+  const uploadEvidence = useUploadEvidence();
+  const handleUploadEvidence = (file: File, name: string, type: string) => {
+    if (!activeAssessment?.id) return;
+    uploadEvidence.mutate({ assessmentId: activeAssessment.id, file, name, type });
+  };
   const [activeTab, setActiveTab] = useState<
     "dashboard" | "goals" | "reviews" | "feedback" | "growth"
   >("dashboard");
@@ -226,6 +284,15 @@ const Performance: React.FC = () => {
 
   const renderDashboard = () => (
     <div className="space-y-8 pb-20">
+      {activeCycle?.stages?.length > 0 && (
+        <div className="space-y-4">
+          <DeadlineBanner stages={activeCycle.stages} cycleName={activeCycle.name} />
+          <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm">
+            <StageTimeline stages={activeCycle.stages} />
+          </div>
+        </div>
+      )}
+
       {/* Performance Overview Header */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <motion.div
@@ -579,20 +646,20 @@ const Performance: React.FC = () => {
         <h3 className="text-2xl font-black mb-12 flex items-center gap-3">
           <MapIcon className="text-indigo-400" /> Strategic Alignment
         </h3>
-        {companyObjectives.length === 0 ? (
+        {myObjectives.length === 0 ? (
           <p className="text-slate-400 font-medium relative">
-            No company-wide objectives have been set yet — check back once HR publishes one.
+            No strategic objectives have been set yet — check back once HR publishes one.
           </p>
         ) : (
           <div className="space-y-8 relative">
-            {companyObjectives.map((obj: any) => (
+            {myObjectives.map((obj: any) => (
               <div key={obj.id} className="bg-white/5 border border-white/10 p-8 rounded-[2.5rem] max-w-xl backdrop-blur-sm flex items-start gap-6">
-                <div className="w-16 h-16 bg-indigo-600 rounded-[1.5rem] flex items-center justify-center shrink-0 shadow-2xl">
-                  <Rocket size={28} />
+                <div className={`w-16 h-16 ${obj.scope === 'department' ? 'bg-emerald-600' : 'bg-indigo-600'} rounded-[1.5rem] flex items-center justify-center shrink-0 shadow-2xl`}>
+                  {obj.scope === 'department' ? <Users size={28} /> : <Rocket size={28} />}
                 </div>
                 <div className="flex-1">
-                  <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-2">
-                    Company Objective
+                  <p className={`text-[10px] font-black uppercase tracking-widest mb-2 ${obj.scope === 'department' ? 'text-emerald-400' : 'text-indigo-400'}`}>
+                    {obj.scope === 'department' ? `${obj.departmentName || 'Department'} Objective` : 'Company Objective'}
                   </p>
                   <h4 className="text-xl font-black mb-4">{obj.title}</h4>
                   <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
@@ -966,6 +1033,11 @@ const Performance: React.FC = () => {
                       {activeAssessment.status.replace('_', ' ')}
                     </span>
 
+                    {activeAssessment.status === 'completed' && activeAssessment.managerReviewReleased === false && (
+                      <div className="mt-10 w-full max-w-md p-6 bg-amber-50 border border-amber-100 rounded-[2rem] text-center">
+                        <p className="text-sm text-amber-700 font-medium">Your manager has completed their review — it'll be available once HR releases results for this cycle.</p>
+                      </div>
+                    )}
                     {activeAssessment.status === 'completed' && activeAssessment.managerRating && (
                       <div className="mt-10 w-full max-w-md p-8 bg-slate-50 rounded-[2.5rem] text-left">
                         <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-2">Manager Rating</p>
@@ -1028,6 +1100,133 @@ const Performance: React.FC = () => {
                       </div>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {/* 360: Select Peer Reviewers */}
+              {activeCycle && (
+                <div className="bg-white p-10 rounded-[3rem] border border-slate-200 shadow-sm">
+                  <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-2">Select Peer Reviewers</h4>
+                  <p className="text-xs text-slate-400 font-medium mb-6">Nominate colleagues to review you this cycle — your manager approves each one before they can write it.</p>
+                  <div className="relative mb-4">
+                    <input
+                      type="text"
+                      value={nominateQuery}
+                      onChange={(e) => setNominateQuery(e.target.value)}
+                      placeholder="Search colleagues to nominate…"
+                      className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none focus:ring-4 focus:ring-indigo-500/10 font-bold"
+                    />
+                    {nominateResults.length > 0 && (
+                      <ul className="absolute left-0 right-0 top-full mt-2 bg-white rounded-2xl shadow-xl border border-slate-100 z-30 overflow-hidden">
+                        {nominateResults.map((emp: any) => (
+                          <li
+                            key={emp.id}
+                            onClick={() => {
+                              setSelectedPeers([...selectedPeers, { id: emp.id, name: emp.name, lastName: emp.lastName }]);
+                              setNominateQuery("");
+                            }}
+                            className="px-5 py-3 cursor-pointer hover:bg-indigo-50 transition-colors text-sm font-semibold text-slate-800"
+                          >
+                            {emp.name} {emp.lastName}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                  {selectedPeers.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mb-4">
+                      {selectedPeers.map((p) => (
+                        <span key={p.id} className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-xs font-bold">
+                          {p.name} {p.lastName}
+                          <button onClick={() => setSelectedPeers(selectedPeers.filter((sp) => sp.id !== p.id))}>
+                            <X size={14} />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {selectedPeers.length > 0 && (
+                    <button
+                      onClick={handleSubmitNominations}
+                      disabled={nominatePeers.isPending}
+                      className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-lg disabled:opacity-50 mb-6"
+                    >
+                      {nominatePeers.isPending ? "Nominating…" : `Nominate ${selectedPeers.length}`}
+                    </button>
+                  )}
+                  {myNominations.length > 0 && (
+                    <div className="space-y-3 pt-4 border-t border-slate-50">
+                      {myNominations.map((n: any) => (
+                        <div key={n.id} className="flex items-center justify-between">
+                          <p className="text-sm font-bold text-slate-700">{n.reviewerName} {n.reviewerLastName}</p>
+                          <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${n.status === 'approved' ? 'bg-emerald-50 text-emerald-600' : n.status === 'rejected' ? 'bg-rose-50 text-rose-500' : n.status === 'submitted' ? 'bg-indigo-50 text-indigo-600' : 'bg-amber-50 text-amber-600'}`}>
+                            {n.status}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 360: Reviews To Write */}
+              {activeCycle && (reviewsAssignedToMe.length > 0 || profile?.managerId) && (
+                <div className="bg-white p-10 rounded-[3rem] border border-slate-200 shadow-sm">
+                  <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-6">Reviews To Write</h4>
+                  <div className="space-y-3">
+                    {reviewsAssignedToMe.map((r: any) => (
+                      <div key={r.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
+                        <p className="text-sm font-bold text-slate-700">
+                          Peer review for <span className="font-black text-slate-900">{r.revieweeName} {r.revieweeLastName}</span>
+                        </p>
+                        <button
+                          onClick={() => { setWritingReview(r); setReviewWriteForm(emptyReviewForm); }}
+                          className="px-4 py-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                        >
+                          Write Review
+                        </button>
+                      </div>
+                    ))}
+                    {profile?.managerId && (
+                      <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
+                        <p className="text-sm font-bold text-slate-700">
+                          Upward review for <span className="font-black text-slate-900">{profile.managerName || "your manager"}</span>
+                        </p>
+                        <button
+                          onClick={() => { setWritingReview({ direction: "upward", revieweeName: profile.managerName }); setReviewWriteForm(emptyReviewForm); }}
+                          className="px-4 py-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                        >
+                          Write Review
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* 360: Feedback received about me */}
+              {activeCycle && (
+                <div className="bg-white p-10 rounded-[3rem] border border-slate-200 shadow-sm">
+                  <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-6">360 Feedback Received</h4>
+                  {receivedReviewsData?.released === false ? (
+                    <p className="text-sm text-slate-400 font-medium">Available once HR releases results for this cycle.</p>
+                  ) : receivedReviews.length === 0 ? (
+                    <p className="text-sm text-slate-400 font-medium">No peer or upward feedback submitted about you yet this cycle.</p>
+                  ) : (
+                    <div className="space-y-4">
+                      {receivedReviews.map((r: any, i: number) => (
+                        <div key={i} className="p-6 bg-slate-50 rounded-2xl">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="px-3 py-1 bg-white rounded-lg text-[9px] font-black uppercase tracking-widest text-slate-500 shadow-sm">Anonymous {r.direction}</span>
+                            <span className="text-xs font-black text-slate-600">{r.rating?.replace(/_/g, ' ')}</span>
+                          </div>
+                          {r.strengths && <p className="text-xs text-slate-600 font-medium mb-1"><span className="font-black">Strengths:</span> {r.strengths}</p>}
+                          {r.improvements && <p className="text-xs text-slate-600 font-medium mb-1"><span className="font-black">Could improve:</span> {r.improvements}</p>}
+                          {r.comment && <p className="text-sm text-slate-600 font-medium italic mt-2">"{r.comment}"</p>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1290,6 +1489,95 @@ const Performance: React.FC = () => {
         )}
       </AnimatePresence>
 
+      {/* Write Peer/Upward Review Modal */}
+      <AnimatePresence>
+        {writingReview && (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center p-6">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setWritingReview(null)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="relative bg-white w-full max-w-xl rounded-[3rem] shadow-2xl overflow-hidden"
+            >
+              <div className="p-10 bg-indigo-600 text-white flex justify-between items-start">
+                <div>
+                  <h2 className="text-2xl font-black mb-1">
+                    {writingReview.direction === "upward" ? "Upward Review" : "Peer Review"}
+                  </h2>
+                  <p className="text-indigo-100 text-sm font-medium">
+                    For {writingReview.revieweeName} {writingReview.revieweeLastName || ""}
+                  </p>
+                </div>
+                <button onClick={() => setWritingReview(null)} className="p-3 bg-white/10 hover:bg-white/20 rounded-2xl transition-all">
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="p-10 space-y-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Rating</label>
+                  <select
+                    value={reviewWriteForm.rating}
+                    onChange={(e) => setReviewWriteForm({ ...reviewWriteForm, rating: e.target.value })}
+                    className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-700"
+                  >
+                    <option value="">Select rating…</option>
+                    <option value="unsatisfactory">Unsatisfactory</option>
+                    <option value="needs_improvement">Needs Improvement</option>
+                    <option value="meets_expectations">Meets Expectations</option>
+                    <option value="exceeds_expectations">Exceeds Expectations</option>
+                    <option value="exceptional">Exceptional</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Strengths</label>
+                  <textarea
+                    rows={3}
+                    value={reviewWriteForm.strengths}
+                    onChange={(e) => setReviewWriteForm({ ...reviewWriteForm, strengths: e.target.value })}
+                    className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-medium resize-none"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Could improve</label>
+                  <textarea
+                    rows={3}
+                    value={reviewWriteForm.improvements}
+                    onChange={(e) => setReviewWriteForm({ ...reviewWriteForm, improvements: e.target.value })}
+                    className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-medium resize-none"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Additional comments</label>
+                  <textarea
+                    rows={3}
+                    value={reviewWriteForm.comment}
+                    onChange={(e) => setReviewWriteForm({ ...reviewWriteForm, comment: e.target.value })}
+                    className="w-full px-6 py-4 bg-slate-50 border-none rounded-3xl outline-none font-medium resize-none"
+                  />
+                </div>
+              </div>
+              <div className="p-8 bg-slate-50 border-t border-slate-100 flex justify-end gap-4">
+                <button onClick={() => setWritingReview(null)} className="px-8 py-4 bg-white border border-slate-200 text-slate-500 rounded-2xl font-black text-xs uppercase tracking-widest">Cancel</button>
+                <button
+                  disabled={!reviewWriteForm.rating || submitPeerReview.isPending || submitUpwardReview.isPending}
+                  onClick={handleSubmitWrittenReview}
+                  className="px-10 py-4 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-100 disabled:opacity-50"
+                >
+                  {submitPeerReview.isPending || submitUpwardReview.isPending ? "Submitting…" : "Submit Review"}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Assessment Wizard */}
       <AssessmentWizard
         isOpen={showAssessmentWizard}
@@ -1297,6 +1585,9 @@ const Performance: React.FC = () => {
         cycleName={activeCycle?.name || ""}
         existingAssessment={activeAssessment}
         goals={myGoals}
+        evidence={myEvidence}
+        onUploadEvidence={handleUploadEvidence}
+        uploadingEvidence={uploadEvidence.isPending}
         onSave={handleSaveAssessment}
         onSubmit={handleSubmitAssessment}
       />

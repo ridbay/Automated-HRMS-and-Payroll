@@ -110,12 +110,13 @@ export const uploadDocument = async (c: Context<AppEnv>) => {
   const file = formData.get('file') as unknown as File;
   const name = formData.get('name') as string;
   const type = formData.get('type') as string;
+  const assessmentId = (formData.get('assessmentId') as string) || undefined;
 
   if (!file || !name || !type) {
     return c.json({ error: 'Missing required fields' }, 400);
   }
 
-  const document = await service.addDocument(companyId as string, employeeId, c.env.BUCKET, { name, type, file });
+  const document = await service.addDocument(companyId as string, employeeId, c.env.BUCKET, { name, type, file, linkedAssessmentId: assessmentId });
   return c.json(document);
 };
 

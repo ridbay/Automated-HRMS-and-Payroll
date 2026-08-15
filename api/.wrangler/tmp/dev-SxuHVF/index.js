@@ -8137,6 +8137,7 @@ __export(schema_exports, {
   companies: () => companies,
   companySettings: () => companySettings,
   complianceTasks: () => complianceTasks,
+  cycleStages: () => cycleStages,
   departments: () => departments,
   emailTemplates: () => emailTemplates,
   emergencyContacts: () => emergencyContacts,
@@ -8167,6 +8168,7 @@ __export(schema_exports, {
   payrollSettings: () => payrollSettings,
   payslips: () => payslips,
   payslipsRelations: () => payslipsRelations,
+  peerReviews: () => peerReviews,
   publicHolidays: () => publicHolidays,
   reviewCycles: () => reviewCycles,
   roles: () => roles,
@@ -8343,6 +8345,9 @@ var employeeDocuments = sqliteTable("employee_documents", {
   type: text("type").notNull(),
   fileKey: text("file_key").notNull(),
   status: text("status").notNull().default("Active"),
+  // Set when uploaded as KPI/appraisal evidence attached to a specific
+  // self-assessment, rather than the general personal document vault.
+  linkedAssessmentId: text("linked_assessment_id"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").$onUpdate(() => (/* @__PURE__ */ new Date()).toISOString())
 });
@@ -8940,6 +8945,12 @@ var goals = sqliteTable("goals", {
   // set when a manager/admin creates it for someone else
   parentGoalId: text("parent_goal_id"),
   // links to a broader goal for alignment rollups
+  // Set on 'department'-scoped objectives so each department can carry its
+  // own strategic goals distinct from the company-wide ones. departmentName
+  // is denormalized (same convention as employees.department/departmentId)
+  // so reads don't need a join.
+  departmentId: text("department_id"),
+  departmentName: text("department_name"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`)
 });
@@ -8990,8 +9001,49 @@ var reviewCycles = sqliteTable("review_cycles", {
   // 'upcoming' | 'active' | 'closed'
   startDate: text("start_date"),
   endDate: text("end_date"),
+  // Legacy flat deadlines — superseded by cycleStages below, kept so old
+  // reads/writes against these two columns keep working.
   selfReviewDueDate: text("self_review_due_date"),
   managerReviewDueDate: text("manager_review_due_date"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`)
+});
+var cycleStages = sqliteTable("cycle_stages", {
+  id: text("id").primaryKey(),
+  companyId: text("company_id").notNull(),
+  cycleId: text("cycle_id").notNull(),
+  key: text("key").notNull(),
+  // one of STAGE_DEFS keys — see reviewCycle.service.ts
+  name: text("name").notNull(),
+  order: integer("order").notNull().default(0),
+  startDate: text("start_date"),
+  dueDate: text("due_date"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`)
+});
+
+// src/models/peerReview.model.ts
+var peerReviews = sqliteTable("peer_reviews", {
+  id: text("id").primaryKey(),
+  companyId: text("company_id").notNull(),
+  cycleId: text("cycle_id").notNull(),
+  revieweeId: text("reviewee_id").notNull(),
+  // the person being reviewed
+  reviewerId: text("reviewer_id").notNull(),
+  // the person writing the review
+  direction: text("direction").notNull(),
+  // 'peer' | 'upward'
+  status: text("status").notNull().default("nominated"),
+  // 'nominated' | 'approved' | 'rejected' | 'submitted'
+  rating: text("rating"),
+  // same 5-point scale as assessments.selfRating; set on submit
+  strengths: text("strengths"),
+  improvements: text("improvements"),
+  comment: text("comment"),
+  nominatedById: text("nominated_by_id"),
+  approvedById: text("approved_by_id"),
+  approvedAt: text("approved_at"),
+  submittedAt: text("submitted_at"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`)
 });
@@ -10093,7 +10145,8 @@ var EmployeeService = class {
       name: data.name,
       type: data.type,
       fileKey,
-      status: "Active"
+      status: "Active",
+      linkedAssessmentId: data.linkedAssessmentId || null
     };
     await this.db.insert(employeeDocuments).values(newDocument);
     return newDocument;
@@ -10261,10 +10314,11 @@ var uploadDocument = /* @__PURE__ */ __name(async (c) => {
   const file = formData.get("file");
   const name = formData.get("name");
   const type = formData.get("type");
+  const assessmentId = formData.get("assessmentId") || void 0;
   if (!file || !name || !type) {
     return c.json({ error: "Missing required fields" }, 400);
   }
-  const document = await service.addDocument(companyId, employeeId, c.env.BUCKET, { name, type, file });
+  const document = await service.addDocument(companyId, employeeId, c.env.BUCKET, { name, type, file, linkedAssessmentId: assessmentId });
   return c.json(document);
 }, "uploadDocument");
 var deleteDocument = /* @__PURE__ */ __name(async (c) => {
@@ -11638,6 +11692,13 @@ var GoalService = class {
   }
   async createGoal(companyId, employeeId, data, assignedById) {
     const id = `GOAL-${crypto.randomUUID().split("-")[0].toUpperCase()}`;
+    let departmentName = data.departmentName || null;
+    if (data.departmentId && !departmentName) {
+      const dept = await this.db.query.departments.findFirst({
+        where: and(eq(departments.id, data.departmentId), eq(departments.companyId, companyId))
+      });
+      departmentName = dept?.name || null;
+    }
     await this.db.insert(goals).values({
       id,
       companyId,
@@ -11651,7 +11712,9 @@ var GoalService = class {
       keyResults: data.keyResults ? JSON.stringify(data.keyResults) : null,
       scope: data.scope || "individual",
       assignedById: assignedById || null,
-      parentGoalId: data.parentGoalId || null
+      parentGoalId: data.parentGoalId || null,
+      departmentId: data.scope === "department" ? data.departmentId || null : null,
+      departmentName: data.scope === "department" ? departmentName : null
     });
     return { id };
   }
@@ -11699,10 +11762,12 @@ var GoalService = class {
       createdAt: goals.createdAt
     }).from(goals).innerJoin(employees, eq(goals.employeeId, employees.id)).where(and(eq(goals.companyId, companyId), eq(employees.managerId, managerId))).orderBy(desc(goals.createdAt)).all();
   }
-  // Company-wide browse for HR/Admin, optionally filtered by scope (e.g. only 'company' objectives).
-  async getCompanyGoals(companyId, scope) {
+  // Company-wide browse for HR/Admin, optionally filtered by scope (e.g. only
+  // 'company' objectives) and/or a specific department.
+  async getCompanyGoals(companyId, scope, departmentId) {
     const conditions = [eq(goals.companyId, companyId)];
     if (scope) conditions.push(eq(goals.scope, scope));
+    if (departmentId) conditions.push(eq(goals.departmentId, departmentId));
     return this.db.select({
       id: goals.id,
       employeeId: goals.employeeId,
@@ -11718,8 +11783,19 @@ var GoalService = class {
       dueDate: goals.dueDate,
       scope: goals.scope,
       parentGoalId: goals.parentGoalId,
+      departmentId: goals.departmentId,
+      departmentName: goals.departmentName,
       createdAt: goals.createdAt
     }).from(goals).innerJoin(employees, eq(goals.employeeId, employees.id)).where(and(...conditions)).orderBy(desc(goals.createdAt)).all();
+  }
+  // The strategic objectives an employee should see themselves aligned to:
+  // every company-wide objective, plus their own department's (if any and if
+  // they belong to one) — so different departments can carry different
+  // objectives without employees seeing every other department's goals.
+  async getObjectivesForEmployee(companyId, employeeId) {
+    const employee = await this.db.query.employees.findFirst({ where: eq(employees.id, employeeId) });
+    const scopeConditions = employee?.departmentId ? or(eq(goals.scope, "company"), and(eq(goals.scope, "department"), eq(goals.departmentId, employee.departmentId))) : eq(goals.scope, "company");
+    return this.db.select().from(goals).where(and(eq(goals.companyId, companyId), scopeConditions)).orderBy(desc(goals.createdAt)).all();
   }
   async getCompletionStats(companyId, employeeIds) {
     const conditions = [eq(goals.companyId, companyId)];
@@ -11770,12 +11846,13 @@ var getTeamGoals = /* @__PURE__ */ __name(async (c) => {
   const rows = await service.getTeamGoals(companyId, employeeId);
   return c.json(rows.map(parseGoal));
 }, "getTeamGoals");
-var getCompanyObjectives = /* @__PURE__ */ __name(async (c) => {
+var getMyObjectives = /* @__PURE__ */ __name(async (c) => {
   const companyId = c.get("companyId");
+  const employeeId = c.get("employeeId");
   const service = new GoalService(c.env.DB);
-  const rows = await service.getCompanyGoals(companyId, "company");
+  const rows = await service.getObjectivesForEmployee(companyId, employeeId);
   return c.json(rows.map(parseGoal));
-}, "getCompanyObjectives");
+}, "getMyObjectives");
 var assignTeamGoal = /* @__PURE__ */ __name(async (c) => {
   const managerId = c.get("employeeId");
   const companyId = c.get("companyId");
@@ -11801,6 +11878,16 @@ var ratingScore = /* @__PURE__ */ __name((rating) => {
   const found = RATING_SCALE.find((r) => r.value === rating);
   return found ? found.score : null;
 }, "ratingScore");
+var STAGE_DEFS = [
+  { key: "kickoff", name: "Kickoff" },
+  { key: "select_peers", name: "Select Peer Reviewers" },
+  { key: "peer_approval", name: "Manager Approves Peer Reviewers" },
+  { key: "self_review", name: "Self-Review" },
+  { key: "peer_upward_review", name: "Peer & Upward Reviews" },
+  { key: "manager_review", name: "Manager Review" },
+  { key: "manager_review_release", name: "Manager Reviews Available" },
+  { key: "final_submission", name: "Review & Final Submission" }
+];
 var ReviewCycleService = class {
   static {
     __name(this, "ReviewCycleService");
@@ -11849,6 +11936,7 @@ var ReviewCycleService = class {
       selfReviewDueDate: data.selfReviewDueDate || null,
       managerReviewDueDate: data.managerReviewDueDate || null
     }).returning();
+    await this.createDefaultStages(companyId, id);
     if (result[0].status === "active") {
       await this.deactivateOthers(companyId, id);
     }
@@ -11889,8 +11977,76 @@ var ReviewCycleService = class {
     if (inUse) {
       throw new Error("Cannot delete a cycle that already has assessments logged against it \u2014 close it instead");
     }
+    await this.db.delete(cycleStages).where(and(eq(cycleStages.cycleId, id), eq(cycleStages.companyId, companyId)));
     const result = await this.db.delete(reviewCycles).where(and(eq(reviewCycles.id, id), eq(reviewCycles.companyId, companyId))).returning();
     return result[0];
+  }
+  // ---------------------------------------------------------------------
+  // Stage timeline
+  // ---------------------------------------------------------------------
+  async createDefaultStages(companyId, cycleId) {
+    const rows = STAGE_DEFS.map((def, idx) => ({
+      id: `STG-${crypto.randomUUID().split("-")[0].toUpperCase()}`,
+      companyId,
+      cycleId,
+      key: def.key,
+      name: def.name,
+      order: idx,
+      startDate: null,
+      dueDate: null
+    }));
+    await this.db.insert(cycleStages).values(rows);
+    return rows;
+  }
+  async getStages(companyId, cycleId) {
+    return this.db.query.cycleStages.findMany({
+      where: and(eq(cycleStages.companyId, companyId), eq(cycleStages.cycleId, cycleId)),
+      orderBy: [asc(cycleStages.order)]
+    });
+  }
+  async getStageByKey(companyId, cycleId, key) {
+    return this.db.query.cycleStages.findFirst({
+      where: and(
+        eq(cycleStages.companyId, companyId),
+        eq(cycleStages.cycleId, cycleId),
+        eq(cycleStages.key, key)
+      )
+    });
+  }
+  async updateStage(companyId, cycleId, stageId, data) {
+    const updateData = { updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
+    if (data.startDate !== void 0) updateData.startDate = data.startDate || null;
+    if (data.dueDate !== void 0) updateData.dueDate = data.dueDate || null;
+    const result = await this.db.update(cycleStages).set(updateData).where(and(
+      eq(cycleStages.id, stageId),
+      eq(cycleStages.cycleId, cycleId),
+      eq(cycleStages.companyId, companyId)
+    )).returning();
+    return result[0];
+  }
+  todayStr() {
+    return (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+  }
+  // Whether writes for a given stage should be accepted right now. No dates
+  // configured on the stage (or the stage/cycle doesn't have one) => open,
+  // so cycles that don't use the granular timeline behave exactly as they
+  // did before this existed.
+  async isStageOpen(companyId, cycleId, key) {
+    const stage = await this.getStageByKey(companyId, cycleId, key);
+    if (!stage || !stage.startDate && !stage.dueDate) return true;
+    const today = this.todayStr();
+    if (stage.startDate && today < stage.startDate) return false;
+    if (stage.dueDate && today > stage.dueDate) return false;
+    return true;
+  }
+  // Whether a manager's rating should be visible to the employee it belongs
+  // to yet. Released once the "manager_review_release" stage has started;
+  // if that stage has no start date configured, treat it as released
+  // immediately (matches behavior before release-gating existed).
+  async isManagerReviewReleased(companyId, cycleId) {
+    const stage = await this.getStageByKey(companyId, cycleId, "manager_review_release");
+    if (!stage || !stage.startDate) return true;
+    return this.todayStr() >= stage.startDate;
   }
 };
 
@@ -12135,6 +12291,21 @@ var parseAssessment = /* @__PURE__ */ __name((asm) => ({
   skillRatings: asm.skillRatings ? JSON.parse(asm.skillRatings) : [],
   developmentGoals: asm.developmentGoals ? JSON.parse(asm.developmentGoals) : []
 }), "parseAssessment");
+var isAdminRole = /* @__PURE__ */ __name((role) => role === "SUPER_ADMIN" || role === "HR_ADMIN", "isAdminRole");
+var withReleaseGating = /* @__PURE__ */ __name((asm, released) => {
+  if (released || asm.status !== "completed") {
+    return { ...asm, managerReviewReleased: true };
+  }
+  const { managerRating, managerComment, managerId, reviewedAt, ...rest } = asm;
+  return { ...rest, managerReviewReleased: false };
+}, "withReleaseGating");
+var stageClosedError = /* @__PURE__ */ __name(async (cycleService, companyId, cycleId, key, label) => {
+  const stage = await cycleService.getStageByKey(companyId, cycleId, key);
+  if (stage?.startDate || stage?.dueDate) {
+    return `The ${label} window is ${stage.startDate && /* @__PURE__ */ new Date() < new Date(stage.startDate) ? "not open yet" : "closed"} (${stage.startDate || "\u2014"} to ${stage.dueDate || "\u2014"}).`;
+  }
+  return `The ${label} window is currently closed.`;
+}, "stageClosedError");
 var getMyAssessments = /* @__PURE__ */ __name(async (c) => {
   const companyId = c.get("companyId");
   const employeeId = c.get("employeeId");
@@ -12142,8 +12313,18 @@ var getMyAssessments = /* @__PURE__ */ __name(async (c) => {
     return c.json({ error: "Unauthorized: No employee ID found" }, 401);
   }
   const service = new AssessmentService(c.env.DB);
+  const cycleService = new ReviewCycleService(c.env.DB);
   const assessments2 = await service.getEmployeeAssessments(companyId, employeeId);
-  return c.json(assessments2.map(parseAssessment));
+  const releaseByCycle = /* @__PURE__ */ new Map();
+  const withGating = /* @__PURE__ */ __name(async (asm) => {
+    if (!asm.cycleId) return { ...parseAssessment(asm), managerReviewReleased: true };
+    if (!releaseByCycle.has(asm.cycleId)) {
+      releaseByCycle.set(asm.cycleId, await cycleService.isManagerReviewReleased(companyId, asm.cycleId));
+    }
+    return withReleaseGating(parseAssessment(asm), releaseByCycle.get(asm.cycleId));
+  }, "withGating");
+  const results = await Promise.all(assessments2.map(withGating));
+  return c.json(results);
 }, "getMyAssessments");
 var getAssessment = /* @__PURE__ */ __name(async (c) => {
   const companyId = c.get("companyId");
@@ -12156,17 +12337,20 @@ var getAssessment = /* @__PURE__ */ __name(async (c) => {
   if (!assessment) {
     return c.json({ error: "Assessment not found" }, 404);
   }
-  return c.json(parseAssessment(assessment));
+  const cycleService = new ReviewCycleService(c.env.DB);
+  const released = assessment.cycleId ? await cycleService.isManagerReviewReleased(companyId, assessment.cycleId) : true;
+  return c.json(withReleaseGating(parseAssessment(assessment), released));
 }, "getAssessment");
 var createAssessment = /* @__PURE__ */ __name(async (c) => {
   const companyId = c.get("companyId");
   const employeeId = c.get("employeeId");
+  const role = c.get("role");
   if (!employeeId) {
     return c.json({ error: "Unauthorized: No employee ID found" }, 401);
   }
   const data = await c.req.json();
+  const cycleService = new ReviewCycleService(c.env.DB);
   if (!data.cycleId && !data.cycleName) {
-    const cycleService = new ReviewCycleService(c.env.DB);
     const activeCycle = await cycleService.getActiveCycle(companyId);
     if (!activeCycle) {
       return c.json({ error: "No review cycle is open yet \u2014 ask HR to start one." }, 400);
@@ -12174,17 +12358,35 @@ var createAssessment = /* @__PURE__ */ __name(async (c) => {
     data.cycleId = activeCycle.id;
     data.cycleName = activeCycle.name;
   }
+  if (!isAdminRole(role) && data.cycleId) {
+    const open = await cycleService.isStageOpen(companyId, data.cycleId, "self_review");
+    if (!open) {
+      return c.json({ error: await stageClosedError(cycleService, companyId, data.cycleId, "self_review", "self-review") }, 403);
+    }
+  }
   const service = new AssessmentService(c.env.DB);
   const assessment = await service.createAssessment(companyId, employeeId, data);
   return c.json(parseAssessment(assessment), 201);
 }, "createAssessment");
 var updateAssessment = /* @__PURE__ */ __name(async (c) => {
   const companyId = c.get("companyId");
+  const role = c.get("role");
   const assessmentId = c.req.param("id");
   if (!assessmentId) {
     return c.json({ error: "Assessment ID is required" }, 400);
   }
   const service = new AssessmentService(c.env.DB);
+  const existing = await service.getAssessmentById(companyId, assessmentId);
+  if (!existing) {
+    return c.json({ error: "Assessment not found" }, 404);
+  }
+  if (!isAdminRole(role) && existing.cycleId) {
+    const cycleService = new ReviewCycleService(c.env.DB);
+    const open = await cycleService.isStageOpen(companyId, existing.cycleId, "self_review");
+    if (!open) {
+      return c.json({ error: await stageClosedError(cycleService, companyId, existing.cycleId, "self_review", "self-review") }, 403);
+    }
+  }
   const data = await c.req.json();
   const assessment = await service.updateAssessment(companyId, assessmentId, data);
   if (!assessment) {
@@ -12194,11 +12396,23 @@ var updateAssessment = /* @__PURE__ */ __name(async (c) => {
 }, "updateAssessment");
 var submitAssessment = /* @__PURE__ */ __name(async (c) => {
   const companyId = c.get("companyId");
+  const role = c.get("role");
   const assessmentId = c.req.param("id");
   if (!assessmentId) {
     return c.json({ error: "Assessment ID is required" }, 400);
   }
   const service = new AssessmentService(c.env.DB);
+  const existing = await service.getAssessmentById(companyId, assessmentId);
+  if (!existing) {
+    return c.json({ error: "Assessment not found" }, 404);
+  }
+  if (!isAdminRole(role) && existing.cycleId) {
+    const cycleService = new ReviewCycleService(c.env.DB);
+    const open = await cycleService.isStageOpen(companyId, existing.cycleId, "self_review");
+    if (!open) {
+      return c.json({ error: await stageClosedError(cycleService, companyId, existing.cycleId, "self_review", "self-review") }, 403);
+    }
+  }
   const assessment = await service.submitAssessment(companyId, assessmentId);
   if (!assessment) {
     return c.json({ error: "Assessment not found" }, 404);
@@ -12213,6 +12427,8 @@ var getActiveCycleAssessment = /* @__PURE__ */ __name(async (c) => {
   }
   const cycleService = new ReviewCycleService(c.env.DB);
   const activeCycle = await cycleService.getActiveCycle(companyId);
+  const stages = activeCycle ? await cycleService.getStages(companyId, activeCycle.id) : [];
+  const cyclePayload = activeCycle ? { ...activeCycle, stages } : null;
   const service = new AssessmentService(c.env.DB);
   const assessment = await service.getActiveCycleAssessment(
     companyId,
@@ -12221,9 +12437,10 @@ var getActiveCycleAssessment = /* @__PURE__ */ __name(async (c) => {
     c.req.query("cycle") || void 0
   );
   if (!assessment) {
-    return c.json({ assessment: null, activeCycle: activeCycle || null });
+    return c.json({ assessment: null, activeCycle: cyclePayload });
   }
-  return c.json({ assessment: parseAssessment(assessment), activeCycle: activeCycle || null });
+  const released = activeCycle ? await cycleService.isManagerReviewReleased(companyId, activeCycle.id) : true;
+  return c.json({ assessment: withReleaseGating(parseAssessment(assessment), released), activeCycle: cyclePayload });
 }, "getActiveCycleAssessment");
 var getTeamPendingAssessments = /* @__PURE__ */ __name(async (c) => {
   const companyId = c.get("companyId");
@@ -12245,6 +12462,27 @@ var getTeamAnalytics = /* @__PURE__ */ __name(async (c) => {
   const analytics = await service.getTeamAnalytics(companyId, employeeId);
   return c.json(analytics);
 }, "getTeamAnalytics");
+var getAssessmentEvidence = /* @__PURE__ */ __name(async (c) => {
+  const companyId = c.get("companyId");
+  const callerId = c.get("employeeId");
+  const role = c.get("role");
+  const assessmentId = c.req.param("id");
+  if (!callerId) return c.json({ error: "Unauthorized: No employee ID found" }, 401);
+  if (!assessmentId) return c.json({ error: "Assessment ID is required" }, 400);
+  const service = new AssessmentService(c.env.DB);
+  const assessment = await service.getAssessmentById(companyId, assessmentId);
+  if (!assessment) return c.json({ error: "Assessment not found" }, 404);
+  if (!isAdminRole(role) && assessment.employeeId !== callerId) {
+    const db2 = drizzle(c.env.DB, { schema: schema_exports });
+    const owner = await db2.query.employees.findFirst({ where: eq(employees.id, assessment.employeeId) });
+    if (!owner || owner.managerId !== callerId) {
+      return c.json({ error: "Forbidden" }, 403);
+    }
+  }
+  const db = drizzle(c.env.DB, { schema: schema_exports });
+  const evidence = await db.select().from(employeeDocuments).where(and(eq(employeeDocuments.companyId, companyId), eq(employeeDocuments.linkedAssessmentId, assessmentId))).orderBy(desc(employeeDocuments.createdAt)).all();
+  return c.json(evidence);
+}, "getAssessmentEvidence");
 var submitManagerReview = /* @__PURE__ */ __name(async (c) => {
   const companyId = c.get("companyId");
   const employeeId = c.get("employeeId");
@@ -12261,6 +12499,16 @@ var submitManagerReview = /* @__PURE__ */ __name(async (c) => {
     return c.json({ error: "A manager rating is required" }, 400);
   }
   const service = new AssessmentService(c.env.DB);
+  if (!isAdminRole(role)) {
+    const existing = await service.getAssessmentById(companyId, assessmentId);
+    if (existing?.cycleId) {
+      const cycleService = new ReviewCycleService(c.env.DB);
+      const open = await cycleService.isStageOpen(companyId, existing.cycleId, "manager_review");
+      if (!open) {
+        return c.json({ error: await stageClosedError(cycleService, companyId, existing.cycleId, "manager_review", "manager review") }, 403);
+      }
+    }
+  }
   const assessment = await service.submitManagerReview(companyId, assessmentId, employeeId, role, {
     managerRating,
     managerComment
@@ -12307,6 +12555,351 @@ var getMyPerformanceSummary = /* @__PURE__ */ __name(async (c) => {
     pendingTeamReviews: teamPending.length
   });
 }, "getMyPerformanceSummary");
+
+// src/services/peerReview.service.ts
+var ADMIN_ROLES3 = ["SUPER_ADMIN", "HR_ADMIN"];
+var PeerReviewService = class {
+  static {
+    __name(this, "PeerReviewService");
+  }
+  db;
+  constructor(dbBinding) {
+    this.db = drizzle(dbBinding, { schema: schema_exports });
+  }
+  // Employee nominates one or more colleagues to peer-review them this cycle.
+  async nominate(companyId, cycleId, revieweeId, peerIds) {
+    const uniquePeers = [...new Set(peerIds)].filter((id) => id && id !== revieweeId);
+    if (uniquePeers.length === 0) {
+      throw new Error("Select at least one peer reviewer");
+    }
+    const existing = await this.db.query.peerReviews.findMany({
+      where: and(
+        eq(peerReviews.companyId, companyId),
+        eq(peerReviews.cycleId, cycleId),
+        eq(peerReviews.revieweeId, revieweeId),
+        eq(peerReviews.direction, "peer")
+      )
+    });
+    const alreadyNominated = new Set(existing.filter((r) => r.status !== "rejected").map((r) => r.reviewerId));
+    const toInsert = uniquePeers.filter((id) => !alreadyNominated.has(id));
+    if (toInsert.length === 0) return [];
+    const rows = toInsert.map((peerId) => ({
+      id: `PR-${crypto.randomUUID().split("-")[0].toUpperCase()}`,
+      companyId,
+      cycleId,
+      revieweeId,
+      reviewerId: peerId,
+      direction: "peer",
+      status: "nominated",
+      nominatedById: revieweeId
+    }));
+    await this.db.insert(peerReviews).values(rows);
+    return rows;
+  }
+  // Everyone I've nominated to review me this cycle, with their status.
+  async getMyNominations(companyId, revieweeId, cycleId) {
+    return this.db.select({
+      id: peerReviews.id,
+      reviewerId: peerReviews.reviewerId,
+      reviewerName: employees.name,
+      reviewerLastName: employees.lastName,
+      avatar: employees.avatar,
+      status: peerReviews.status,
+      submittedAt: peerReviews.submittedAt
+    }).from(peerReviews).innerJoin(employees, eq(peerReviews.reviewerId, employees.id)).where(and(
+      eq(peerReviews.companyId, companyId),
+      eq(peerReviews.revieweeId, revieweeId),
+      eq(peerReviews.cycleId, cycleId),
+      eq(peerReviews.direction, "peer")
+    )).orderBy(desc(peerReviews.createdAt)).all();
+  }
+  // Nominations awaiting this manager's approval, for their direct reports.
+  async getTeamPendingApprovals(companyId, managerId) {
+    const reviewee = employees;
+    return this.db.select({
+      id: peerReviews.id,
+      revieweeId: peerReviews.revieweeId,
+      revieweeName: reviewee.name,
+      revieweeLastName: reviewee.lastName,
+      reviewerId: peerReviews.reviewerId,
+      cycleId: peerReviews.cycleId,
+      createdAt: peerReviews.createdAt
+    }).from(peerReviews).innerJoin(reviewee, eq(peerReviews.revieweeId, reviewee.id)).where(and(
+      eq(peerReviews.companyId, companyId),
+      eq(peerReviews.status, "nominated"),
+      eq(peerReviews.direction, "peer"),
+      eq(reviewee.managerId, managerId)
+    )).orderBy(desc(peerReviews.createdAt)).all();
+  }
+  // Reviewer names attached separately (small helper) since the query above
+  // already joins on reviewee — callers that need reviewer identity too can
+  // batch-resolve via this.
+  async getReviewerNames(companyId, reviewerIds) {
+    const map = /* @__PURE__ */ new Map();
+    if (reviewerIds.length === 0) return map;
+    const rows = await this.db.query.employees.findMany({
+      where: and(eq(employees.companyId, companyId), inArray(employees.id, reviewerIds))
+    });
+    for (const r of rows) map.set(r.id, { name: r.name, lastName: r.lastName });
+    return map;
+  }
+  async approveNomination(companyId, id, approverId, approverRole, approve3) {
+    const nomination = await this.db.query.peerReviews.findFirst({
+      where: and(eq(peerReviews.id, id), eq(peerReviews.companyId, companyId))
+    });
+    if (!nomination) return null;
+    const isAdmin = !!approverRole && ADMIN_ROLES3.includes(approverRole);
+    if (!isAdmin) {
+      const reviewee = await this.db.query.employees.findFirst({ where: eq(employees.id, nomination.revieweeId) });
+      if (!reviewee || reviewee.managerId !== approverId) return null;
+    }
+    const result = await this.db.update(peerReviews).set({
+      status: approve3 ? "approved" : "rejected",
+      approvedById: approverId,
+      approvedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    }).where(eq(peerReviews.id, id)).returning();
+    return result[0];
+  }
+  // Peer/upward reviews this employee has been asked to write (approved,
+  // not yet submitted) — their "Reviews To Write" queue.
+  async getAssignedToMe(companyId, reviewerId, cycleId) {
+    return this.db.select({
+      id: peerReviews.id,
+      revieweeId: peerReviews.revieweeId,
+      revieweeName: employees.name,
+      revieweeLastName: employees.lastName,
+      avatar: employees.avatar,
+      direction: peerReviews.direction,
+      status: peerReviews.status
+    }).from(peerReviews).innerJoin(employees, eq(peerReviews.revieweeId, employees.id)).where(and(
+      eq(peerReviews.companyId, companyId),
+      eq(peerReviews.reviewerId, reviewerId),
+      eq(peerReviews.cycleId, cycleId),
+      eq(peerReviews.status, "approved")
+    )).orderBy(desc(peerReviews.createdAt)).all();
+  }
+  async submitReview(companyId, id, reviewerId, data) {
+    const review = await this.db.query.peerReviews.findFirst({
+      where: and(eq(peerReviews.id, id), eq(peerReviews.companyId, companyId))
+    });
+    if (!review || review.reviewerId !== reviewerId || review.status !== "approved") return null;
+    const result = await this.db.update(peerReviews).set({
+      rating: data.rating,
+      strengths: data.strengths || null,
+      improvements: data.improvements || null,
+      comment: data.comment || null,
+      status: "submitted",
+      submittedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    }).where(eq(peerReviews.id, id)).returning();
+    return result[0];
+  }
+  // Upward review: no nomination/approval gate — an employee reviews their
+  // own manager directly. Upserts so re-submitting during the window edits
+  // the same row instead of piling up duplicates.
+  async submitUpwardReview(companyId, cycleId, employeeId, managerId, data) {
+    const existing = await this.db.query.peerReviews.findFirst({
+      where: and(
+        eq(peerReviews.companyId, companyId),
+        eq(peerReviews.cycleId, cycleId),
+        eq(peerReviews.reviewerId, employeeId),
+        eq(peerReviews.revieweeId, managerId),
+        eq(peerReviews.direction, "upward")
+      )
+    });
+    const values = {
+      rating: data.rating,
+      strengths: data.strengths || null,
+      improvements: data.improvements || null,
+      comment: data.comment || null,
+      status: "submitted",
+      submittedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    if (existing) {
+      const result2 = await this.db.update(peerReviews).set(values).where(eq(peerReviews.id, existing.id)).returning();
+      return result2[0];
+    }
+    const id = `UR-${crypto.randomUUID().split("-")[0].toUpperCase()}`;
+    const result = await this.db.insert(peerReviews).values({
+      id,
+      companyId,
+      cycleId,
+      revieweeId: managerId,
+      reviewerId: employeeId,
+      direction: "upward",
+      ...values
+    }).returning();
+    return result[0];
+  }
+  // Submitted reviews written about me (anonymized on the reviewer side by
+  // the caller/controller — this just returns the raw rows).
+  async getReceivedReviews(companyId, revieweeId, cycleId) {
+    return this.db.query.peerReviews.findMany({
+      where: and(
+        eq(peerReviews.companyId, companyId),
+        eq(peerReviews.revieweeId, revieweeId),
+        eq(peerReviews.cycleId, cycleId),
+        eq(peerReviews.status, "submitted")
+      )
+    });
+  }
+  async getCompanyReviews(companyId, cycleId) {
+    const conditions = [eq(peerReviews.companyId, companyId)];
+    if (cycleId) conditions.push(eq(peerReviews.cycleId, cycleId));
+    const reviewee = employees;
+    return this.db.select({
+      id: peerReviews.id,
+      revieweeId: peerReviews.revieweeId,
+      revieweeName: reviewee.name,
+      revieweeLastName: reviewee.lastName,
+      reviewerId: peerReviews.reviewerId,
+      direction: peerReviews.direction,
+      status: peerReviews.status,
+      rating: peerReviews.rating,
+      submittedAt: peerReviews.submittedAt,
+      createdAt: peerReviews.createdAt
+    }).from(peerReviews).innerJoin(reviewee, eq(peerReviews.revieweeId, reviewee.id)).where(and(...conditions)).orderBy(desc(peerReviews.createdAt)).all();
+  }
+};
+
+// src/controllers/employee/peerReview.controller.ts
+var isAdminRole2 = /* @__PURE__ */ __name((role) => role === "SUPER_ADMIN" || role === "HR_ADMIN", "isAdminRole");
+var nominatePeers = /* @__PURE__ */ __name(async (c) => {
+  const companyId = c.get("companyId");
+  const employeeId = c.get("employeeId");
+  const role = c.get("role");
+  if (!employeeId) return c.json({ error: "Unauthorized: No employee ID found" }, 401);
+  const cycleService = new ReviewCycleService(c.env.DB);
+  const activeCycle = await cycleService.getActiveCycle(companyId);
+  if (!activeCycle) return c.json({ error: "No review cycle is open yet." }, 400);
+  if (!isAdminRole2(role)) {
+    const open = await cycleService.isStageOpen(companyId, activeCycle.id, "select_peers");
+    if (!open) return c.json({ error: "The peer reviewer selection window is closed." }, 403);
+  }
+  const { peerIds } = await c.req.json();
+  if (!Array.isArray(peerIds) || peerIds.length === 0) {
+    return c.json({ error: "peerIds is required" }, 400);
+  }
+  const service = new PeerReviewService(c.env.DB);
+  try {
+    const rows = await service.nominate(companyId, activeCycle.id, employeeId, peerIds);
+    return c.json({ nominated: rows.length }, 201);
+  } catch (error) {
+    return c.json({ error: error.message }, 400);
+  }
+}, "nominatePeers");
+var getMyNominations = /* @__PURE__ */ __name(async (c) => {
+  const companyId = c.get("companyId");
+  const employeeId = c.get("employeeId");
+  if (!employeeId) return c.json({ error: "Unauthorized: No employee ID found" }, 401);
+  const cycleService = new ReviewCycleService(c.env.DB);
+  const activeCycle = await cycleService.getActiveCycle(companyId);
+  if (!activeCycle) return c.json([]);
+  const service = new PeerReviewService(c.env.DB);
+  const nominations = await service.getMyNominations(companyId, employeeId, activeCycle.id);
+  return c.json(nominations);
+}, "getMyNominations");
+var getTeamPendingApprovals = /* @__PURE__ */ __name(async (c) => {
+  const companyId = c.get("companyId");
+  const employeeId = c.get("employeeId");
+  if (!employeeId) return c.json({ error: "Unauthorized: No employee ID found" }, 401);
+  const service = new PeerReviewService(c.env.DB);
+  const pending = await service.getTeamPendingApprovals(companyId, employeeId);
+  const reviewerNames = await service.getReviewerNames(companyId, pending.map((p) => p.reviewerId));
+  const withReviewerNames = pending.map((p) => ({
+    ...p,
+    reviewerName: reviewerNames.get(p.reviewerId)?.name || "Unknown",
+    reviewerLastName: reviewerNames.get(p.reviewerId)?.lastName || ""
+  }));
+  return c.json(withReviewerNames);
+}, "getTeamPendingApprovals");
+var approveNomination = /* @__PURE__ */ __name(async (c) => {
+  const companyId = c.get("companyId");
+  const employeeId = c.get("employeeId");
+  const role = c.get("role");
+  const id = c.req.param("id");
+  if (!employeeId) return c.json({ error: "Unauthorized: No employee ID found" }, 401);
+  const { approve: approve3 } = await c.req.json();
+  const cycleService = new ReviewCycleService(c.env.DB);
+  const service = new PeerReviewService(c.env.DB);
+  const nomination = await service.approveNomination(companyId, id, employeeId, role, approve3 !== false);
+  if (!nomination) return c.json({ error: "Nomination not found, or you are not this employee's manager" }, 404);
+  if (!isAdminRole2(role)) {
+    const open = await cycleService.isStageOpen(companyId, nomination.cycleId, "peer_approval");
+    if (!open) {
+      return c.json({ error: "The peer reviewer approval window is closed.", nomination }, 200);
+    }
+  }
+  return c.json(nomination);
+}, "approveNomination");
+var getAssignedToMe = /* @__PURE__ */ __name(async (c) => {
+  const companyId = c.get("companyId");
+  const employeeId = c.get("employeeId");
+  if (!employeeId) return c.json({ error: "Unauthorized: No employee ID found" }, 401);
+  const cycleService = new ReviewCycleService(c.env.DB);
+  const activeCycle = await cycleService.getActiveCycle(companyId);
+  if (!activeCycle) return c.json([]);
+  const service = new PeerReviewService(c.env.DB);
+  const assigned = await service.getAssignedToMe(companyId, employeeId, activeCycle.id);
+  return c.json(assigned);
+}, "getAssignedToMe");
+var submitPeerReview = /* @__PURE__ */ __name(async (c) => {
+  const companyId = c.get("companyId");
+  const employeeId = c.get("employeeId");
+  const role = c.get("role");
+  const id = c.req.param("id");
+  if (!employeeId) return c.json({ error: "Unauthorized: No employee ID found" }, 401);
+  const data = await c.req.json();
+  if (!data.rating) return c.json({ error: "A rating is required" }, 400);
+  const service = new PeerReviewService(c.env.DB);
+  const cycleService = new ReviewCycleService(c.env.DB);
+  const review = await service.submitReview(companyId, id, employeeId, data);
+  if (!review) return c.json({ error: "Review not found, not assigned to you, or already submitted" }, 404);
+  if (!isAdminRole2(role)) {
+    const open = await cycleService.isStageOpen(companyId, review.cycleId, "peer_upward_review");
+    if (!open) return c.json({ error: "The peer & upward review window is closed.", review }, 200);
+  }
+  return c.json(review);
+}, "submitPeerReview");
+var submitUpwardReview = /* @__PURE__ */ __name(async (c) => {
+  const companyId = c.get("companyId");
+  const employeeId = c.get("employeeId");
+  const role = c.get("role");
+  if (!employeeId) return c.json({ error: "Unauthorized: No employee ID found" }, 401);
+  const cycleService = new ReviewCycleService(c.env.DB);
+  const activeCycle = await cycleService.getActiveCycle(companyId);
+  if (!activeCycle) return c.json({ error: "No review cycle is open yet." }, 400);
+  if (!isAdminRole2(role)) {
+    const open = await cycleService.isStageOpen(companyId, activeCycle.id, "peer_upward_review");
+    if (!open) return c.json({ error: "The peer & upward review window is closed." }, 403);
+  }
+  const employeeService = new EmployeeService(c.env.DB);
+  const profile = await employeeService.getEmployeeProfile(companyId, employeeId);
+  if (!profile?.managerId) {
+    return c.json({ error: "You don't have a manager assigned to review." }, 400);
+  }
+  const data = await c.req.json();
+  if (!data.rating) return c.json({ error: "A rating is required" }, 400);
+  const service = new PeerReviewService(c.env.DB);
+  const review = await service.submitUpwardReview(companyId, activeCycle.id, employeeId, profile.managerId, data);
+  return c.json(review);
+}, "submitUpwardReview");
+var getMyReceivedReviews = /* @__PURE__ */ __name(async (c) => {
+  const companyId = c.get("companyId");
+  const employeeId = c.get("employeeId");
+  if (!employeeId) return c.json({ error: "Unauthorized: No employee ID found" }, 401);
+  const cycleService = new ReviewCycleService(c.env.DB);
+  const activeCycle = await cycleService.getActiveCycle(companyId);
+  if (!activeCycle) return c.json({ reviews: [], released: true });
+  const released = await cycleService.isManagerReviewReleased(companyId, activeCycle.id);
+  if (!released) return c.json({ reviews: [], released: false });
+  const service = new PeerReviewService(c.env.DB);
+  const reviews = await service.getReceivedReviews(companyId, employeeId, activeCycle.id);
+  const anonymized = reviews.map(({ reviewerId, ...rest }) => rest);
+  return c.json({ reviews: anonymized, released: true, ratingScale: RATING_SCALE });
+}, "getMyReceivedReviews");
 
 // src/services/reports.service.ts
 var CHART_COLORS = [
@@ -13001,7 +13594,7 @@ employeeRoutes.patch("/attendance/team-requests/:id/status", updateTeamOvertimeS
 employeeRoutes.post("/feedback", sendShoutout);
 employeeRoutes.get("/feedback", getShoutouts);
 employeeRoutes.get("/goals", getMyGoals);
-employeeRoutes.get("/goals/company", getCompanyObjectives);
+employeeRoutes.get("/goals/objectives", getMyObjectives);
 employeeRoutes.post("/goals", createGoal);
 employeeRoutes.patch("/goals/:id", updateGoalProgress);
 employeeRoutes.get("/goals/team", getTeamGoals);
@@ -13017,6 +13610,15 @@ employeeRoutes.post("/assessments", createAssessment);
 employeeRoutes.put("/assessments/:id", updateAssessment);
 employeeRoutes.post("/assessments/:id/submit", submitAssessment);
 employeeRoutes.post("/assessments/:id/manager-review", submitManagerReview);
+employeeRoutes.get("/assessments/:id/evidence", getAssessmentEvidence);
+employeeRoutes.post("/peer-reviews/nominate", nominatePeers);
+employeeRoutes.get("/peer-reviews/my-nominations", getMyNominations);
+employeeRoutes.get("/peer-reviews/team-pending-approval", getTeamPendingApprovals);
+employeeRoutes.get("/peer-reviews/assigned-to-me", getAssignedToMe);
+employeeRoutes.get("/peer-reviews/received", getMyReceivedReviews);
+employeeRoutes.post("/peer-reviews/upward", submitUpwardReview);
+employeeRoutes.patch("/peer-reviews/:id/approve", approveNomination);
+employeeRoutes.post("/peer-reviews/:id/submit", submitPeerReview);
 employeeRoutes.route("/benefits", benefits_employee_routes_default);
 var employee_routes_default = employeeRoutes;
 
@@ -13563,6 +14165,23 @@ var deleteCycle = /* @__PURE__ */ __name(async (c) => {
     return c.json({ error: error.message }, 400);
   }
 }, "deleteCycle");
+var getCycleStages = /* @__PURE__ */ __name(async (c) => {
+  const companyId = c.get("companyId");
+  const cycleId = c.req.param("id");
+  const service = new ReviewCycleService(c.env.DB);
+  const stages = await service.getStages(companyId, cycleId);
+  return c.json(stages);
+}, "getCycleStages");
+var updateCycleStage = /* @__PURE__ */ __name(async (c) => {
+  const companyId = c.get("companyId");
+  const cycleId = c.req.param("id");
+  const stageId = c.req.param("stageId");
+  const data = await c.req.json();
+  const service = new ReviewCycleService(c.env.DB);
+  const stage = await service.updateStage(companyId, cycleId, stageId, data);
+  if (!stage) return c.json({ error: "Stage not found" }, 404);
+  return c.json(stage);
+}, "updateCycleStage");
 
 // src/middlewares/role.middleware.ts
 var requireRole = /* @__PURE__ */ __name((...allowedRoles) => {
@@ -15830,8 +16449,9 @@ var getCompanyAnalytics = /* @__PURE__ */ __name(async (c) => {
 var getCompanyGoals = /* @__PURE__ */ __name(async (c) => {
   const companyId = c.get("companyId");
   const scope = c.req.query("scope") || void 0;
+  const departmentId = c.req.query("departmentId") || void 0;
   const service = new GoalService(c.env.DB);
-  const rows = await service.getCompanyGoals(companyId, scope);
+  const rows = await service.getCompanyGoals(companyId, scope, departmentId);
   return c.json(rows.map((g) => ({ ...g, keyResults: g.keyResults ? JSON.parse(g.keyResults) : [] })));
 }, "getCompanyGoals");
 var createCompanyGoal = /* @__PURE__ */ __name(async (c) => {
@@ -15841,15 +16461,26 @@ var createCompanyGoal = /* @__PURE__ */ __name(async (c) => {
   if (!body.employeeOwnerId || !body.title) {
     return c.json({ error: "employeeOwnerId and title are required" }, 400);
   }
+  const scope = body.scope || "company";
+  if (scope === "department" && !body.departmentId) {
+    return c.json({ error: "departmentId is required for a department-scoped objective" }, 400);
+  }
   const service = new GoalService(c.env.DB);
   const { id } = await service.createGoal(
     companyId,
     body.employeeOwnerId,
-    { ...body, scope: body.scope || "company" },
+    { ...body, scope },
     creatorId
   );
   return c.json({ id, message: "Objective created" }, 201);
 }, "createCompanyGoal");
+var getCompanyPeerReviews = /* @__PURE__ */ __name(async (c) => {
+  const companyId = c.get("companyId");
+  const cycleId = c.req.query("cycleId") || void 0;
+  const service = new PeerReviewService(c.env.DB);
+  const reviews = await service.getCompanyReviews(companyId, cycleId);
+  return c.json({ reviews, ratingScale: RATING_SCALE });
+}, "getCompanyPeerReviews");
 
 // src/controllers/admin/training.controller.ts
 var getEmployeeTrainings = /* @__PURE__ */ __name(async (c) => {
@@ -15984,10 +16615,13 @@ adminRoutes.put("/performance/cycles/:id", adminOnly5, edit2("performance"), upd
 adminRoutes.post("/performance/cycles/:id/activate", adminOnly5, edit2("performance"), activateCycle);
 adminRoutes.post("/performance/cycles/:id/close", adminOnly5, edit2("performance"), closeCycle);
 adminRoutes.delete("/performance/cycles/:id", adminOnly5, edit2("performance"), deleteCycle);
+adminRoutes.get("/performance/cycles/:id/stages", adminOnly5, view3("performance"), getCycleStages);
+adminRoutes.put("/performance/cycles/:id/stages/:stageId", adminOnly5, edit2("performance"), updateCycleStage);
 adminRoutes.get("/performance/analytics", adminOnly5, view3("performance"), getCompanyAnalytics);
 adminRoutes.get("/performance/assessments", adminOnly5, view3("performance"), getCompanyAssessments);
 adminRoutes.get("/performance/goals", adminOnly5, view3("performance"), getCompanyGoals);
 adminRoutes.post("/performance/goals", adminOnly5, create("performance"), createCompanyGoal);
+adminRoutes.get("/performance/peer-reviews", adminOnly5, view3("performance"), getCompanyPeerReviews);
 adminRoutes.get("/training/employee/:id", adminOnly5, view3("performance"), getEmployeeTrainings);
 adminRoutes.post("/training/employee/:id", adminOnly5, create("performance"), addEmployeeTraining);
 adminRoutes.route("/payroll", payroll_routes_default);

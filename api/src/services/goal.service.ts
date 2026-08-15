@@ -1,6 +1,6 @@
 import { D1Database } from '@cloudflare/workers-types';
 import { drizzle } from 'drizzle-orm/d1';
-import { eq, and, desc, inArray } from 'drizzle-orm';
+import { eq, and, or, desc, inArray } from 'drizzle-orm';
 import * as schema from '../db/schema';
 
 const ADMIN_ROLES = ['SUPER_ADMIN', 'HR_ADMIN'];
@@ -23,6 +23,18 @@ export class GoalService {
 
   async createGoal(companyId: string, employeeId: string, data: any, assignedById?: string) {
     const id = `GOAL-${crypto.randomUUID().split('-')[0].toUpperCase()}`;
+
+    // Resolve the department name once here so every reader (admin browse,
+    // employee alignment view) gets a consistent label without needing its
+    // own join — same denormalization convention as employees.department.
+    let departmentName: string | null = data.departmentName || null;
+    if (data.departmentId && !departmentName) {
+      const dept = await this.db.query.departments.findFirst({
+        where: and(eq(schema.departments.id, data.departmentId), eq(schema.departments.companyId, companyId)),
+      });
+      departmentName = dept?.name || null;
+    }
+
     await this.db.insert(schema.goals).values({
       id,
       companyId,
@@ -37,6 +49,8 @@ export class GoalService {
       scope: data.scope || 'individual',
       assignedById: assignedById || null,
       parentGoalId: data.parentGoalId || null,
+      departmentId: data.scope === 'department' ? (data.departmentId || null) : null,
+      departmentName: data.scope === 'department' ? departmentName : null,
     });
     return { id };
   }
@@ -96,10 +110,12 @@ export class GoalService {
       .all();
   }
 
-  // Company-wide browse for HR/Admin, optionally filtered by scope (e.g. only 'company' objectives).
-  async getCompanyGoals(companyId: string, scope?: string) {
+  // Company-wide browse for HR/Admin, optionally filtered by scope (e.g. only
+  // 'company' objectives) and/or a specific department.
+  async getCompanyGoals(companyId: string, scope?: string, departmentId?: string) {
     const conditions = [eq(schema.goals.companyId, companyId)];
     if (scope) conditions.push(eq(schema.goals.scope, scope));
+    if (departmentId) conditions.push(eq(schema.goals.departmentId, departmentId));
 
     return this.db
       .select({
@@ -117,11 +133,32 @@ export class GoalService {
         dueDate: schema.goals.dueDate,
         scope: schema.goals.scope,
         parentGoalId: schema.goals.parentGoalId,
+        departmentId: schema.goals.departmentId,
+        departmentName: schema.goals.departmentName,
         createdAt: schema.goals.createdAt,
       })
       .from(schema.goals)
       .innerJoin(schema.employees, eq(schema.goals.employeeId, schema.employees.id))
       .where(and(...conditions))
+      .orderBy(desc(schema.goals.createdAt))
+      .all();
+  }
+
+  // The strategic objectives an employee should see themselves aligned to:
+  // every company-wide objective, plus their own department's (if any and if
+  // they belong to one) — so different departments can carry different
+  // objectives without employees seeing every other department's goals.
+  async getObjectivesForEmployee(companyId: string, employeeId: string) {
+    const employee = await this.db.query.employees.findFirst({ where: eq(schema.employees.id, employeeId) });
+
+    const scopeConditions = employee?.departmentId
+      ? or(eq(schema.goals.scope, 'company'), and(eq(schema.goals.scope, 'department'), eq(schema.goals.departmentId, employee.departmentId)))
+      : eq(schema.goals.scope, 'company');
+
+    return this.db
+      .select()
+      .from(schema.goals)
+      .where(and(eq(schema.goals.companyId, companyId), scopeConditions))
       .orderBy(desc(schema.goals.createdAt))
       .all();
   }

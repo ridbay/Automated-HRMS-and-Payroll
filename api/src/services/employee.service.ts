@@ -286,7 +286,7 @@ export class EmployeeService {
     return { success: true };
   }
 
-  async addDocument(companyId: string, employeeId: string, bucket: R2Bucket, data: { name: string; type: string; file: File }) {
+  async addDocument(companyId: string, employeeId: string, bucket: R2Bucket, data: { name: string; type: string; file: File; linkedAssessmentId?: string }) {
     const documentId = `DOC-${Math.floor(1000 + Math.random() * 9000)}`;
     const fileKey = `companies/${companyId}/employees/${employeeId}/documents/${documentId}-${data.file.name}`;
 
@@ -303,6 +303,7 @@ export class EmployeeService {
       type: data.type,
       fileKey,
       status: 'Active',
+      linkedAssessmentId: data.linkedAssessmentId || null,
     };
 
     await this.db.insert(employeeDocuments).values(newDocument);

@@ -16,6 +16,8 @@ import {
   Clock,
   Sparkles,
   Ghost,
+  Users2,
+  Settings2,
 } from 'lucide-react';
 import {
   BarChart,
@@ -38,9 +40,14 @@ import {
   useAdminGoals,
   useCreateCompanyGoal,
   useShoutouts,
+  useCycleStages,
+  useUpdateCycleStage,
+  useAdminPeerReviews,
+  useDepartments,
 } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import { usePopup } from '../../components/PopupProvider';
+import { StageTimeline, DeadlineBanner } from '../../components/StageTimeline';
 
 const DIST_COLORS = ['#ef4444', '#f97316', '#3b82f6', '#8b5cf6', '#10b981'];
 
@@ -58,12 +65,12 @@ const ASSESSMENT_STATUS_STYLES: Record<string, string> = {
 };
 
 const emptyCycleForm = { name: '', startDate: '', endDate: '', selfReviewDueDate: '', managerReviewDueDate: '' };
-const emptyGoalForm = { title: '', description: '', scope: 'company', dueDate: '' };
+const emptyGoalForm = { title: '', description: '', scope: 'company', departmentId: '', dueDate: '' };
 
 const PerformanceManagement: React.FC = () => {
   const { user } = useAuth();
   const { confirm } = usePopup();
-  const [activeTab, setActiveTab] = useState<'overview' | 'cycles' | 'reviews' | 'goals' | 'recognition'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'cycles' | 'reviews' | '360' | 'goals' | 'recognition'>('overview');
 
   const { data: cyclesData } = useReviewCycles();
   const cycles = cyclesData?.cycles || [];
@@ -73,6 +80,7 @@ const PerformanceManagement: React.FC = () => {
   const [analyticsCycleId, setAnalyticsCycleId] = useState<string>('');
   const effectiveCycleId = analyticsCycleId || activeCycle?.id || '';
   const { data: analytics } = useAdminPerformanceAnalytics(effectiveCycleId || undefined);
+  const { data: activeCycleStages = [] } = useCycleStages(activeCycle?.id);
 
   const createCycle = useCreateReviewCycle();
   const activateCycle = useActivateReviewCycle();
@@ -82,6 +90,38 @@ const PerformanceManagement: React.FC = () => {
   const [showCycleModal, setShowCycleModal] = useState(false);
   const [cycleForm, setCycleForm] = useState(emptyCycleForm);
   const [cycleError, setCycleError] = useState<string | null>(null);
+
+  // --- Stage editor ---
+  const [editingStagesCycle, setEditingStagesCycle] = useState<any>(null);
+  const { data: editingStages = [] } = useCycleStages(editingStagesCycle?.id);
+  const [stageDrafts, setStageDrafts] = useState<Record<string, { startDate: string; dueDate: string }>>({});
+  const updateStage = useUpdateCycleStage();
+
+  const openStageEditor = (cycle: any) => {
+    setEditingStagesCycle(cycle);
+    setStageDrafts({});
+  };
+
+  const stageDraftFor = (stage: any) =>
+    stageDrafts[stage.id] || { startDate: stage.startDate || '', dueDate: stage.dueDate || '' };
+
+  const handleSaveStages = () => {
+    if (!editingStagesCycle) return;
+    editingStages.forEach((stage: any) => {
+      const draft = stageDrafts[stage.id];
+      if (!draft) return;
+      updateStage.mutate({
+        cycleId: editingStagesCycle.id,
+        stageId: stage.id,
+        data: { startDate: draft.startDate || null, dueDate: draft.dueDate || null },
+      });
+    });
+    setEditingStagesCycle(null);
+  };
+
+  // --- 360 reviews browse ---
+  const { data: peerReviewsData } = useAdminPeerReviews(effectiveCycleId || undefined);
+  const peerReviews = peerReviewsData?.reviews || [];
 
   const handleCreateCycle = () => {
     if (!cycleForm.name.trim()) {
@@ -124,13 +164,21 @@ const PerformanceManagement: React.FC = () => {
 
   // --- Goals browse ---
   const [goalScopeFilter, setGoalScopeFilter] = useState<string>('');
-  const { data: companyGoals = [] } = useAdminGoals(goalScopeFilter || undefined);
+  const [goalDepartmentFilter, setGoalDepartmentFilter] = useState<string>('');
+  const { data: companyGoals = [] } = useAdminGoals(goalScopeFilter || undefined, goalDepartmentFilter || undefined);
+  const { data: departments = [] } = useDepartments();
   const createCompanyGoal = useCreateCompanyGoal();
   const [showGoalModal, setShowGoalModal] = useState(false);
   const [goalForm, setGoalForm] = useState(emptyGoalForm);
+  const [goalError, setGoalError] = useState<string | null>(null);
 
   const handleCreateGoal = () => {
     if (!goalForm.title.trim() || !user?.id) return;
+    if (goalForm.scope === 'department' && !goalForm.departmentId) {
+      setGoalError('Pick which department this objective belongs to.');
+      return;
+    }
+    setGoalError(null);
     createCompanyGoal.mutate(
       { ...goalForm, employeeOwnerId: user.id },
       {
@@ -138,6 +186,7 @@ const PerformanceManagement: React.FC = () => {
           setShowGoalModal(false);
           setGoalForm(emptyGoalForm);
         },
+        onError: (err: any) => setGoalError(err.message || 'Failed to create objective.'),
       }
     );
   };
@@ -195,6 +244,7 @@ const PerformanceManagement: React.FC = () => {
             { id: 'overview', name: 'Overview', icon: <TrendingUp size={18} /> },
             { id: 'cycles', name: 'Review Cycles', icon: <Calendar size={18} /> },
             { id: 'reviews', name: 'Reviews', icon: <Star size={18} /> },
+            { id: '360', name: '360 Reviews', icon: <Users2 size={18} /> },
             { id: 'goals', name: 'Goals', icon: <Target size={18} /> },
             { id: 'recognition', name: 'Recognition', icon: <Heart size={18} /> },
           ].map((tab) => (
@@ -215,6 +265,15 @@ const PerformanceManagement: React.FC = () => {
         <motion.div key={activeTab} initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -15 }} transition={{ duration: 0.3 }}>
           {activeTab === 'overview' && (
             <div className="space-y-8 pb-20">
+              {activeCycle && activeCycleStages.length > 0 && (
+                <div className="space-y-4">
+                  <DeadlineBanner stages={activeCycleStages} cycleName={activeCycle.name} />
+                  <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm">
+                    <StageTimeline stages={activeCycleStages} />
+                  </div>
+                </div>
+              )}
+
               <div className="flex items-center justify-between">
                 <p className="text-sm text-slate-500 font-medium">
                   Scoped to{' '}
@@ -321,6 +380,13 @@ const PerformanceManagement: React.FC = () => {
                           </button>
                         )}
                         <button
+                          onClick={() => openStageEditor(cycle)}
+                          className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 transition-all"
+                          title="Manage stage timeline"
+                        >
+                          <Settings2 size={14} />
+                        </button>
+                        <button
                           onClick={async () => {
                             if (await confirm(`Delete "${cycle.name}"? This only works if no assessments have been logged against it.`)) {
                               deleteCycle.mutate(cycle.id);
@@ -421,6 +487,56 @@ const PerformanceManagement: React.FC = () => {
             </div>
           )}
 
+          {activeTab === '360' && (
+            <div className="space-y-6 pb-20">
+              <div>
+                <h2 className="text-2xl font-black text-slate-800">360 Reviews</h2>
+                <p className="text-sm text-slate-500 font-medium">Peer nominations and upward reviews across the company for {analytics?.cycle?.name || 'the selected cycle'}.</p>
+              </div>
+              <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden">
+                {peerReviews.length === 0 ? (
+                  <div className="text-center py-20">
+                    <Users2 size={48} className="text-slate-300 mx-auto mb-4" />
+                    <p className="text-slate-400 font-medium">No peer or upward reviews yet this cycle.</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left">
+                      <thead>
+                        <tr className="border-b border-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                          <th className="px-8 py-4">Reviewee</th>
+                          <th className="px-4 py-4">Direction</th>
+                          <th className="px-4 py-4">Status</th>
+                          <th className="px-4 py-4">Rating</th>
+                          <th className="px-8 py-4">Submitted</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50">
+                        {peerReviews.map((r: any) => (
+                          <tr key={r.id} className="hover:bg-slate-50/50 transition-colors">
+                            <td className="px-8 py-4 text-sm font-black text-slate-800">{r.revieweeName} {r.revieweeLastName}</td>
+                            <td className="px-4 py-4">
+                              <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${r.direction === 'upward' ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-100 text-slate-500'}`}>
+                                {r.direction}
+                              </span>
+                            </td>
+                            <td className="px-4 py-4">
+                              <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${r.status === 'submitted' ? 'bg-emerald-50 text-emerald-600' : r.status === 'rejected' ? 'bg-rose-50 text-rose-500' : 'bg-amber-50 text-amber-600'}`}>
+                                {r.status}
+                              </span>
+                            </td>
+                            <td className="px-4 py-4 text-xs font-bold text-slate-600">{r.rating?.replace(/_/g, ' ') || '—'}</td>
+                            <td className="px-8 py-4 text-xs font-bold text-slate-400">{r.submittedAt ? new Date(r.submittedAt).toLocaleDateString() : '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {activeTab === 'goals' && (
             <div className="space-y-6 pb-20">
               <div className="flex flex-wrap justify-between items-center gap-4">
@@ -440,6 +556,18 @@ const PerformanceManagement: React.FC = () => {
                     <option value="team">Team</option>
                     <option value="individual">Individual</option>
                   </select>
+                  {goalScopeFilter === 'department' && (
+                    <select
+                      value={goalDepartmentFilter}
+                      onChange={(e) => setGoalDepartmentFilter(e.target.value)}
+                      className="px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 outline-none"
+                    >
+                      <option value="">All departments</option>
+                      {departments.map((d: any) => (
+                        <option key={d.id} value={d.id}>{d.name}</option>
+                      ))}
+                    </select>
+                  )}
                   <button
                     onClick={() => setShowGoalModal(true)}
                     className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 shadow-lg hover:scale-105 transition-all"
@@ -465,7 +593,9 @@ const PerformanceManagement: React.FC = () => {
                         </span>
                       </div>
                       <h4 className="text-sm font-black text-slate-800">{g.title}</h4>
-                      <p className="text-[10px] text-slate-400 font-bold uppercase">{g.employeeName} {g.employeeLastName} · {g.department}</p>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase">
+                        {g.scope === 'department' && g.departmentName ? g.departmentName : `${g.employeeName} ${g.employeeLastName} · ${g.department}`}
+                      </p>
                       <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
                         <div className="h-full bg-indigo-600" style={{ width: `${g.progress}%` }} />
                       </div>
@@ -643,6 +773,7 @@ const PerformanceManagement: React.FC = () => {
                 <button onClick={() => setShowGoalModal(false)} className="p-3 bg-white/10 hover:bg-white/20 rounded-2xl transition-all"><X size={20} /></button>
               </div>
               <div className="p-10 space-y-6">
+                {goalError && <div className="p-4 bg-rose-50 border border-rose-100 text-rose-600 rounded-2xl text-xs font-bold">{goalError}</div>}
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Objective Title</label>
                   <input
@@ -665,7 +796,11 @@ const PerformanceManagement: React.FC = () => {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Scope</label>
-                    <select value={goalForm.scope} onChange={(e) => setGoalForm({ ...goalForm, scope: e.target.value })} className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-700">
+                    <select
+                      value={goalForm.scope}
+                      onChange={(e) => setGoalForm({ ...goalForm, scope: e.target.value, departmentId: e.target.value === 'department' ? goalForm.departmentId : '' })}
+                      className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-700"
+                    >
                       <option value="company">Company</option>
                       <option value="department">Department</option>
                     </select>
@@ -675,15 +810,81 @@ const PerformanceManagement: React.FC = () => {
                     <input type="date" value={goalForm.dueDate} onChange={(e) => setGoalForm({ ...goalForm, dueDate: e.target.value })} className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-700" />
                   </div>
                 </div>
+                {goalForm.scope === 'department' && (
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Department</label>
+                    <select
+                      value={goalForm.departmentId}
+                      onChange={(e) => setGoalForm({ ...goalForm, departmentId: e.target.value })}
+                      className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-700"
+                    >
+                      <option value="">Select a department…</option>
+                      {departments.map((d: any) => (
+                        <option key={d.id} value={d.id}>{d.name}</option>
+                      ))}
+                    </select>
+                    <p className="text-[10px] text-slate-400 font-medium">Only visible to employees in this department, alongside any company-wide objectives.</p>
+                  </div>
+                )}
               </div>
               <div className="p-8 bg-slate-50 border-t border-slate-100 flex justify-end gap-4">
                 <button onClick={() => setShowGoalModal(false)} className="px-8 py-4 bg-white text-slate-500 rounded-2xl font-black text-xs uppercase tracking-widest">Cancel</button>
                 <button
-                  disabled={!goalForm.title.trim() || createCompanyGoal.isPending}
+                  disabled={!goalForm.title.trim() || (goalForm.scope === 'department' && !goalForm.departmentId) || createCompanyGoal.isPending}
                   onClick={handleCreateGoal}
                   className="px-10 py-4 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-100 disabled:opacity-50"
                 >
                   {createCompanyGoal.isPending ? 'Creating…' : 'Establish Objective'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Stage Timeline Editor */}
+      <AnimatePresence>
+        {editingStagesCycle && (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center p-6">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setEditingStagesCycle(null)} className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" />
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="relative bg-white w-full max-w-2xl rounded-[3rem] shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+              <div className="p-10 bg-indigo-600 text-white flex justify-between items-start shrink-0">
+                <div>
+                  <h2 className="text-2xl font-black mb-1">Stage Timeline</h2>
+                  <p className="text-indigo-100 text-sm font-medium">{editingStagesCycle.name} — set each stage's window. Leave dates blank for "always open."</p>
+                </div>
+                <button onClick={() => setEditingStagesCycle(null)} className="p-3 bg-white/10 hover:bg-white/20 rounded-2xl transition-all"><X size={20} /></button>
+              </div>
+              <div className="p-10 space-y-4 overflow-y-auto scrollbar-hide">
+                {editingStages.map((stage: any) => {
+                  const draft = stageDraftFor(stage);
+                  return (
+                    <div key={stage.id} className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl">
+                      <p className="flex-1 text-sm font-bold text-slate-700">{stage.name}</p>
+                      <input
+                        type="date"
+                        value={draft.startDate}
+                        onChange={(e) => setStageDrafts({ ...stageDrafts, [stage.id]: { ...draft, startDate: e.target.value } })}
+                        className="px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none"
+                      />
+                      <span className="text-slate-300 text-xs">→</span>
+                      <input
+                        type="date"
+                        value={draft.dueDate}
+                        onChange={(e) => setStageDrafts({ ...stageDrafts, [stage.id]: { ...draft, dueDate: e.target.value } })}
+                        className="px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none"
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="p-8 bg-slate-50 border-t border-slate-100 flex justify-end gap-4 shrink-0">
+                <button onClick={() => setEditingStagesCycle(null)} className="px-8 py-4 bg-white border border-slate-200 text-slate-500 rounded-2xl font-black text-xs uppercase tracking-widest">Cancel</button>
+                <button
+                  onClick={handleSaveStages}
+                  className="px-10 py-4 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-100"
+                >
+                  Save Timeline
                 </button>
               </div>
             </motion.div>

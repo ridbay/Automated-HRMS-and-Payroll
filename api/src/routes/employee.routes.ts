@@ -25,7 +25,7 @@ import { authMiddleware } from '../middlewares/auth.middleware';
 import { getMyCompensation } from '../controllers/employee/compensation.controller';
 import { getMyPayslips } from '../controllers/employee/payslip.controller';
 import { sendShoutout, getShoutouts } from '../controllers/employee/feedback.controller';
-import { getMyGoals, createGoal, updateGoalProgress, getTeamGoals, assignTeamGoal, getCompanyObjectives } from '../controllers/employee/goal.controller';
+import { getMyGoals, createGoal, updateGoalProgress, getTeamGoals, assignTeamGoal, getMyObjectives } from '../controllers/employee/goal.controller';
 import {
   getMyAssessments,
   getAssessment,
@@ -35,9 +35,20 @@ import {
   getActiveCycleAssessment,
   getTeamPendingAssessments,
   getTeamAnalytics,
+  getAssessmentEvidence,
   submitManagerReview
 } from '../controllers/employee/assessment.controller';
 import { getMyPerformanceSummary } from '../controllers/employee/performanceSummary.controller';
+import {
+  nominatePeers,
+  getMyNominations,
+  getTeamPendingApprovals,
+  approveNomination,
+  getAssignedToMe,
+  submitPeerReview,
+  submitUpwardReview,
+  getMyReceivedReviews,
+} from '../controllers/employee/peerReview.controller';
 import { getTeamReport } from '../controllers/admin/reports.controller';
 import benefitsEmployeeRoutes from './benefits-employee.routes';
 
@@ -95,9 +106,10 @@ employeeRoutes.get('/feedback', getShoutouts);
 
 // Goals / OKRs
 employeeRoutes.get('/goals', getMyGoals);
-// Read-only company/department objectives, for alignment context — must be
-// registered ahead of the `:id`-shaped routes below.
-employeeRoutes.get('/goals/company', getCompanyObjectives);
+// Read-only strategic objectives (company-wide + the caller's own
+// department's) for alignment context — must be registered ahead of the
+// `:id`-shaped routes below.
+employeeRoutes.get('/goals/objectives', getMyObjectives);
 employeeRoutes.post('/goals', createGoal);
 employeeRoutes.patch('/goals/:id', updateGoalProgress);
 
@@ -127,6 +139,20 @@ employeeRoutes.post('/assessments', createAssessment);
 employeeRoutes.put('/assessments/:id', updateAssessment);
 employeeRoutes.post('/assessments/:id/submit', submitAssessment);
 employeeRoutes.post('/assessments/:id/manager-review', submitManagerReview);
+employeeRoutes.get('/assessments/:id/evidence', getAssessmentEvidence);
+
+// 360 (peer + upward) reviews
+employeeRoutes.post('/peer-reviews/nominate', nominatePeers);
+employeeRoutes.get('/peer-reviews/my-nominations', getMyNominations);
+// Manager-scoped: nominees for direct reports awaiting approval. Registered
+// ahead of the `:id` route below for the same static-vs-dynamic reason as
+// elsewhere in this file.
+employeeRoutes.get('/peer-reviews/team-pending-approval', getTeamPendingApprovals);
+employeeRoutes.get('/peer-reviews/assigned-to-me', getAssignedToMe);
+employeeRoutes.get('/peer-reviews/received', getMyReceivedReviews);
+employeeRoutes.post('/peer-reviews/upward', submitUpwardReview);
+employeeRoutes.patch('/peer-reviews/:id/approve', approveNomination);
+employeeRoutes.post('/peer-reviews/:id/submit', submitPeerReview);
 
 // Benefits & Wellbeing self-service (plan enrollment, dependents, wellness
 // programs, claims) — all scoped to the caller via the JWT employeeId.
