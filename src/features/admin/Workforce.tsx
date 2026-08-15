@@ -1414,6 +1414,8 @@ const Workforce: React.FC = () => {
                     Save Draft
                   </button>
                   <button
+                    type="button"
+                    disabled={createEmployeeMutation.isPending || updateEmployeeMutation.isPending}
                     onClick={() => {
                       if (wizardStep === 1) {
                         const newErrors: Record<string, string> = {};
@@ -1474,7 +1476,7 @@ const Workforce: React.FC = () => {
                         };
 
                         const handleError = (error: any) => {
-                          popupAlert(error.message || "An error occurred");
+                          popupAlert(error?.message || "An error occurred");
                         };
 
                         if (formData.id) {
@@ -1484,12 +1486,17 @@ const Workforce: React.FC = () => {
                         }
                       }
                     }}
-                    className="px-12 py-4 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-100 hover:scale-105 active:scale-95 transition-all flex items-center gap-3"
+                    className={`px-12 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-100 transition-all flex items-center gap-3 ${
+                      createEmployeeMutation.isPending || updateEmployeeMutation.isPending 
+                        ? "bg-indigo-400 text-indigo-50 cursor-not-allowed" 
+                        : "bg-indigo-600 text-white hover:scale-105 active:scale-95"
+                    }`}
                   >
-                    {wizardStep === 4
-                      ? (formData.id ? "Confirm & Update Employee" : "Confirm & Create Employee")
-                      : "Next: " +
-                        (wizardStep === 3 ? "Finalize" : "Continue")}{" "}
+                    {createEmployeeMutation.isPending || updateEmployeeMutation.isPending ? "Processing..." : (
+                      wizardStep === 4
+                        ? (formData.id ? "Confirm & Update Employee" : "Confirm & Create Employee")
+                        : "Next: " + (wizardStep === 3 ? "Finalize" : "Continue")
+                    )}
                     <ArrowRight size={18} />
                   </button>
                 </div>

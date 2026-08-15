@@ -22,3 +22,4 @@ export * from '../models/assessment.model';
 export * from '../models/reviewCycle.model';
 export * from '../models/transition.model';
 export * from '../models/support.model';
+export * from '../models/controlCenter.model';

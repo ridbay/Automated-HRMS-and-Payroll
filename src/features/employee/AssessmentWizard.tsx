@@ -21,6 +21,7 @@ interface AssessmentWizardProps {
   onClose: () => void;
   cycleName: string;
   existingAssessment?: any;
+  goals?: { id: string; title: string; progress: number }[];
   onSave: (data: any) => void;
   onSubmit: (id: string) => void;
 }
@@ -30,6 +31,7 @@ const AssessmentWizard: React.FC<AssessmentWizardProps> = ({
   onClose,
   cycleName,
   existingAssessment,
+  goals = [],
   onSave,
   onSubmit
 }) => {
@@ -37,7 +39,9 @@ const AssessmentWizard: React.FC<AssessmentWizardProps> = ({
   const [assessmentData, setAssessmentData] = useState({
     achievements: existingAssessment?.achievements || [''],
     challenges: existingAssessment?.challenges || [''],
-    goalsProgress: existingAssessment?.goalsProgress || [],
+    goalsProgress: existingAssessment?.goalsProgress?.length
+      ? existingAssessment.goalsProgress
+      : goals.map((g) => ({ goalId: g.id, title: g.title, progress: g.progress, comment: '' })),
     skillRatings: existingAssessment?.skillRatings || [
       { skill: 'Technical Skills', rating: 4, comment: '' },
       { skill: 'Communication', rating: 4, comment: '' },
@@ -78,6 +82,12 @@ const AssessmentWizard: React.FC<AssessmentWizardProps> = ({
   const removeChallenge = (index: number) => {
     const updated = assessmentData.challenges.filter((_, i) => i !== index);
     setAssessmentData(prev => ({ ...prev, challenges: updated }));
+  };
+
+  const updateGoalProgressEntry = (index: number, field: string, value: any) => {
+    const updated = [...assessmentData.goalsProgress];
+    updated[index] = { ...updated[index], [field]: value };
+    setAssessmentData(prev => ({ ...prev, goalsProgress: updated }));
   };
 
   const updateSkillRating = (index: number, field: string, value: any) => {
@@ -189,13 +199,40 @@ const AssessmentWizard: React.FC<AssessmentWizardProps> = ({
           <div className="space-y-6">
             <div>
               <h3 className="text-xl font-black text-slate-800 mb-2">Goals Progress</h3>
-              <p className="text-slate-500 text-sm">Review your goals and document your progress.</p>
+              <p className="text-slate-500 text-sm">Review your active goals and document your progress this cycle.</p>
             </div>
-            <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4">
-              <p className="text-sm text-amber-700 font-medium">
-                This section will be populated with your active goals from the Objectives tab.
-              </p>
-            </div>
+            {assessmentData.goalsProgress.length === 0 ? (
+              <div className="bg-slate-50 border border-slate-100 rounded-2xl p-6 text-center">
+                <p className="text-sm text-slate-500 font-medium">
+                  You don't have any goals set yet — add some from the Objectives tab first, or skip this step.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {assessmentData.goalsProgress.map((gp: any, index: number) => (
+                  <div key={gp.goalId || index} className="bg-slate-50 p-5 rounded-2xl space-y-3">
+                    <div className="flex justify-between items-center">
+                      <h4 className="font-bold text-slate-800">{gp.title}</h4>
+                      <span className="text-sm font-black text-indigo-600">{gp.progress}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      value={gp.progress}
+                      onChange={(e) => updateGoalProgressEntry(index, 'progress', Number(e.target.value))}
+                      className="w-full accent-indigo-600"
+                    />
+                    <textarea
+                      value={gp.comment}
+                      onChange={(e) => updateGoalProgressEntry(index, 'comment', e.target.value)}
+                      placeholder="Any context on this goal's progress..."
+                      className="w-full px-4 py-3 bg-white border-none rounded-xl outline-none focus:ring-4 focus:ring-indigo-500/10 font-medium text-slate-700 resize-none h-16 text-sm"
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         );
 

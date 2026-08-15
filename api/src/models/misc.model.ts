@@ -58,9 +58,18 @@ export const employeeTrainings = sqliteTable('employee_trainings', {
 export const auditLogs = sqliteTable('audit_logs', {
   id: text('id').primaryKey(),
   companyId: text('company_id').notNull().references(() => companies.id),
+  // The employee this entry is filed under — the acting admin for
+  // company/settings-level events, or the affected employee for
+  // employee-specific events (so it also surfaces on their own Audit tab).
   employeeId: text('employee_id').notNull(),
   action: text('action').notNull(),
   actorName: text('actor_name').notNull(),
   details: text('details').notNull(),
+  // Control Center module the action originated from (e.g. 'workforce',
+  // 'roles', 'settings') — powers the Audit Logs filter/badge. Nullable so
+  // pre-existing rows (none currently written, but future ad-hoc ones) don't break.
+  module: text('module'),
+  severity: text('severity').default('info').notNull(), // 'info' | 'warning'
+  ipAddress: text('ip_address'),
   createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
 });

@@ -1,6 +1,22 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../context/AuthContext";
-import { useShoutouts, useActiveCycleAssessment, createAssessment, updateAssessment, submitAssessment } from "../../api/client";
+import {
+  useShoutouts,
+  useSendShoutout,
+  useActiveCycleAssessment,
+  createAssessment,
+  updateAssessment,
+  submitAssessment,
+  useMyGoals,
+  useCreateGoal,
+  useUpdateGoal,
+  useMyPerformanceSummary,
+  useCompanyObjectives,
+  useDirectory,
+  useMyProfile,
+  useMyAssessments,
+} from "../../api/client";
 import { motion, AnimatePresence } from "framer-motion";
 import AssessmentWizard from "./AssessmentWizard";
 import {
@@ -9,81 +25,62 @@ import {
   TrendingUp,
   Users,
   Award,
-  ChevronRight,
   Calendar,
   Star,
   MessageSquare,
   Plus,
   CheckCircle2,
-  AlertCircle,
   Zap,
   Heart,
-  BarChart3,
-  PieChart as PieChartIcon,
   Map as MapIcon,
-  ArrowUpRight,
   ArrowRight,
   User,
   Flame,
   Sparkles,
-  Filter,
   X,
   Send,
-  MoreHorizontal,
-  ChevronDown,
   Rocket,
-  BrainCircuit,
-  ThumbsUp,
   Ghost,
 } from "lucide-react";
 import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  BarChart,
-  Bar,
-  Cell,
   RadarChart,
   PolarGrid,
   PolarAngleAxis,
   PolarRadiusAxis,
   Radar,
-  PieChart,
-  Pie,
 } from "recharts";
-import {
-  MOCK_EMPLOYEES,
-  MOCK_GOALS,
-  MOCK_FEEDBACK,
-  MOCK_BADGES,
-} from "../../data/mocks";
 import Celebration from "../../components/Celebration";
 
-const performanceDistData = [
-  { name: "Unsatisfactory", count: 2, fill: "#ef4444" },
-  { name: "Needs Imp.", count: 8, fill: "#f97316" },
-  { name: "Meets Exp.", count: 65, fill: "#3b82f6" },
-  { name: "Exceeds Exp.", count: 42, fill: "#8b5cf6" },
-  { name: "Exceptional", count: 12, fill: "#10b981" },
-];
-
-const skillGapData = [
-  { subject: "Technical", current: 120, target: 150 },
-  { subject: "Leadership", current: 98, target: 130 },
-  { subject: "Strategy", current: 86, target: 130 },
-  { subject: "Communication", current: 99, target: 140 },
-  { subject: "Innovation", current: 135, target: 140 },
-];
-
 const Performance: React.FC = () => {
-  const { token, user } = useAuth();
-  const companyId = (user as any)?.companyId || "comp-1234";
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const { data: shoutouts = [] } = useShoutouts();
-  const { data: activeAssessment } = useActiveCycleAssessment('H2 2024');
+  const sendShoutout = useSendShoutout();
+  const { data: cycleData } = useActiveCycleAssessment();
+  const activeAssessment = cycleData?.assessment;
+  const activeCycle = cycleData?.activeCycle;
+  const { data: summary } = useMyPerformanceSummary();
+  const { data: myGoals = [] } = useMyGoals();
+  const { data: companyObjectives = [] } = useCompanyObjectives();
+  const { data: profile } = useMyProfile();
+  const { data: myAssessments = [] } = useMyAssessments();
+  const { data: directory = [] } = useDirectory();
+
+  // Growth tab data: most recent assessment that actually has skill ratings
+  // on it (falls back to the active cycle's in-progress one), and the
+  // matching directory record for the employee's manager.
+  const latestAssessmentWithRatings = myAssessments.find((a: any) => (a.skillRatings || []).length > 0) || activeAssessment;
+  const skillRadarData = (latestAssessmentWithRatings?.skillRatings || []).map((s: any) => ({
+    subject: s.skill,
+    current: s.rating,
+    target: Math.min(s.rating + 1, 5),
+  }));
+  const latestDevelopmentGoals = (myAssessments.find((a: any) => (a.developmentGoals || []).length > 0) || activeAssessment)?.developmentGoals || [];
+  const managerRecord = directory.find((e: any) => e.id === profile?.managerId);
+  const createGoalMutation = useCreateGoal();
+  const updateGoalMutation = useUpdateGoal();
   const [activeTab, setActiveTab] = useState<
     "dashboard" | "goals" | "reviews" | "feedback" | "growth"
   >("dashboard");
@@ -92,85 +89,90 @@ const Performance: React.FC = () => {
   const [showAssessmentWizard, setShowAssessmentWizard] = useState(false);
   const [celebrating, setCelebrating] = useState(false);
 
+  // New objective form state
+  const emptyGoalForm = { title: "", description: "", category: "individual", dueDate: "" };
+  const [goalForm, setGoalForm] = useState(emptyGoalForm);
+
+  const handleCreateGoal = () => {
+    if (!goalForm.title.trim()) return;
+    createGoalMutation.mutate(
+      { title: goalForm.title.trim(), description: goalForm.description.trim() || undefined, scope: goalForm.category, dueDate: goalForm.dueDate || undefined },
+      {
+        onSuccess: () => {
+          setShowGoalModal(false);
+          setGoalForm(emptyGoalForm);
+          triggerCelebration();
+        },
+      }
+    );
+  };
+
+  const handleMarkGoalComplete = (goal: any) => {
+    updateGoalMutation.mutate(
+      { id: goal.id, data: { progress: 100, status: "completed" } },
+      { onSuccess: () => triggerCelebration() }
+    );
+  };
+
+  const handleToggleKeyResult = (goal: any, index: number) => {
+    const updated = (goal.keyResults || []).map((kr: any, i: number) =>
+      i === index ? { ...kr, completed: !kr.completed } : kr
+    );
+    updateGoalMutation.mutate({ id: goal.id, data: { keyResults: updated } });
+  };
+
   // Recipient search state
   const [recipientQuery, setRecipientQuery] = useState("");
+  const [recipientId, setRecipientId] = useState<string | null>(null);
   const [recipientResults, setRecipientResults] = useState<
     { id: string; name: string; lastName: string }[]
   >([]);
-  const [recipientLoading, setRecipientLoading] = useState(false);
   const [showRecipientDropdown, setShowRecipientDropdown] = useState(false);
   const recipientRef = useRef<HTMLDivElement>(null);
 
   // Shoutout form state
   const [selectedType, setSelectedType] = useState<string | null>(null);
   const [shoutoutMessage, setShoutoutMessage] = useState("");
-  const [sendingShoutout, setSendingShoutout] = useState(false);
 
-  const handleSendShoutout = async () => {
-    if (!recipientQuery.trim() || !selectedType || !shoutoutMessage.trim())
-      return;
-    setSendingShoutout(true);
-    try {
-      const res = await fetch(
-        `${import.meta.env.VITE_API_URL || "http://127.0.0.1:8787"}/employee/feedback`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-company-id": companyId,
-            Authorization: `Bearer ${token || ""}`,
-          },
-          body: JSON.stringify({
-            toEmployeeName: recipientQuery.trim(),
-            type: selectedType,
-            message: shoutoutMessage.trim(),
-          }),
+  const handleSendShoutout = () => {
+    if (!recipientQuery.trim() || !selectedType || !shoutoutMessage.trim()) return;
+    sendShoutout.mutate(
+      {
+        toEmployeeName: recipientQuery.trim(),
+        toEmployeeId: recipientId || undefined,
+        type: selectedType,
+        message: shoutoutMessage.trim(),
+      },
+      {
+        onSuccess: () => {
+          setShowFeedbackModal(false);
+          setRecipientQuery("");
+          setRecipientId(null);
+          setSelectedType(null);
+          setShoutoutMessage("");
+          triggerCelebration();
         },
-      );
-      if (res.ok) {
-        setShowFeedbackModal(false);
-        setRecipientQuery("");
-        setSelectedType(null);
-        setShoutoutMessage("");
-        triggerCelebration();
       }
-    } finally {
-      setSendingShoutout(false);
-    }
+    );
   };
 
+  // NOTE: this used to hit `/admin/employees?search=`, which is gated to
+  // SUPER_ADMIN/HR_ADMIN — any regular employee or manager searching for a
+  // shoutout recipient got a silent 403. The directory endpoint is open to
+  // every authenticated employee, so filter that client-side instead.
   useEffect(() => {
-    if (!recipientQuery.trim()) {
+    const q = recipientQuery.trim().toLowerCase();
+    if (!q) {
       setRecipientResults([]);
       setShowRecipientDropdown(false);
       return;
     }
-    const timer = setTimeout(async () => {
-      setRecipientLoading(true);
-      try {
-        const res = await fetch(
-          `${import.meta.env.VITE_API_URL || "http://127.0.0.1:8787"}/admin/employees?search=${encodeURIComponent(recipientQuery)}`,
-          {
-            headers: {
-              "x-company-id": companyId,
-              Authorization: `Bearer ${token || ""}`,
-            },
-          },
-        );
-        if (res.ok) {
-          const data = await res.json();
-          const employees = Array.isArray(data) ? data : (data.employees ?? []);
-          setRecipientResults(employees.slice(0, 8));
-          setShowRecipientDropdown(true);
-        }
-      } catch {
-        // silently fail — network issue
-      } finally {
-        setRecipientLoading(false);
-      }
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [recipientQuery]);
+    const matches = directory.filter((e: any) =>
+      `${e.name || ""} ${e.lastName || ""}`.toLowerCase().includes(q)
+    );
+    setRecipientResults(matches.slice(0, 8));
+    setShowRecipientDropdown(matches.length > 0);
+  }, [recipientQuery, directory]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -191,17 +193,21 @@ const Performance: React.FC = () => {
     setTimeout(() => setCelebrating(false), 3000);
   };
 
+  const refreshAssessmentData = () => {
+    queryClient.invalidateQueries({ queryKey: ['activeCycleAssessment'] });
+    queryClient.invalidateQueries({ queryKey: ['myAssessments'] });
+    queryClient.invalidateQueries({ queryKey: ['myPerformanceSummary'] });
+  };
+
   const handleSaveAssessment = async (data: any) => {
     try {
       if (activeAssessment?.id) {
         await updateAssessment(activeAssessment.id, data);
       } else {
-        const result = await createAssessment({
-          cycleName: 'H2 2024',
-          ...data
-        });
-        // The active assessment query will refetch with the new data
+        // cycleId/cycleName are resolved server-side from whichever cycle is active.
+        await createAssessment(data);
       }
+      refreshAssessmentData();
     } catch (error) {
       console.error('Failed to save assessment:', error);
     }
@@ -210,6 +216,7 @@ const Performance: React.FC = () => {
   const handleSubmitAssessment = async (id: string) => {
     try {
       await submitAssessment(id);
+      refreshAssessmentData();
       setShowAssessmentWizard(false);
       triggerCelebration();
     } catch (error) {
@@ -229,15 +236,12 @@ const Performance: React.FC = () => {
             <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
               <TrendingUp size={20} />
             </div>
-            <span className="text-emerald-500 text-xs font-black flex items-center gap-0.5">
-              <ArrowUpRight size={14} /> +0.3
-            </span>
           </div>
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
-            Avg. Performance Score
+            Latest Rating
           </p>
           <h3 className="text-3xl font-black text-slate-800 tracking-tighter">
-            4.2{" "}
+            {summary?.avgRating ? summary.avgRating.toFixed(1) : "—"}{" "}
             <span className="text-sm font-medium text-slate-400">/ 5.0</span>
           </h3>
         </motion.div>
@@ -250,15 +254,12 @@ const Performance: React.FC = () => {
             <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
               <Target size={20} />
             </div>
-            <span className="text-emerald-500 text-xs font-black flex items-center gap-0.5">
-              <ArrowUpRight size={14} /> +12%
-            </span>
           </div>
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
             Goal Completion Rate
           </p>
           <h3 className="text-3xl font-black text-slate-800 tracking-tighter">
-            76%
+            {summary?.goalCompletionRate ?? 0}%
           </h3>
         </motion.div>
 
@@ -270,15 +271,17 @@ const Performance: React.FC = () => {
             <div className="p-2 bg-amber-50 text-amber-600 rounded-xl">
               <Star size={20} />
             </div>
-            <div className="w-6 h-6 bg-rose-500 text-white text-[10px] font-black rounded-full flex items-center justify-center">
-              5
-            </div>
+            {(summary?.pendingTeamReviews ?? 0) > 0 && (
+              <div className="w-6 h-6 bg-rose-500 text-white text-[10px] font-black rounded-full flex items-center justify-center">
+                {summary?.pendingTeamReviews}
+              </div>
+            )}
           </div>
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
-            Pending Reviews
+            Team Reviews Pending
           </p>
           <h3 className="text-3xl font-black text-slate-800 tracking-tighter">
-            18
+            {summary?.pendingTeamReviews ?? 0}
           </h3>
         </motion.div>
 
@@ -295,7 +298,7 @@ const Performance: React.FC = () => {
               Continuous Feedback
             </p>
             <h3 className="text-3xl font-black tracking-tighter">
-              240+{" "}
+              {(summary?.shoutoutsSent ?? 0) + (summary?.shoutoutsReceived ?? 0)}{" "}
               <span className="text-xs font-medium text-indigo-200">
                 Shoutouts
               </span>
@@ -305,155 +308,132 @@ const Performance: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Bell Curve Distribution */}
+        {/* Goals at a glance */}
         <div className="lg:col-span-2 bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden">
           <div className="flex items-center justify-between mb-8">
             <div>
               <h3 className="text-lg font-black text-slate-800">
-                Performance Distribution
+                My Goals at a Glance
               </h3>
               <p className="text-xs text-slate-400 font-medium">
-                Visualization of talent density across categories.
+                Progress on your most recently updated objectives.
               </p>
             </div>
-            <div className="flex gap-2">
-              <button className="p-2 text-slate-400 hover:text-indigo-600 transition-colors">
-                <MoreHorizontal size={20} />
-              </button>
+            <button
+              onClick={() => setActiveTab("goals")}
+              className="text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:underline"
+            >
+              View All
+            </button>
+          </div>
+          {myGoals.length === 0 ? (
+            <div className="py-16 text-center">
+              <Target size={40} className="text-slate-300 mx-auto mb-4" />
+              <p className="text-slate-400 font-medium">
+                No goals set yet — head to Objectives to create one.
+              </p>
             </div>
-          </div>
-          <div className="h-[300px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={performanceDistData} margin={{ top: 20 }}>
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  vertical={false}
-                  stroke="#f1f5f9"
-                />
-                <XAxis
-                  dataKey="name"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fontSize: 10, fontWeight: 800, fill: "#94a3b8" }}
-                />
-                <Tooltip
-                  cursor={{ fill: "#f8fafc" }}
-                  contentStyle={{
-                    borderRadius: "16px",
-                    border: "none",
-                    boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1)",
-                  }}
-                />
-                <Bar dataKey="count" radius={[12, 12, 0, 0]} barSize={60}>
-                  {performanceDistData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.fill} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          ) : (
+            <div className="space-y-6">
+              {myGoals.slice(0, 5).map((goal: any) => (
+                <div key={goal.id}>
+                  <div className="flex justify-between items-center mb-2">
+                    <p className="text-sm font-black text-slate-800">{goal.title}</p>
+                    <span className="text-xs font-black text-slate-600">{goal.progress}%</span>
+                  </div>
+                  <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${goal.status === "completed" ? "bg-emerald-500" : goal.status === "at_risk" ? "bg-amber-500" : "bg-indigo-600"}`}
+                      style={{ width: `${goal.progress}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* Top Performers */}
+        {/* Recent Recognition */}
         <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm flex flex-col">
           <h3 className="text-lg font-black text-slate-800 mb-8 flex items-center gap-2">
-            <Trophy className="text-amber-500" /> Star Performers
+            <Heart className="text-rose-500" /> Recent Recognition
           </h3>
           <div className="space-y-6 flex-1">
-            {MOCK_EMPLOYEES.slice(0, 4).map((emp, i) => (
-              <div
-                key={i}
-                className="flex items-center justify-between group cursor-pointer"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="relative">
-                    <img
-                      src={emp.avatar}
-                      className="w-12 h-12 rounded-2xl object-cover ring-2 ring-slate-50 group-hover:ring-indigo-100 transition-all"
-                    />
-                    <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-emerald-500 rounded-lg flex items-center justify-center border-2 border-white">
-                      <CheckCircle2 size={10} className="text-white" />
-                    </div>
+            {shoutouts.length === 0 ? (
+              <p className="text-sm text-slate-400 font-medium">
+                No shoutouts yet — be the first to send one!
+              </p>
+            ) : (
+              shoutouts.slice(0, 4).map((fb: any) => (
+                <div key={fb.id} className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center shrink-0">
+                    <Sparkles size={16} className="text-indigo-500" />
                   </div>
                   <div>
-                    <p className="text-sm font-black text-slate-800 leading-none mb-1">
-                      {emp.name}
+                    <p className="text-xs font-bold text-slate-700 leading-snug">
+                      To <span className="text-indigo-600">{fb.toEmployeeName}</span>: "{fb.message}"
                     </p>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
-                      {emp.role}
-                    </p>
+                    <p className="text-[9px] text-slate-400 font-bold uppercase mt-1">#{fb.type}</p>
                   </div>
                 </div>
-                <div className="text-right">
-                  <div className="flex items-center gap-1 text-amber-500 font-black text-sm">
-                    <Star size={14} fill="currentColor" /> 4.{9 - i}
-                  </div>
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
-          <button className="w-full mt-10 py-4 bg-slate-50 text-slate-600 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-50 hover:text-indigo-600 transition-all">
-            View Analytics Report
+          <button
+            onClick={() => setActiveTab("feedback")}
+            className="w-full mt-10 py-4 bg-slate-50 text-slate-600 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-50 hover:text-indigo-600 transition-all"
+          >
+            Give Recognition
           </button>
         </div>
       </div>
 
-      {/* Deadlines Section */}
+      {/* Review Cycle Section */}
       <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm">
         <div className="flex items-center justify-between mb-8">
           <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
-            <Calendar className="text-indigo-600" /> Upcoming Deadlines
+            <Calendar className="text-indigo-600" /> Review Cycle
           </h3>
-          <span className="text-xs font-bold text-slate-400">
-            June 2024 Cycle
-          </span>
+          {activeCycle && (
+            <span className="text-xs font-bold text-slate-400">{activeCycle.name}</span>
+          )}
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {[
-            {
-              title: "Self-Assessments",
-              date: "June 10",
-              progress: 100,
-              color: "emerald",
-            },
-            {
-              title: "Manager Reviews",
-              date: "June 15",
-              progress: 65,
-              color: "indigo",
-            },
-            {
-              title: "Final Calibration",
-              date: "June 25",
-              progress: 0,
-              color: "amber",
-            },
-          ].map((d, i) => (
-            <div
-              key={i}
-              className="bg-slate-50 p-6 rounded-3xl border border-slate-100 relative group overflow-hidden"
-            >
-              <div
-                className={`absolute top-0 right-0 p-4 opacity-0 group-hover:opacity-100 transition-opacity`}
-              >
-                <CheckCircle2 size={20} className={`text-${d.color}-500`} />
-              </div>
-              <p className="text-xs font-black text-slate-800 mb-1">
-                {d.title}
-              </p>
+        {!activeCycle ? (
+          <p className="text-sm text-slate-400 font-medium">
+            No review cycle is open right now — check back once HR starts one.
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100">
+              <p className="text-xs font-black text-slate-800 mb-1">My Self-Assessment</p>
               <p className="text-[10px] text-slate-400 font-bold uppercase mb-4">
-                Due: {d.date}
+                {activeCycle.selfReviewDueDate ? `Due ${activeCycle.selfReviewDueDate}` : "No due date set"}
               </p>
-              <div className="w-full h-2 bg-white rounded-full overflow-hidden">
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: `${d.progress}%` }}
-                  className={`h-full bg-${d.color}-500`}
-                />
-              </div>
+              <span
+                className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${summary?.myCycleStatus === "completed"
+                  ? "bg-emerald-50 text-emerald-600"
+                  : summary?.myCycleStatus
+                    ? "bg-amber-50 text-amber-600"
+                    : "bg-slate-100 text-slate-500"
+                  }`}
+              >
+                {summary?.myCycleStatus ? summary.myCycleStatus.replace("_", " ") : "Not started"}
+              </span>
             </div>
-          ))}
-        </div>
+            <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100">
+              <p className="text-xs font-black text-slate-800 mb-1">Manager Reviews Due</p>
+              <p className="text-[10px] text-slate-400 font-bold uppercase">
+                {activeCycle.managerReviewDueDate || "No due date set"}
+              </p>
+            </div>
+            <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100">
+              <p className="text-xs font-black text-slate-800 mb-1">Cycle Window</p>
+              <p className="text-[10px] text-slate-400 font-bold uppercase">
+                {activeCycle.startDate || "—"} → {activeCycle.endDate || "—"}
+              </p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -475,152 +455,155 @@ const Performance: React.FC = () => {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        {MOCK_GOALS.map((goal) => (
-          <motion.div
-            key={goal.id}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm hover:shadow-xl transition-all group relative"
-          >
-            {goal.progress === 100 && (
-              <div className="absolute top-6 right-8 text-emerald-500 animate-bounce">
-                <Award size={24} fill="currentColor" />
-              </div>
-            )}
+      {myGoals.length === 0 ? (
+        <div className="bg-white rounded-[3rem] border border-slate-200 shadow-sm py-24 text-center">
+          <Target size={48} className="text-slate-300 mx-auto mb-4" />
+          <p className="text-slate-400 font-medium">No objectives yet — set your first one above.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          {myGoals.map((goal: any) => (
+            <motion.div
+              key={goal.id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm hover:shadow-xl transition-all group relative"
+            >
+              {goal.progress === 100 && (
+                <div className="absolute top-6 right-8 text-emerald-500 animate-bounce">
+                  <Award size={24} fill="currentColor" />
+                </div>
+              )}
 
-            <div className="flex gap-2 mb-6">
-              <span
-                className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${goal.priority === "high"
-                  ? "bg-rose-50 text-rose-500"
-                  : "bg-slate-100 text-slate-500"
-                  }`}
-              >
-                {goal.priority} Priority
-              </span>
-              <span
-                className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${goal.status === "on_track"
-                  ? "bg-emerald-50 text-emerald-600"
-                  : "bg-amber-50 text-amber-600"
-                  }`}
-              >
-                {goal.status.replace("_", " ")}
-              </span>
-            </div>
-
-            <h3 className="text-lg font-black text-slate-800 mb-3 group-hover:text-indigo-600 transition-colors">
-              {goal.title}
-            </h3>
-            <p className="text-xs text-slate-500 font-medium mb-8 leading-relaxed h-12 overflow-hidden">
-              {goal.description}
-            </p>
-
-            <div className="space-y-3 mb-10">
-              <div className="flex justify-between items-end">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                  Progress
+              <div className="flex gap-2 mb-6">
+                <span
+                  className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${goal.priority === "high"
+                    ? "bg-rose-50 text-rose-500"
+                    : "bg-slate-100 text-slate-500"
+                    }`}
+                >
+                  {goal.priority} Priority
                 </span>
-                <span className="text-xl font-black text-slate-800">
-                  {goal.progress}%
+                <span
+                  className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${goal.status === "completed"
+                    ? "bg-emerald-50 text-emerald-600"
+                    : goal.status === "at_risk"
+                      ? "bg-rose-50 text-rose-500"
+                      : "bg-amber-50 text-amber-600"
+                    }`}
+                >
+                  {goal.status.replace("_", " ")}
                 </span>
+                {goal.assignedById && (
+                  <span className="px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest bg-indigo-50 text-indigo-500">
+                    Assigned
+                  </span>
+                )}
               </div>
-              <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden p-0.5">
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: `${goal.progress}%` }}
-                  className={`h-full rounded-full ${goal.status === "on_track" ? "bg-indigo-600" : "bg-amber-500"}`}
-                />
-              </div>
-            </div>
 
-            {goal.keyResults && (
-              <div className="space-y-3 mb-8">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                  Key Results
+              <h3 className="text-lg font-black text-slate-800 mb-3 group-hover:text-indigo-600 transition-colors">
+                {goal.title}
+              </h3>
+              {goal.description && (
+                <p className="text-xs text-slate-500 font-medium mb-8 leading-relaxed h-12 overflow-hidden">
+                  {goal.description}
                 </p>
-                {goal.keyResults.map((kr, idx) => (
-                  <div key={idx} className="flex items-center gap-3">
-                    {kr.completed ? (
-                      <CheckCircle2 size={16} className="text-emerald-500" />
-                    ) : (
-                      <div className="w-4 h-4 border-2 border-slate-200 rounded-md" />
-                    )}
-                    <span
-                      className={`text-xs font-bold ${kr.completed ? "text-slate-400 line-through" : "text-slate-600"}`}
-                    >
-                      {kr.text}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
+              )}
 
-            <div className="flex items-center justify-between pt-6 border-t border-slate-50">
-              <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                <Calendar size={14} /> Due {goal.dueDate}
+              <div className="space-y-3 mb-10">
+                <div className="flex justify-between items-end">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    Progress
+                  </span>
+                  <span className="text-xl font-black text-slate-800">
+                    {goal.progress}%
+                  </span>
+                </div>
+                <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden p-0.5">
+                  <motion.div
+                    initial={{ width: 0 }}
+                    animate={{ width: `${goal.progress}%` }}
+                    className={`h-full rounded-full ${goal.status === "at_risk" ? "bg-amber-500" : "bg-indigo-600"}`}
+                  />
+                </div>
               </div>
-              <button
-                onClick={triggerCelebration}
-                className="px-4 py-2 bg-slate-50 hover:bg-emerald-50 text-slate-600 hover:text-emerald-600 rounded-xl transition-all"
-              >
-                <CheckCircle2 size={18} />
-              </button>
-            </div>
-          </motion.div>
-        ))}
-      </div>
+
+              {goal.keyResults && goal.keyResults.length > 0 && (
+                <div className="space-y-3 mb-8">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    Key Results
+                  </p>
+                  {goal.keyResults.map((kr: any, idx: number) => (
+                    <button
+                      key={idx}
+                      onClick={() => handleToggleKeyResult(goal, idx)}
+                      className="flex items-center gap-3 w-full text-left"
+                    >
+                      {kr.completed ? (
+                        <CheckCircle2 size={16} className="text-emerald-500 shrink-0" />
+                      ) : (
+                        <div className="w-4 h-4 border-2 border-slate-200 rounded-md shrink-0" />
+                      )}
+                      <span
+                        className={`text-xs font-bold ${kr.completed ? "text-slate-400 line-through" : "text-slate-600"}`}
+                      >
+                        {kr.text}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex items-center justify-between pt-6 border-t border-slate-50">
+                <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  <Calendar size={14} /> {goal.dueDate ? `Due ${goal.dueDate}` : "No due date"}
+                </div>
+                {goal.status !== "completed" && (
+                  <button
+                    onClick={() => handleMarkGoalComplete(goal)}
+                    className="px-4 py-2 bg-slate-50 hover:bg-emerald-50 text-slate-600 hover:text-emerald-600 rounded-xl transition-all"
+                    title="Mark as complete"
+                  >
+                    <CheckCircle2 size={18} />
+                  </button>
+                )}
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      )}
 
       {/* Goal Alignment Visualization */}
       <div className="bg-slate-900 rounded-[3rem] p-12 text-white relative overflow-hidden">
         <Sparkles className="absolute top-10 right-10 text-indigo-400/20 w-32 h-32" />
         <h3 className="text-2xl font-black mb-12 flex items-center gap-3">
-          <MapIcon className="text-indigo-400" /> Strategic Alignment Matrix
+          <MapIcon className="text-indigo-400" /> Strategic Alignment
         </h3>
-        <div className="space-y-16 relative">
-          {/* Alignment Tree - Conceptual */}
-          <div className="relative pl-20 before:absolute before:left-[2.4rem] before:top-12 before:bottom-0 before:w-1 before:bg-indigo-500/20">
-            <div className="absolute left-0 top-0 w-20 h-20 bg-indigo-600 rounded-[2rem] flex items-center justify-center border-8 border-slate-900 z-10 shadow-2xl">
-              <Rocket size={32} />
-            </div>
-            <div className="bg-white/5 border border-white/10 p-8 rounded-[2.5rem] max-w-xl backdrop-blur-sm">
-              <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-2">
-                Company Objective
-              </p>
-              <h4 className="text-xl font-black mb-4">
-                Africa's Leading Payroll Engine
-              </h4>
-              <div className="flex items-center gap-4 text-xs font-bold text-slate-400">
-                <div className="flex -space-x-2">
-                  {MOCK_EMPLOYEES.map((e) => (
-                    <img
-                      key={e.id}
-                      src={e.avatar}
-                      className="w-6 h-6 rounded-lg ring-2 ring-slate-900"
-                    />
-                  ))}
+        {companyObjectives.length === 0 ? (
+          <p className="text-slate-400 font-medium relative">
+            No company-wide objectives have been set yet — check back once HR publishes one.
+          </p>
+        ) : (
+          <div className="space-y-8 relative">
+            {companyObjectives.map((obj: any) => (
+              <div key={obj.id} className="bg-white/5 border border-white/10 p-8 rounded-[2.5rem] max-w-xl backdrop-blur-sm flex items-start gap-6">
+                <div className="w-16 h-16 bg-indigo-600 rounded-[1.5rem] flex items-center justify-center shrink-0 shadow-2xl">
+                  <Rocket size={28} />
                 </div>
-                <span>24 Aligned Initiatives</span>
+                <div className="flex-1">
+                  <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-2">
+                    Company Objective
+                  </p>
+                  <h4 className="text-xl font-black mb-4">{obj.title}</h4>
+                  <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+                    <div className="h-full bg-emerald-500" style={{ width: `${obj.progress}%` }} />
+                  </div>
+                  <p className="text-xs font-bold text-slate-400 mt-2">{obj.progress}% complete</p>
+                </div>
               </div>
-            </div>
+            ))}
           </div>
-
-          <div className="relative pl-40">
-            <div className="absolute left-20 top-0 w-14 h-14 bg-emerald-600 rounded-2xl flex items-center justify-center border-8 border-slate-900 z-10 shadow-2xl">
-              <BrainCircuit size={24} />
-            </div>
-            <div className="bg-white/5 border border-white/10 p-8 rounded-[2.5rem] max-w-xl backdrop-blur-sm">
-              <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-2">
-                Engineering Pillar
-              </p>
-              <h4 className="text-xl font-black mb-4">
-                Scalable Micro-disbursement Architecture
-              </h4>
-              <div className="w-full h-1.5 bg-white/10 rounded-full mt-4 overflow-hidden">
-                <div className="h-full bg-emerald-500 w-[65%]" />
-              </div>
-            </div>
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );
@@ -788,49 +771,44 @@ const Performance: React.FC = () => {
                 <div className="bg-white p-12 rounded-[3.5rem] border border-slate-200 shadow-sm">
                   <div className="flex items-center justify-between mb-12">
                     <h3 className="text-2xl font-black text-slate-800 flex items-center gap-4">
-                      <Flame className="text-rose-500" /> Career Development
-                      Path
+                      <Flame className="text-rose-500" /> Development Goals
                     </h3>
-                    <span className="px-5 py-2 bg-emerald-50 text-emerald-600 rounded-[1.2rem] text-xs font-black uppercase tracking-widest border border-emerald-100 shadow-sm">
-                      Active Plan
+                    <span className="px-5 py-2 bg-slate-50 text-slate-500 rounded-[1.2rem] text-xs font-black uppercase tracking-widest border border-slate-100">
+                      From latest self-assessment
                     </span>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-16">
-                    <div className="p-8 bg-slate-50 rounded-[2.5rem] border border-slate-100 relative group">
-                      <div className="absolute -top-4 -right-4 w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-lg text-indigo-600 group-hover:scale-110 transition-transform">
-                        <Target size={24} />
-                      </div>
-                      <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-3">
-                        12 Month Vision
-                      </p>
-                      <h5 className="text-lg font-black text-slate-800 mb-3">
-                        Technical Architect
-                      </h5>
-                      <p className="text-xs text-slate-500 font-medium leading-relaxed">
-                        Transition from feature development to system-wide
-                        architectural governance and scalability optimization.
+                  {latestDevelopmentGoals.length === 0 ? (
+                    <div className="mb-16 p-10 bg-slate-50 rounded-[2.5rem] border border-slate-100 text-center">
+                      <p className="text-sm text-slate-500 font-medium">
+                        No development goals on file yet — set some in your next self-assessment.
                       </p>
                     </div>
-                    <div className="p-8 bg-slate-50 rounded-[2.5rem] border border-slate-100 relative group">
-                      <div className="absolute -top-4 -right-4 w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-lg text-rose-500 group-hover:scale-110 transition-transform">
-                        <Rocket size={24} />
-                      </div>
-                      <p className="text-[10px] font-black text-rose-500 uppercase tracking-widest mb-3">
-                        Long Term Goal
-                      </p>
-                      <h5 className="text-lg font-black text-slate-800 mb-3">
-                        VP of Engineering
-                      </h5>
-                      <p className="text-xs text-slate-500 font-medium leading-relaxed">
-                        Scaling high-performance engineering cultures across
-                        multiple geographic regions and product lines.
-                      </p>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-16">
+                      {latestDevelopmentGoals.map((dg: any, i: number) => (
+                        <div key={i} className="p-8 bg-slate-50 rounded-[2.5rem] border border-slate-100 relative group">
+                          <div className="absolute -top-4 -right-4 w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-lg text-indigo-600 group-hover:scale-110 transition-transform">
+                            <Target size={24} />
+                          </div>
+                          <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-3">
+                            {dg.category || "Development"}
+                          </p>
+                          <h5 className="text-lg font-black text-slate-800 mb-3">
+                            {dg.title}
+                          </h5>
+                          {dg.targetDate && (
+                            <p className="text-xs text-slate-500 font-medium leading-relaxed">
+                              Target: {dg.targetDate}
+                            </p>
+                          )}
+                        </div>
+                      ))}
                     </div>
-                  </div>
+                  )}
                   <section>
                     <div className="flex items-center justify-between mb-8">
                       <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.25em]">
-                        Skills Analysis Matrix
+                        Skills Self-Rating
                       </h4>
                       <div className="flex gap-4">
                         <div className="flex items-center gap-2">
@@ -842,51 +820,57 @@ const Performance: React.FC = () => {
                         <div className="flex items-center gap-2">
                           <div className="w-3 h-3 rounded-full bg-indigo-100" />
                           <span className="text-[10px] font-bold text-slate-400 uppercase">
-                            Target
+                            Growth Target
                           </span>
                         </div>
                       </div>
                     </div>
-                    <div className="h-[450px] w-full bg-slate-50/50 rounded-[3rem] p-10 flex items-center justify-center">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <RadarChart data={skillGapData}>
-                          <PolarGrid stroke="#e2e8f0" strokeWidth={2} />
-                          <PolarAngleAxis
-                            dataKey="subject"
-                            tick={{
-                              fontSize: 10,
-                              fontWeight: 800,
-                              fill: "#64748b",
-                            }}
-                          />
-                          <PolarRadiusAxis angle={30} domain={[0, 150]} hide />
-                          <Radar
-                            name="Current"
-                            dataKey="current"
-                            stroke="#4f46e5"
-                            fill="#4f46e5"
-                            fillOpacity={0.6}
-                            dot={{ fill: "#4f46e5", r: 4 }}
-                          />
-                          <Radar
-                            name="Target"
-                            dataKey="target"
-                            stroke="#4f46e5"
-                            strokeDasharray="4 4"
-                            fill="#4f46e5"
-                            fillOpacity={0.1}
-                          />
-                          <Tooltip
-                            contentStyle={{
-                              borderRadius: "20px",
-                              border: "none",
-                              boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)",
-                              fontSize: "10px",
-                            }}
-                          />
-                        </RadarChart>
-                      </ResponsiveContainer>
-                    </div>
+                    {skillRadarData.length === 0 ? (
+                      <div className="h-[200px] w-full bg-slate-50/50 rounded-[3rem] flex items-center justify-center">
+                        <p className="text-sm text-slate-400 font-medium">Rate your skills in a self-assessment to see them here.</p>
+                      </div>
+                    ) : (
+                      <div className="h-[450px] w-full bg-slate-50/50 rounded-[3rem] p-10 flex items-center justify-center">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <RadarChart data={skillRadarData}>
+                            <PolarGrid stroke="#e2e8f0" strokeWidth={2} />
+                            <PolarAngleAxis
+                              dataKey="subject"
+                              tick={{
+                                fontSize: 10,
+                                fontWeight: 800,
+                                fill: "#64748b",
+                              }}
+                            />
+                            <PolarRadiusAxis angle={30} domain={[0, 5]} hide />
+                            <Radar
+                              name="Current"
+                              dataKey="current"
+                              stroke="#4f46e5"
+                              fill="#4f46e5"
+                              fillOpacity={0.6}
+                              dot={{ fill: "#4f46e5", r: 4 }}
+                            />
+                            <Radar
+                              name="Growth Target"
+                              dataKey="target"
+                              stroke="#4f46e5"
+                              strokeDasharray="4 4"
+                              fill="#4f46e5"
+                              fillOpacity={0.1}
+                            />
+                            <Tooltip
+                              contentStyle={{
+                                borderRadius: "20px",
+                                border: "none",
+                                boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)",
+                                fontSize: "10px",
+                              }}
+                            />
+                          </RadarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    )}
                   </section>
                 </div>
               </div>
@@ -899,92 +883,152 @@ const Performance: React.FC = () => {
                   <Award className="absolute -bottom-8 -right-8 w-48 h-48 text-white/10 rotate-12" />
                   <div className="relative z-10">
                     <h4 className="text-xl font-black mb-8 flex items-center gap-3">
-                      <Users size={24} /> Mentorship
+                      <Users size={24} /> Your Manager
                     </h4>
-                    <div className="flex items-center gap-6 mb-10 bg-white/10 p-6 rounded-[2rem] border border-white/20 backdrop-blur-md">
-                      <img
-                        src="https://i.pravatar.cc/150?u=mentor_diana"
-                        className="w-16 h-16 rounded-[1.2rem] object-cover border-2 border-white/50"
-                      />
-                      <div>
-                        <p className="text-[10px] font-black text-indigo-200 uppercase tracking-widest mb-1">
-                          Assigned Mentor
-                        </p>
-                        <p className="text-lg font-black tracking-tight leading-tight">
-                          Diana Prince
-                        </p>
-                        <p className="text-xs text-indigo-100 font-medium">
-                          VP Engineering
-                        </p>
-                      </div>
-                    </div>
-                    <button className="w-full py-5 bg-white text-indigo-600 rounded-[1.8rem] font-black text-xs uppercase tracking-widest flex items-center justify-center gap-3 shadow-lg hover:bg-indigo-50 transition-all">
-                      Sync Progress <ArrowRight size={18} />
-                    </button>
+                    {profile?.managerName ? (
+                      <>
+                        <div className="flex items-center gap-6 mb-10 bg-white/10 p-6 rounded-[2rem] border border-white/20 backdrop-blur-md">
+                          <img
+                            src={managerRecord?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.managerName)}&background=random`}
+                            className="w-16 h-16 rounded-[1.2rem] object-cover border-2 border-white/50"
+                          />
+                          <div>
+                            <p className="text-[10px] font-black text-indigo-200 uppercase tracking-widest mb-1">
+                              Growth Partner
+                            </p>
+                            <p className="text-lg font-black tracking-tight leading-tight">
+                              {profile.managerName}
+                            </p>
+                            {managerRecord?.role && (
+                              <p className="text-xs text-indigo-100 font-medium">{managerRecord.role}</p>
+                            )}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => {
+                            if (managerRecord) {
+                              setRecipientQuery(`${managerRecord.name} ${managerRecord.lastName || ""}`.trim());
+                              setRecipientId(managerRecord.id);
+                            } else {
+                              setRecipientQuery(profile.managerName);
+                            }
+                            setShowFeedbackModal(true);
+                          }}
+                          className="w-full py-5 bg-white text-indigo-600 rounded-[1.8rem] font-black text-xs uppercase tracking-widest flex items-center justify-center gap-3 shadow-lg hover:bg-indigo-50 transition-all"
+                        >
+                          Send Recognition <ArrowRight size={18} />
+                        </button>
+                      </>
+                    ) : (
+                      <p className="text-sm text-indigo-100 font-medium">
+                        No manager is assigned to you yet.
+                      </p>
+                    )}
                   </div>
                 </motion.div>
               </div>
             </div>
           )}
           {activeTab === "reviews" && (
-            <div className="bg-white p-24 rounded-[4rem] border border-slate-200 shadow-sm flex flex-col items-center justify-center text-center">
-              {activeAssessment ? (
-                <>
-                  <motion.div
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    className="w-32 h-32 bg-emerald-50 rounded-[2.5rem] flex items-center justify-center text-emerald-500 mb-10 shadow-inner"
-                  >
-                    <CheckCircle2 size={64} strokeWidth={1.5} />
-                  </motion.div>
-                  <h3 className="text-3xl font-black text-slate-800 mb-4 tracking-tighter">
-                    Assessment in Progress
-                  </h3>
-                  <p className="text-slate-500 max-w-sm font-medium text-lg leading-relaxed mb-2">
-                    Your self-assessment for {activeAssessment.cycleName}
-                  </p>
-                  <span className={`px-4 py-2 rounded-full text-xs font-black uppercase tracking-widest ${activeAssessment.status === 'submitted' ? 'bg-emerald-100 text-emerald-600' :
-                    activeAssessment.status === 'under_review' ? 'bg-amber-100 text-amber-600' :
-                      'bg-slate-100 text-slate-600'
-                    }`}>
-                    {activeAssessment.status.replace('_', ' ')}
-                  </span>
-                  <div className="flex gap-4 mt-12">
-                    <button
-                      onClick={() => setShowAssessmentWizard(true)}
-                      className="px-10 py-5 bg-indigo-600 text-white rounded-[2rem] font-black text-sm uppercase tracking-widest shadow-2xl shadow-indigo-100 hover:scale-105 active:scale-95 transition-all"
+            <div className="space-y-10 pb-20">
+              <div className="bg-white p-24 rounded-[4rem] border border-slate-200 shadow-sm flex flex-col items-center justify-center text-center">
+                {!activeCycle ? (
+                  <>
+                    <motion.div className="w-32 h-32 bg-slate-50 rounded-[2.5rem] flex items-center justify-center text-slate-300 mb-10 shadow-inner">
+                      <Star size={64} strokeWidth={1.5} />
+                    </motion.div>
+                    <h3 className="text-3xl font-black text-slate-800 mb-4 tracking-tighter">
+                      No Review Cycle Open
+                    </h3>
+                    <p className="text-slate-500 max-w-sm font-medium text-lg leading-relaxed">
+                      HR hasn't started a performance review cycle yet. Check back soon.
+                    </p>
+                  </>
+                ) : activeAssessment ? (
+                  <>
+                    <motion.div
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      className={`w-32 h-32 rounded-[2.5rem] flex items-center justify-center mb-10 shadow-inner ${activeAssessment.status === 'completed' ? 'bg-emerald-50 text-emerald-500' : 'bg-amber-50 text-amber-500'}`}
                     >
-                      {activeAssessment.status === 'draft' ? 'Continue Assessment' : 'View Assessment'}
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <motion.div
-                    animate={{ rotate: [0, 10, -10, 0] }}
-                    transition={{ duration: 4, repeat: Infinity }}
-                    className="w-32 h-32 bg-indigo-50 rounded-[2.5rem] flex items-center justify-center text-indigo-300 mb-10 shadow-inner"
-                  >
-                    <Star size={64} strokeWidth={1.5} />
-                  </motion.div>
-                  <h3 className="text-3xl font-black text-slate-800 mb-4 tracking-tighter">
-                    Review Cycle Not Started
-                  </h3>
-                  <p className="text-slate-500 max-w-sm font-medium text-lg leading-relaxed">
-                    The next appraisal window (H2 2024) is open. Prepare your self-reflections early!
-                  </p>
-                  <div className="flex gap-4 mt-12">
-                    <button
-                      onClick={() => setShowAssessmentWizard(true)}
-                      className="px-10 py-5 bg-indigo-600 text-white rounded-[2rem] font-black text-sm uppercase tracking-widest shadow-2xl shadow-indigo-100 hover:scale-105 active:scale-95 transition-all"
+                      <CheckCircle2 size={64} strokeWidth={1.5} />
+                    </motion.div>
+                    <h3 className="text-3xl font-black text-slate-800 mb-4 tracking-tighter">
+                      {activeAssessment.status === 'completed' ? 'Review Complete' : 'Assessment in Progress'}
+                    </h3>
+                    <p className="text-slate-500 max-w-sm font-medium text-lg leading-relaxed mb-2">
+                      Your self-assessment for {activeAssessment.cycleName}
+                    </p>
+                    <span className={`px-4 py-2 rounded-full text-xs font-black uppercase tracking-widest ${activeAssessment.status === 'completed' ? 'bg-emerald-100 text-emerald-600' :
+                      activeAssessment.status === 'submitted' || activeAssessment.status === 'under_review' ? 'bg-amber-100 text-amber-600' :
+                        'bg-slate-100 text-slate-600'
+                      }`}>
+                      {activeAssessment.status.replace('_', ' ')}
+                    </span>
+
+                    {activeAssessment.status === 'completed' && activeAssessment.managerRating && (
+                      <div className="mt-10 w-full max-w-md p-8 bg-slate-50 rounded-[2.5rem] text-left">
+                        <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-2">Manager Rating</p>
+                        <p className="text-lg font-black text-slate-800 mb-4">{activeAssessment.managerRating.replace(/_/g, ' ')}</p>
+                        {activeAssessment.managerComment && (
+                          <p className="text-sm text-slate-600 font-medium italic">"{activeAssessment.managerComment}"</p>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="flex gap-4 mt-12">
+                      <button
+                        onClick={() => setShowAssessmentWizard(true)}
+                        className="px-10 py-5 bg-indigo-600 text-white rounded-[2rem] font-black text-sm uppercase tracking-widest shadow-2xl shadow-indigo-100 hover:scale-105 active:scale-95 transition-all"
+                      >
+                        {activeAssessment.status === 'draft' ? 'Continue Assessment' : 'View Assessment'}
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <motion.div
+                      animate={{ rotate: [0, 10, -10, 0] }}
+                      transition={{ duration: 4, repeat: Infinity }}
+                      className="w-32 h-32 bg-indigo-50 rounded-[2.5rem] flex items-center justify-center text-indigo-300 mb-10 shadow-inner"
                     >
-                      Prepare My Assessment
-                    </button>
-                    <button className="px-10 py-5 bg-white border border-slate-200 text-slate-500 rounded-[2rem] font-black text-sm uppercase tracking-widest hover:bg-slate-50 transition-all">
-                      Review History
-                    </button>
+                      <Star size={64} strokeWidth={1.5} />
+                    </motion.div>
+                    <h3 className="text-3xl font-black text-slate-800 mb-4 tracking-tighter">
+                      Review Cycle Open
+                    </h3>
+                    <p className="text-slate-500 max-w-sm font-medium text-lg leading-relaxed">
+                      The {activeCycle.name} appraisal window is open. Prepare your self-reflections early!
+                    </p>
+                    <div className="flex gap-4 mt-12">
+                      <button
+                        onClick={() => setShowAssessmentWizard(true)}
+                        className="px-10 py-5 bg-indigo-600 text-white rounded-[2rem] font-black text-sm uppercase tracking-widest shadow-2xl shadow-indigo-100 hover:scale-105 active:scale-95 transition-all"
+                      >
+                        Prepare My Assessment
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {myAssessments.length > 0 && (
+                <div className="bg-white p-10 rounded-[3rem] border border-slate-200 shadow-sm">
+                  <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-6">Review History</h4>
+                  <div className="divide-y divide-slate-50">
+                    {myAssessments.map((a: any) => (
+                      <div key={a.id} className="py-4 flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-bold text-slate-800">{a.cycleName}</p>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase">{a.status.replace('_', ' ')}</p>
+                        </div>
+                        <p className="text-xs font-black text-slate-600">
+                          {a.managerRating?.replace(/_/g, ' ') || a.selfRating?.replace(/_/g, ' ') || '—'}
+                        </p>
+                      </div>
+                    ))}
                   </div>
-                </>
+                </div>
               )}
             </div>
           )}
@@ -1031,8 +1075,22 @@ const Performance: React.FC = () => {
                   </label>
                   <input
                     type="text"
+                    value={goalForm.title}
+                    onChange={(e) => setGoalForm({ ...goalForm, title: e.target.value })}
                     placeholder="e.g. Master the new Wallet Engine architecture"
                     className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none focus:ring-4 focus:ring-indigo-500/10 font-black text-slate-800"
+                  />
+                </div>
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    Description
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={goalForm.description}
+                    onChange={(e) => setGoalForm({ ...goalForm, description: e.target.value })}
+                    placeholder="What does success look like?"
+                    className="w-full px-6 py-4 bg-slate-50 border-none rounded-3xl outline-none font-medium resize-none"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-6">
@@ -1040,10 +1098,14 @@ const Performance: React.FC = () => {
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
                       Goal Category
                     </label>
-                    <select className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-600">
-                      <option>Individual</option>
-                      <option>Team</option>
-                      <option>Department</option>
+                    <select
+                      value={goalForm.category}
+                      onChange={(e) => setGoalForm({ ...goalForm, category: e.target.value })}
+                      className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-600"
+                    >
+                      <option value="individual">Individual</option>
+                      <option value="team">Team</option>
+                      <option value="department">Department</option>
                     </select>
                   </div>
                   <div className="space-y-3">
@@ -1052,6 +1114,8 @@ const Performance: React.FC = () => {
                     </label>
                     <input
                       type="date"
+                      value={goalForm.dueDate}
+                      onChange={(e) => setGoalForm({ ...goalForm, dueDate: e.target.value })}
                       className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-600"
                     />
                   </div>
@@ -1065,13 +1129,11 @@ const Performance: React.FC = () => {
                   Cancel
                 </button>
                 <button
-                  onClick={() => {
-                    setShowGoalModal(false);
-                    triggerCelebration();
-                  }}
-                  className="px-10 py-4 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-100"
+                  disabled={!goalForm.title.trim() || createGoalMutation.isPending}
+                  onClick={handleCreateGoal}
+                  className="px-10 py-4 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-100 disabled:opacity-50"
                 >
-                  Establish Goal
+                  {createGoalMutation.isPending ? "Creating…" : "Establish Goal"}
                 </button>
               </div>
             </motion.div>
@@ -1120,15 +1182,13 @@ const Performance: React.FC = () => {
                       className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 z-10"
                       size={18}
                     />
-                    {recipientLoading && (
-                      <div className="absolute right-4 top-1/2 -translate-y-1/2 z-10">
-                        <div className="w-4 h-4 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
-                      </div>
-                    )}
                     <input
                       type="text"
                       value={recipientQuery}
-                      onChange={(e) => setRecipientQuery(e.target.value)}
+                      onChange={(e) => {
+                        setRecipientQuery(e.target.value);
+                        setRecipientId(null);
+                      }}
                       onFocus={() =>
                         recipientResults.length > 0 &&
                         setShowRecipientDropdown(true)
@@ -1150,6 +1210,7 @@ const Performance: React.FC = () => {
                               setRecipientQuery(
                                 `${emp.name}${emp.lastName ? " " + emp.lastName : ""}`,
                               );
+                              setRecipientId(emp.id);
                               setShowRecipientDropdown(false);
                             }}
                             className="flex items-center gap-3 px-5 py-3 cursor-pointer hover:bg-indigo-50 transition-colors"
@@ -1207,11 +1268,11 @@ const Performance: React.FC = () => {
                       !recipientQuery.trim() ||
                       !selectedType ||
                       !shoutoutMessage.trim() ||
-                      sendingShoutout
+                      sendShoutout.isPending
                     }
                     className="flex-1 py-5 bg-indigo-600 text-white rounded-3xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-3 shadow-xl shadow-indigo-100 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100"
                   >
-                    {sendingShoutout ? (
+                    {sendShoutout.isPending ? (
                       <>
                         <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />{" "}
                         Sending...
@@ -1233,8 +1294,9 @@ const Performance: React.FC = () => {
       <AssessmentWizard
         isOpen={showAssessmentWizard}
         onClose={() => setShowAssessmentWizard(false)}
-        cycleName="H2 2024"
+        cycleName={activeCycle?.name || ""}
         existingAssessment={activeAssessment}
+        goals={myGoals}
         onSave={handleSaveAssessment}
         onSubmit={handleSubmitAssessment}
       />

@@ -79,6 +79,7 @@ const Sidebar: React.FC = () => {
     { name: "Team Calendar", icon: <Calendar size={20} />, path: "attendance" },
     { name: "Budget & Payroll", icon: <Wallet size={20} />, path: "payroll" },
     { name: "Assets", icon: <Box size={20} />, path: "assets" }, // Added Assets menu item
+    { name: "Benefits", icon: <Heart size={20} />, path: "benefits" },
     { name: "Reports", icon: <BarChart3 size={20} />, path: "reports" },
     { name: "Goals & OKRs", icon: <Target size={20} />, path: "goals" },
     { name: "Settings", icon: <Settings size={20} />, path: "settings" },
@@ -155,7 +156,7 @@ const Sidebar: React.FC = () => {
     navToUse = hrAdminNav;
   } else if (userRole === "PAYROLL_OFFICER") {
     navToUse = NAV_ITEMS.filter((i) =>
-      ["dashboard", "payroll", "reports", "settings"].includes(i.path),
+      ["dashboard", "payroll", "benefits", "reports", "settings"].includes(i.path),
     );
   }
 

@@ -7,10 +7,13 @@ import HRDashboard from "./features/admin/HRDashboard";
 import Workforce from "./features/admin/Workforce";
 import Payroll from "./features/payroll/Payroll";
 import Recruitment from "./features/recruitment/Recruitment";
+import RecruitmentAnalytics from "./features/recruitment/RecruitmentAnalytics";
 import Attendance from "./features/employee/Attendance";
 import Performance from "./features/employee/Performance";
+import PerformanceManagement from "./features/admin/PerformanceManagement";
 import EmployeePortal from "./features/employee/EmployeePortal";
 import ManagerDashboard from "./features/manager/ManagerDashboard";
+import TeamReports from "./features/manager/TeamReports";
 import Benefits from "./features/employee/Benefits";
 import Leave from "./features/employee/Leave";
 import MyPayroll from "./features/employee/MyPayroll";
@@ -23,6 +26,7 @@ import Onboarding from "./features/admin/Onboarding";
 import Directory from "./features/core/Directory";
 import AdminLeaveRequests from "./features/admin/AdminLeaveRequests";
 import AttendanceManagement from "./features/admin/AttendanceManagement";
+import BenefitsAdmin from "./features/admin/BenefitsAdmin";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { NavigationProvider, useNavigation } from "./context/NavigationContext";
 
@@ -68,6 +72,8 @@ const AppContent: React.FC = () => {
         return <Payroll />;
       case "recruitment":
         return <Recruitment />;
+      case "analytics":
+        return <RecruitmentAnalytics />;
       case "assets":
         return <AssetManagement />;
       case "onboarding":
@@ -81,8 +87,12 @@ const AppContent: React.FC = () => {
         return <Attendance />;
       case "performance":
         if (user.role === "MANAGER") return <ManagerDashboard />;
+        if (user.role === "HR_ADMIN" || user.role === "SUPER_ADMIN") return <PerformanceManagement />;
         return <Performance />;
       case "benefits":
+        if (user.role === "HR_ADMIN" || user.role === "SUPER_ADMIN") {
+          return <BenefitsAdmin />;
+        }
         return <Benefits />;
       case "leave-approvals":
         return <AdminLeaveRequests />;
@@ -91,7 +101,7 @@ const AppContent: React.FC = () => {
       case "my-payroll":
         return <MyPayroll />;
       case "reports":
-        if (user.role === "MANAGER") return <ManagerDashboard />;
+        if (user.role === "MANAGER") return <TeamReports />;
         return <Reports />;
       case "portal":
         return <EmployeePortal />;

@@ -1,17 +1,18 @@
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Building2, Users, ShieldCheck, Zap, Globe, 
-  Mail, Bell, Lock, Database, History, 
-  Plus, Search, ChevronRight, Save, Trash2, 
-  Upload, CheckCircle2, AlertCircle, ExternalLink,
-  Eye, EyeOff, Key, Monitor, FileText, 
+import {
+  Building2, Users, ShieldCheck, Zap, Globe,
+  Mail, Bell, Lock, Database, History,
+  Plus, Search, ChevronRight, Save, Trash2,
+  Upload, Monitor, FileText,
   Calendar, MapPin, Sliders, Smartphone,
-  Info, ArrowRight, UserPlus, MoreHorizontal,
-  LayoutGrid, Share2, Terminal, Code,
-  Copy, KeyRound, Loader2, PlaySquare, Workflow,
-  X, ChevronDown, Crown, Star, Shield
+  ArrowRight, UserPlus,
+  LayoutGrid, Code,
+  Copy, KeyRound, Loader2, Workflow,
+  X, ChevronDown, Crown, Star,
+  Link2, Unlink, HardDrive, ListChecks,
+  Download, CalendarPlus, CheckCheck
 } from 'lucide-react';
 import { usePopup } from '../../components/PopupProvider';
 import {
@@ -21,15 +22,38 @@ import {
   useDepartmentMembers, useAssignDepartmentMember, useRemoveDepartmentMember,
   useLocations, useCreateLocation, useDeleteLocation,
   useRoles, useCreateRole, useUpdateRole, useDeleteRole,
-  useEmployees
+  useEmployees,
+  useHolidays, useCreateHoliday, useDeleteHoliday,
+  useEmailTemplates, useUpdateEmailTemplate,
+  useIntegrations, useToggleIntegration,
+  useWorkflows, useUpdateWorkflow,
+  useDataStats, exportCompanyData,
+  useAuditLogs, exportAuditLogsCsv,
 } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 
+const WEEKDAYS = [
+  { iso: 1, label: 'M' }, { iso: 2, label: 'T' }, { iso: 3, label: 'W' }, { iso: 4, label: 'T' },
+  { iso: 5, label: 'F' }, { iso: 6, label: 'S' }, { iso: 7, label: 'S' },
+];
+
+const AUDIT_MODULES = [
+  { key: 'company', label: 'Company' },
+  { key: 'settings', label: 'Settings' },
+  { key: 'roles', label: 'Roles' },
+  { key: 'departments', label: 'Departments' },
+  { key: 'locations', label: 'Locations' },
+  { key: 'workforce', label: 'Workforce' },
+  { key: 'integrations', label: 'Integrations' },
+  { key: 'workflows', label: 'Workflows' },
+  { key: 'api', label: 'API' },
+  { key: 'email', label: 'Email' },
+];
+
 const Settings: React.FC = () => {
   const [activeSection, setActiveSection] = useState('profile');
-  const [isSaving, setIsSaving] = useState(false);
   const [newKeyName, setNewKeyName] = useState('');
-  const { prompt } = usePopup();
+  const { prompt, confirm, alert: popupAlert } = usePopup();
 
   // These sections (Company Profile, Departments & Locations, Roles & Permissions,
   // API Access) are backed by admin-only endpoints. Every role's nav links to this
@@ -43,6 +67,7 @@ const Settings: React.FC = () => {
   const { data: apiKeys, isLoading: isKeysLoading } = useApiKeys(isAdmin);
   const createApiKeyMutation = useCreateApiKey();
   const deleteApiKeyMutation = useDeleteApiKey();
+  const [copiedKeyId, setCopiedKeyId] = useState<string | null>(null);
 
   const sections = [
     { id: 'profile', name: 'Company Profile', icon: <Building2 size={18} />, group: 'General' },
@@ -57,11 +82,6 @@ const Settings: React.FC = () => {
     { id: 'audit', name: 'Audit Logs', icon: <History size={18} />, group: 'Compliance' },
     { id: 'api', name: 'API Access', icon: <Code size={18} />, group: 'Advanced' },
   ];
-
-  const handleSave = () => {
-    setIsSaving(true);
-    setTimeout(() => setIsSaving(false), 1500);
-  };
 
   const { data: company, isLoading: isCompanyLoading } = useCompany(isAdmin);
   const updateCompanyMutation = useUpdateCompany();
@@ -78,12 +98,63 @@ const Settings: React.FC = () => {
   const { data: roles, isLoading: isRolesLoading } = useRoles(isAdmin);
   const createRole = useCreateRole();
   const updateRole = useUpdateRole();
+  const deleteRole = useDeleteRole();
 
   const [expandedDeptId, setExpandedDeptId] = useState<string | null>(null);
   const [newMemberByDept, setNewMemberByDept] = useState<Record<string, string>>({});
   const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null);
   const [permissionsDraft, setPermissionsDraft] = useState<Record<string, Record<string, boolean>>>({});
   const { data: deptMembers, isLoading: isDeptMembersLoading } = useDepartmentMembers(expandedDeptId || undefined);
+
+  // Company Profile extras: branding, working calendar, public holidays
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [workingDaysDraft, setWorkingDaysDraft] = useState<number[]>([1, 2, 3, 4, 5]);
+  const [showHolidays, setShowHolidays] = useState(false);
+  const { data: holidays, isLoading: isHolidaysLoading } = useHolidays(isAdmin && showHolidays);
+  const createHoliday = useCreateHoliday();
+  const deleteHoliday = useDeleteHoliday();
+
+  useEffect(() => {
+    if (settings?.workingDays) setWorkingDaysDraft(settings.workingDays);
+  }, [settings?.workingDays]);
+
+  useEffect(() => {
+    if (company?.logoUrl) setLogoPreview(company.logoUrl);
+  }, [company?.logoUrl]);
+
+  // Email Templates
+  const { data: emailTemplates, isLoading: isTemplatesLoading } = useEmailTemplates(isAdmin);
+  const updateEmailTemplate = useUpdateEmailTemplate();
+  const [selectedTemplateKey, setSelectedTemplateKey] = useState<string | null>(null);
+  // null = no unsaved edits yet; falls back to the selected template's saved
+  // values. Using null (rather than empty strings) so the fields show the
+  // template's real content before the user has typed anything.
+  const [templateDraft, setTemplateDraft] = useState<{ subject: string; body: string } | null>(null);
+
+  // Integrations
+  const { data: integrations, isLoading: isIntegrationsLoading } = useIntegrations(isAdmin);
+  const toggleIntegration = useToggleIntegration();
+
+  // Workflows
+  const { data: workflows, isLoading: isWorkflowsLoading } = useWorkflows(isAdmin);
+  const updateWorkflow = useUpdateWorkflow();
+  const [expandedWorkflowKey, setExpandedWorkflowKey] = useState<string | null>(null);
+  const [workflowStepsDraft, setWorkflowStepsDraft] = useState<{ id: string; name: string; assignee: string }[]>([]);
+  const [newStepName, setNewStepName] = useState('');
+  const [newStepAssignee, setNewStepAssignee] = useState('');
+
+  // Data & Backup
+  const { data: dataStats, isLoading: isDataStatsLoading } = useDataStats(isAdmin && activeSection === 'data');
+  const [isExporting, setIsExporting] = useState(false);
+
+  // Audit Logs
+  const [auditSearch, setAuditSearch] = useState('');
+  const [auditModule, setAuditModule] = useState('');
+  const { data: auditLogs, isLoading: isAuditLoading } = useAuditLogs(
+    { module: auditModule || undefined, search: auditSearch || undefined },
+    isAdmin && activeSection === 'audit'
+  );
+  const [isExportingAudit, setIsExportingAudit] = useState(false);
 
   const handleSaveProfile = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -97,9 +168,34 @@ const Settings: React.FC = () => {
     });
   };
 
+  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      popupAlert('Logo must be 2MB or smaller.', 'File Too Large');
+      e.target.value = '';
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      setLogoPreview(dataUrl);
+      updateCompanyMutation.mutate({ logoUrl: dataUrl });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const toggleWorkingDay = (iso: number) => {
+    const next = workingDaysDraft.includes(iso)
+      ? workingDaysDraft.filter((d) => d !== iso)
+      : [...workingDaysDraft, iso].sort((a, b) => a - b);
+    setWorkingDaysDraft(next);
+    updateSettingsMutation.mutate({ workingDays: next });
+  };
+
   const renderProfile = () => {
     if (isCompanyLoading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-indigo-500" size={32} /></div>;
-    
+
     return (
       <form onSubmit={handleSaveProfile} className="space-y-10">
         <div className="flex justify-between items-end">
@@ -107,7 +203,7 @@ const Settings: React.FC = () => {
             <h2 className="text-2xl font-black text-slate-800">Company Identity</h2>
             <p className="text-sm text-slate-500 font-medium">Manage your organization's core details and branding.</p>
           </div>
-          <button 
+          <button
             type="submit"
             disabled={updateCompanyMutation.isPending}
             className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-100 flex items-center gap-2 disabled:opacity-50"
@@ -119,14 +215,19 @@ const Settings: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
           <div className="lg:col-span-1 space-y-6">
             <div className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm flex flex-col items-center text-center">
-                <div className="relative group cursor-pointer mb-6">
+                <label className="relative group cursor-pointer mb-6">
                   <div className="w-32 h-32 bg-slate-50 rounded-[2.5rem] flex items-center justify-center border-2 border-dashed border-slate-200 group-hover:border-indigo-400 transition-all overflow-hidden">
-                      <Building2 size={48} className="text-slate-300 group-hover:text-indigo-400 transition-colors" />
+                      {logoPreview ? (
+                        <img src={logoPreview} alt="Company logo" className="w-full h-full object-cover" />
+                      ) : (
+                        <Building2 size={48} className="text-slate-300 group-hover:text-indigo-400 transition-colors" />
+                      )}
                   </div>
                   <div className="absolute inset-0 bg-indigo-600/0 group-hover:bg-indigo-600/10 transition-all rounded-[2.5rem] flex items-center justify-center">
                       <Upload size={20} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
                   </div>
-                </div>
+                  <input type="file" accept="image/png,image/jpeg,image/svg+xml" className="hidden" onChange={handleLogoChange} />
+                </label>
                 <h3 className="font-black text-slate-800">Company Logo</h3>
                 <p className="text-[10px] text-slate-400 uppercase font-black mt-1 tracking-widest">SVG, PNG, JPG (Max 2MB)</p>
             </div>
@@ -178,16 +279,85 @@ const Settings: React.FC = () => {
                         <span className="text-xs font-bold text-slate-700 uppercase">Working Days</span>
                       </div>
                       <div className="flex gap-2">
-                        {['M','T','W','T','F','S','S'].map((day, i) => (
-                          <button key={i} type="button" className={`w-8 h-8 rounded-lg text-[10px] font-black transition-all ${i < 5 ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-slate-400 border border-slate-100'}`}>
-                            {day}
+                        {WEEKDAYS.map(({ iso, label }) => (
+                          <button
+                            key={iso}
+                            type="button"
+                            onClick={() => toggleWorkingDay(iso)}
+                            className={`w-8 h-8 rounded-lg text-[10px] font-black transition-all ${workingDaysDraft.includes(iso) ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-slate-400 border border-slate-100'}`}
+                          >
+                            {label}
                           </button>
                         ))}
                       </div>
                   </div>
-                  <button type="button" className="w-full py-4 border-2 border-dashed border-slate-200 text-slate-400 rounded-2xl font-black text-xs uppercase tracking-widest hover:border-indigo-400 hover:text-indigo-600 transition-all flex items-center justify-center gap-2">
-                      <Plus size={16} /> Manage Public Holidays
+                  <button
+                    type="button"
+                    onClick={() => setShowHolidays((v) => !v)}
+                    className="w-full py-4 border-2 border-dashed border-slate-200 text-slate-400 rounded-2xl font-black text-xs uppercase tracking-widest hover:border-indigo-400 hover:text-indigo-600 transition-all flex items-center justify-center gap-2"
+                  >
+                      <CalendarPlus size={16} /> {showHolidays ? 'Hide Public Holidays' : 'Manage Public Holidays'}
+                      <ChevronDown size={14} className={`transition-transform ${showHolidays ? 'rotate-180' : ''}`} />
                   </button>
+
+                  <AnimatePresence>
+                    {showHolidays && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100 space-y-4">
+                          <form
+                            onSubmit={(e) => {
+                              e.preventDefault();
+                              const fd = new FormData(e.currentTarget);
+                              const name = fd.get('name') as string;
+                              const date = fd.get('date') as string;
+                              if (name && date) createHoliday.mutate({ name, date });
+                              e.currentTarget.reset();
+                            }}
+                            className="flex gap-3"
+                          >
+                            <input name="name" placeholder="Holiday name (e.g. New Year's Day)" className="flex-1 px-4 py-3 bg-white border border-slate-200 rounded-xl font-bold text-xs outline-none" required />
+                            <input name="date" type="date" className="px-4 py-3 bg-white border border-slate-200 rounded-xl font-bold text-xs outline-none" required />
+                            <button type="submit" disabled={createHoliday.isPending} className="px-5 py-3 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 disabled:opacity-50 shrink-0">
+                              Add
+                            </button>
+                          </form>
+
+                          <div className="space-y-2">
+                            {isHolidaysLoading ? (
+                              <Loader2 className="animate-spin text-indigo-500 mx-auto" size={18} />
+                            ) : holidays?.length ? (
+                              holidays.map((h: any) => (
+                                <div key={h.id} className="flex justify-between items-center px-4 py-3 bg-white rounded-xl border border-slate-100">
+                                  <div className="flex items-center gap-3">
+                                    <Calendar size={14} className="text-indigo-400" />
+                                    <span className="text-xs font-bold text-slate-700">{h.name}</span>
+                                    <span className="text-[10px] font-black text-slate-400 uppercase">{h.date}</span>
+                                  </div>
+                                  <button
+                                    onClick={async () => {
+                                      if (await confirm(`Remove "${h.name}" from the holiday calendar?`, 'Remove Holiday')) {
+                                        deleteHoliday.mutate(h.id);
+                                      }
+                                    }}
+                                    className="text-slate-300 hover:text-rose-500"
+                                  >
+                                    <X size={14} />
+                                  </button>
+                                </div>
+                              ))
+                            ) : (
+                              <p className="text-[10px] text-slate-400 font-bold uppercase text-center py-3">No holidays added yet</p>
+                            )}
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
             </div>
           </div>
@@ -255,7 +425,16 @@ const Settings: React.FC = () => {
                       <span className="px-3 py-1 bg-white border border-slate-200 rounded-lg text-[9px] font-black text-slate-500 uppercase tracking-widest">
                         {d.memberCount || 0} {d.memberCount === 1 ? 'member' : 'members'}
                       </span>
-                      <button onClick={() => deleteDept.mutate(d.id)} className="text-rose-400 hover:text-rose-600"><Trash2 size={16} /></button>
+                      <button
+                        onClick={async () => {
+                          if (await confirm(`Delete "${d.name}"? Members will be unassigned, not deleted.`, 'Delete Department')) {
+                            deleteDept.mutate(d.id);
+                          }
+                        }}
+                        className="text-rose-400 hover:text-rose-600"
+                      >
+                        <Trash2 size={16} />
+                      </button>
                     </div>
                   </div>
 
@@ -387,7 +566,16 @@ const Settings: React.FC = () => {
                   <h4 className="font-bold text-slate-800">{l.name}</h4>
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{l.city}, {l.country}</p>
                 </div>
-                <button onClick={() => deleteLoc.mutate(l.id)} className="text-rose-400 hover:text-rose-600"><Trash2 size={16} /></button>
+                <button
+                  onClick={async () => {
+                    if (await confirm(`Remove location "${l.name}"?`, 'Remove Location')) {
+                      deleteLoc.mutate(l.id);
+                    }
+                  }}
+                  className="text-rose-400 hover:text-rose-600"
+                >
+                  <Trash2 size={16} />
+                </button>
               </div>
             ))}
           </div>
@@ -429,6 +617,17 @@ const Settings: React.FC = () => {
     }));
   };
 
+  const handleDeleteRole = async (role: any) => {
+    const usageWarning = role.usersCount > 0 ? ` ${role.usersCount} employee${role.usersCount === 1 ? '' : 's'} currently ${role.usersCount === 1 ? 'has' : 'have'} it assigned and will fall back to their base role.` : '';
+    if (await confirm(`Delete the "${role.name}" role?${usageWarning}`, 'Delete Role')) {
+      deleteRole.mutate(role.id);
+      if (selectedRoleId === role.id) {
+        setSelectedRoleId(null);
+        setPermissionsDraft({});
+      }
+    }
+  };
+
   const renderRoles = () => {
     return (
       <div className="space-y-10">
@@ -459,7 +658,14 @@ const Settings: React.FC = () => {
                 className={`bg-white p-8 rounded-[2.5rem] border shadow-sm relative group cursor-pointer transition-all ${selectedRoleId === role.id ? 'border-indigo-600 ring-4 ring-indigo-500/10' : 'border-slate-200'}`}
               >
                   <div className={`absolute top-0 right-0 w-16 h-16 bg-${role.color || 'slate'}-50 rounded-full -mr-8 -mt-8`} />
-                  <h3 className="text-lg font-black text-slate-800 mb-2">{role.name}</h3>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleDeleteRole(role); }}
+                    className="absolute top-6 right-6 text-slate-300 hover:text-rose-500 transition-colors z-10"
+                    title="Delete role"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                  <h3 className="text-lg font-black text-slate-800 mb-2 pr-6">{role.name}</h3>
                   <p className="text-xs text-slate-400 font-medium leading-relaxed mb-6">{role.description || 'No description'}</p>
                   <div className="flex items-center justify-between mt-auto">
                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{role.usersCount || 0} Users</span>
@@ -555,113 +761,142 @@ const Settings: React.FC = () => {
           <p className="text-sm text-slate-500 font-medium">Connect ZenHR with your existing productivity and finance stack.</p>
        </div>
 
-       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {[
-            { name: 'Google Calendar', icon: <Calendar />, category: 'Scheduling', status: 'Connected' },
-            { name: 'Slack Notifications', icon: <Smartphone />, category: 'Communication', status: 'Connected' },
-            { name: 'Paystack Bank', icon: <Globe />, category: 'Fintech', status: 'Connected' },
-            { name: 'Microsoft Outlook', icon: <Mail />, category: 'Communications', status: 'Available' },
-            { name: 'Zoom Conferencing', icon: <Monitor />, category: 'Video', status: 'Available' },
-            { name: 'QuickBooks Accounting', icon: <Database />, category: 'Finance', status: 'Available' },
-          ].map((app, i) => (
-            <motion.div 
-              key={i} 
-              whileHover={{ y: -5 }}
-              className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm relative group"
-            >
-               <div className="flex justify-between items-start mb-8">
-                  <div className="w-14 h-14 bg-slate-50 text-indigo-600 rounded-2xl flex items-center justify-center shadow-inner group-hover:scale-110 transition-transform">
-                     {app.icon}
-                  </div>
-                  <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${
-                    app.status === 'Connected' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-50 text-slate-400'
-                  }`}>
-                    {app.status}
-                  </span>
+       {isIntegrationsLoading ? <Loader2 className="animate-spin text-indigo-500 mx-auto" /> : (
+         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {integrations?.map((app: any) => {
+              const isConnected = app.status === 'connected';
+              const ICONS: Record<string, React.ReactNode> = {
+                google_calendar: <Calendar />, slack: <Smartphone />, paystack: <Globe />,
+                outlook: <Mail />, zoom: <Monitor />, quickbooks: <Database />,
+              };
+              return (
+                <motion.div
+                  key={app.id}
+                  whileHover={{ y: -5 }}
+                  className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm relative group"
+                >
+                   <div className="flex justify-between items-start mb-8">
+                      <div className="w-14 h-14 bg-slate-50 text-indigo-600 rounded-2xl flex items-center justify-center shadow-inner group-hover:scale-110 transition-transform">
+                         {ICONS[app.key] || <LayoutGrid />}
+                      </div>
+                      <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${
+                        isConnected ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-50 text-slate-400'
+                      }`}>
+                        {isConnected ? 'Connected' : 'Available'}
+                      </span>
+                   </div>
+                   <h3 className="text-lg font-black text-slate-800 mb-1">{app.name}</h3>
+                   <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-6">{app.category}</p>
+                   <button
+                     onClick={() => toggleIntegration.mutate(app.key)}
+                     disabled={toggleIntegration.isPending}
+                     className={`w-full py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 disabled:opacity-50 ${
+                       isConnected ? 'bg-slate-50 text-slate-600 hover:bg-rose-50 hover:text-rose-600' : 'bg-indigo-600 text-white shadow-lg hover:bg-indigo-700'
+                     }`}
+                   >
+                     {isConnected ? <><Unlink size={13} /> Disconnect</> : <><Link2 size={13} /> Connect Account</>}
+                   </button>
+                </motion.div>
+              );
+            })}
+         </div>
+       )}
+    </div>
+  );
+
+  const renderAudit = () => {
+    const severityColor = (sev: string) => sev === 'warning' ? 'text-amber-600' : 'text-slate-600';
+    return (
+      <div className="space-y-10">
+         <div className="flex flex-col md:flex-row justify-between md:items-end gap-4">
+            <div>
+               <h2 className="text-2xl font-black text-slate-800">Security Audit Logs</h2>
+               <p className="text-sm text-slate-500 font-medium">Immutable record of administrative actions across the org (latest 200).</p>
+            </div>
+            <div className="flex gap-3">
+               <div className="relative">
+                  <Search size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" />
+                  <input
+                    value={auditSearch}
+                    onChange={(e) => setAuditSearch(e.target.value)}
+                    placeholder="Search actor, action, details..."
+                    className="pl-10 pr-4 py-3 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold text-xs outline-none w-56"
+                  />
                </div>
-               <h3 className="text-lg font-black text-slate-800 mb-1">{app.name}</h3>
-               <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-6">{app.category}</p>
-               <button className={`w-full py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${
-                 app.status === 'Connected' ? 'bg-slate-50 text-slate-600 hover:bg-slate-100' : 'bg-indigo-600 text-white shadow-lg'
-               }`}>
-                 {app.status === 'Connected' ? 'Configure' : 'Connect Account'}
+               <select
+                 value={auditModule}
+                 onChange={(e) => setAuditModule(e.target.value)}
+                 className="px-4 py-3 bg-white border border-slate-200 text-slate-600 rounded-xl font-black text-[10px] uppercase tracking-widest outline-none"
+               >
+                 <option value="">All Modules</option>
+                 {AUDIT_MODULES.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
+               </select>
+               <button
+                 onClick={async () => {
+                   setIsExportingAudit(true);
+                   try { await exportAuditLogsCsv(); } catch (e: any) { popupAlert(e.message, 'Export Failed'); }
+                   setIsExportingAudit(false);
+                 }}
+                 disabled={isExportingAudit}
+                 className="px-6 py-3 bg-indigo-50 text-indigo-600 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-indigo-100 transition-all flex items-center gap-2 disabled:opacity-50 shrink-0"
+               >
+                  <Download size={16} /> {isExportingAudit ? 'Exporting...' : 'Export CSV'}
                </button>
-            </motion.div>
-          ))}
-       </div>
-    </div>
-  );
+            </div>
+         </div>
 
-  const renderAudit = () => (
-    <div className="space-y-10">
-       <div className="flex justify-between items-center">
-          <div>
-             <h2 className="text-2xl font-black text-slate-800">Security Audit Logs</h2>
-             <p className="text-sm text-slate-500 font-medium">Immutable record of all administrative actions and system events.</p>
-          </div>
-          <div className="flex gap-3">
-             <button className="px-6 py-3 bg-white border border-slate-200 text-slate-600 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center gap-2">
-                <Search size={18} /> Search
-             </button>
-             <button className="px-6 py-3 bg-indigo-50 text-indigo-600 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-indigo-100 transition-all">
-                Export Log (CSV)
-             </button>
-          </div>
-       </div>
-
-       <div className="bg-white rounded-[3rem] border border-slate-200 shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-             <table className="w-full text-left">
-                <thead className="bg-slate-50/50 text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
-                   <tr>
-                      <th className="px-10 py-5">Timestamp</th>
-                      <th className="px-8 py-5">User</th>
-                      <th className="px-8 py-5">Action</th>
-                      <th className="px-8 py-5">Module</th>
-                      <th className="px-8 py-5">IP Address</th>
-                      <th className="px-10 py-5 text-right">Details</th>
-                   </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                   {[
-                     { time: '2024-05-24 14:22:10', user: 'James HR', action: 'Approved Payroll Batch', mod: 'Payroll', ip: '192.168.1.1', sev: 'info' },
-                     { time: '2024-05-24 12:05:45', user: 'Emma D.', action: 'Modified Permissions', mod: 'Settings', ip: '192.168.1.4', sev: 'warning' },
-                     { time: '2024-05-23 09:15:22', user: 'System', action: 'Automated Wallet Top-up', mod: 'Wallet', ip: 'Cloud-Internal', sev: 'info' },
-                     { time: '2024-05-22 16:40:12', user: 'James HR', action: 'Deleted Candidate Record', mod: 'Recruitment', ip: '192.168.1.1', sev: 'warning' },
-                     { time: '2024-05-22 10:20:05', user: 'Sarah J.', action: 'User Login', mod: 'Auth', ip: '10.0.0.85', sev: 'info' },
-                   ].map((log, i) => (
-                     <tr key={i} className="hover:bg-slate-50/50 transition-all group">
-                        <td className="px-10 py-5">
-                           <span className="text-xs font-bold text-slate-500 font-mono">{log.time}</span>
-                        </td>
-                        <td className="px-8 py-5">
-                           <div className="flex items-center gap-2">
-                              <div className="w-6 h-6 bg-indigo-100 text-indigo-600 rounded-md flex items-center justify-center text-[10px] font-black">
-                                 {log.user[0]}
-                              </div>
-                              <span className="text-xs font-black text-slate-700">{log.user}</span>
-                           </div>
-                        </td>
-                        <td className="px-8 py-5">
-                           <span className={`text-xs font-bold ${log.sev === 'warning' ? 'text-amber-600' : 'text-slate-600'}`}>{log.action}</span>
-                        </td>
-                        <td className="px-8 py-5">
-                           <span className="px-2 py-0.5 bg-slate-100 text-slate-400 rounded text-[9px] font-black uppercase">{log.mod}</span>
-                        </td>
-                        <td className="px-8 py-5">
-                           <span className="text-xs font-medium text-slate-400 font-mono">{log.ip}</span>
-                        </td>
-                        <td className="px-10 py-5 text-right">
-                           <button className="p-2 text-slate-300 hover:text-indigo-600 transition-all"><Info size={18} /></button>
-                        </td>
+         <div className="bg-white rounded-[3rem] border border-slate-200 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+               <table className="w-full text-left">
+                  <thead className="bg-slate-50/50 text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
+                     <tr>
+                        <th className="px-10 py-5">Timestamp</th>
+                        <th className="px-8 py-5">Actor</th>
+                        <th className="px-8 py-5">Action</th>
+                        <th className="px-8 py-5">Module</th>
+                        <th className="px-8 py-5">IP Address</th>
+                        <th className="px-10 py-5">Details</th>
                      </tr>
-                   ))}
-                </tbody>
-             </table>
-          </div>
-       </div>
-    </div>
-  );
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                     {isAuditLoading ? (
+                       <tr><td colSpan={6} className="py-16 text-center"><Loader2 className="animate-spin text-indigo-500 mx-auto" /></td></tr>
+                     ) : auditLogs?.length ? auditLogs.map((log: any) => (
+                       <tr key={log.id} className="hover:bg-slate-50/50 transition-all group">
+                          <td className="px-10 py-5">
+                             <span className="text-xs font-bold text-slate-500 font-mono whitespace-nowrap">{new Date(log.createdAt).toLocaleString()}</span>
+                          </td>
+                          <td className="px-8 py-5">
+                             <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 bg-indigo-100 text-indigo-600 rounded-md flex items-center justify-center text-[10px] font-black shrink-0">
+                                   {log.actorName?.[0] || '?'}
+                                </div>
+                                <span className="text-xs font-black text-slate-700 whitespace-nowrap">{log.actorName}</span>
+                             </div>
+                          </td>
+                          <td className="px-8 py-5">
+                             <span className={`text-xs font-bold ${severityColor(log.severity)}`}>{log.action}</span>
+                          </td>
+                          <td className="px-8 py-5">
+                             <span className="px-2 py-0.5 bg-slate-100 text-slate-400 rounded text-[9px] font-black uppercase whitespace-nowrap">{log.module || '—'}</span>
+                          </td>
+                          <td className="px-8 py-5">
+                             <span className="text-xs font-medium text-slate-400 font-mono">{log.ipAddress || '—'}</span>
+                          </td>
+                          <td className="px-10 py-5 max-w-xs">
+                             <span className="text-xs font-medium text-slate-500 line-clamp-1" title={log.details}>{log.details || '—'}</span>
+                          </td>
+                       </tr>
+                     )) : (
+                       <tr><td colSpan={6} className="py-16 text-center text-sm font-bold text-slate-400">No audit activity matches these filters yet.</td></tr>
+                     )}
+                  </tbody>
+               </table>
+            </div>
+         </div>
+      </div>
+    );
+  };
 
   const renderSecurity = () => {
     if (isSettingsLoading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-indigo-500" size={32} /></div>;
@@ -672,8 +907,8 @@ const Settings: React.FC = () => {
             <h2 className="text-2xl font-black text-slate-800">Security & Privacy</h2>
             <p className="text-sm text-slate-500 font-medium">Configure access controls, MFA requirements, and password policies.</p>
           </div>
-          <button 
-            onClick={() => updateSettingsMutation.mutate({ 
+          <button
+            onClick={() => updateSettingsMutation.mutate({
               require2fa: !settings?.require2fa,
               passwordMinLength: settings?.passwordMinLength || 12,
               sessionTimeoutMins: settings?.sessionTimeoutMins || 60
@@ -696,7 +931,7 @@ const Settings: React.FC = () => {
                 <p className="text-xs font-medium text-slate-500">Enforce MFA for all admin and employee accounts.</p>
               </div>
             </div>
-            <button 
+            <button
               onClick={() => updateSettingsMutation.mutate({ require2fa: !settings?.require2fa })}
               className={`w-14 h-8 rounded-full transition-colors relative ${settings?.require2fa ? 'bg-indigo-500' : 'bg-slate-200'}`}
             >
@@ -707,26 +942,152 @@ const Settings: React.FC = () => {
           <div className="grid grid-cols-2 gap-6">
             <div className="space-y-2">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Password Minimum Length</label>
-              <input 
-                type="number" 
-                value={settings?.passwordMinLength || 12} 
+              <input
+                type="number"
+                value={settings?.passwordMinLength || 12}
                 onChange={(e) => updateSettingsMutation.mutate({ passwordMinLength: parseInt(e.target.value) })}
-                className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none focus:ring-4 focus:ring-indigo-500/10 font-bold" 
+                className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none focus:ring-4 focus:ring-indigo-500/10 font-bold"
               />
             </div>
             <div className="space-y-2">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Session Timeout (Minutes)</label>
-              <input 
-                type="number" 
-                value={settings?.sessionTimeoutMins || 60} 
+              <input
+                type="number"
+                value={settings?.sessionTimeoutMins || 60}
                 onChange={(e) => updateSettingsMutation.mutate({ sessionTimeoutMins: parseInt(e.target.value) })}
-                className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none focus:ring-4 focus:ring-indigo-500/10 font-bold" 
+                className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none focus:ring-4 focus:ring-indigo-500/10 font-bold"
               />
             </div>
           </div>
         </div>
       </div>
     );
+  };
+
+  const renderNotifications = () => {
+    if (isSettingsLoading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-indigo-500" size={32} /></div>;
+
+    const NOTIF_ROWS: { key: string; label: string; desc: string; icon: React.ReactNode }[] = [
+      { key: 'notifyLeaveRequests', label: 'Leave Requests', desc: 'Alert HR/Managers when an employee submits or updates a leave request.', icon: <Calendar size={20} /> },
+      { key: 'notifyPayrollRuns', label: 'Payroll Runs', desc: 'Notify admins when a payroll run is submitted, approved, or paid.', icon: <Zap size={20} /> },
+      { key: 'notifyNewHires', label: 'New Hires', desc: 'Notify the team when a new employee is onboarded.', icon: <UserPlus size={20} /> },
+      { key: 'notifyComplianceAlerts', label: 'Compliance Alerts', desc: 'Statutory remittance deadlines and compliance task reminders.', icon: <ShieldCheck size={20} /> },
+      { key: 'notifyWeeklyDigest', label: 'Weekly Digest', desc: 'A weekly summary email of workforce, payroll, and recruitment activity.', icon: <Mail size={20} /> },
+    ];
+
+    return (
+      <div className="space-y-10">
+        <div>
+          <h2 className="text-2xl font-black text-slate-800">Notification Preferences</h2>
+          <p className="text-sm text-slate-500 font-medium">Choose which events trigger notifications for your admin team.</p>
+        </div>
+
+        <div className="bg-white rounded-[3rem] border border-slate-200 shadow-sm p-10 space-y-6">
+          {NOTIF_ROWS.map((row) => {
+            const enabled = !!(settings as any)?.[row.key];
+            return (
+              <div key={row.key} className="flex items-center justify-between p-6 border-2 border-slate-100 rounded-2xl">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-indigo-50 text-indigo-500 rounded-2xl flex items-center justify-center">
+                    {row.icon}
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-slate-800">{row.label}</h4>
+                    <p className="text-xs font-medium text-slate-500">{row.desc}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => updateSettingsMutation.mutate({ [row.key]: !enabled })}
+                  className={`w-14 h-8 rounded-full transition-colors relative shrink-0 ${enabled ? 'bg-indigo-500' : 'bg-slate-200'}`}
+                >
+                  <div className={`w-6 h-6 bg-white rounded-full absolute top-1 transition-transform ${enabled ? 'translate-x-7' : 'translate-x-1'}`} />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  const renderEmailTemplates = () => {
+    const selected = emailTemplates?.find((t: any) => t.key === selectedTemplateKey) || emailTemplates?.[0] || null;
+    const activeKey = selectedTemplateKey || selected?.key;
+    const draft = templateDraft || { subject: selected?.subject || '', body: selected?.body || '' };
+
+    return (
+      <div className="space-y-10">
+        <div>
+          <h2 className="text-2xl font-black text-slate-800">Email Templates</h2>
+          <p className="text-sm text-slate-500 font-medium">Customize the transactional emails ZenHR sends on your behalf. Use <code className="px-1 bg-slate-100 rounded text-indigo-600">{'{{variables}}'}</code> to personalize.</p>
+        </div>
+
+        {isTemplatesLoading ? <Loader2 className="animate-spin text-indigo-500 mx-auto" /> : (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="bg-white rounded-[3rem] border border-slate-200 shadow-sm p-4 space-y-2 h-fit">
+              {emailTemplates?.map((t: any) => (
+                <button
+                  key={t.key}
+                  onClick={() => {
+                    setSelectedTemplateKey(t.key);
+                    setTemplateDraft(null);
+                  }}
+                  className={`w-full text-left px-5 py-4 rounded-2xl transition-all ${activeKey === t.key ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-600 hover:bg-slate-50'}`}
+                >
+                  <span className="font-black text-sm block">{t.name}</span>
+                  <span className={`text-[10px] uppercase font-black tracking-widest ${activeKey === t.key ? 'text-indigo-200' : 'text-slate-400'}`}>{t.key}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="lg:col-span-2 bg-white rounded-[3rem] border border-slate-200 shadow-sm p-10 space-y-6">
+              {!selected ? (
+                <p className="text-sm font-bold text-slate-400 text-center py-16">Select a template to edit.</p>
+              ) : (
+                <>
+                  <div className="flex justify-between items-start">
+                    <h3 className="text-lg font-black text-slate-800">{selected.name}</h3>
+                    <button
+                      onClick={() => updateEmailTemplate.mutate({
+                        key: selected.key,
+                        data: { subject: draft.subject, body: draft.body },
+                      })}
+                      disabled={updateEmailTemplate.isPending}
+                      className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-indigo-700 disabled:opacity-50"
+                    >
+                      <Save size={14} /> {updateEmailTemplate.isPending ? 'Saving...' : 'Save Template'}
+                    </button>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Subject</label>
+                    <input
+                      value={draft.subject}
+                      onChange={(e) => setTemplateDraft({ ...draft, subject: e.target.value })}
+                      className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none focus:ring-4 focus:ring-indigo-500/10 font-bold"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Body</label>
+                    <textarea
+                      rows={12}
+                      value={draft.body}
+                      onChange={(e) => setTemplateDraft({ ...draft, body: e.target.value })}
+                      className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none focus:ring-4 focus:ring-indigo-500/10 font-medium text-sm leading-relaxed resize-none"
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const openWorkflow = (wf: any) => {
+    const isOpen = expandedWorkflowKey === wf.key;
+    setExpandedWorkflowKey(isOpen ? null : wf.key);
+    if (!isOpen) setWorkflowStepsDraft(wf.steps || []);
   };
 
   const renderWorkflows = () => (
@@ -737,20 +1098,103 @@ const Settings: React.FC = () => {
           <p className="text-sm text-slate-500 font-medium">Configure automated task pipelines for onboarding and offboarding.</p>
         </div>
       </div>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {['Onboarding Pipeline', 'Offboarding Pipeline', 'Leave Approvals', 'Payroll Locking'].map((flow) => (
-          <div key={flow} className="bg-white p-8 rounded-[2.5rem] border border-slate-200 hover:border-indigo-300 hover:shadow-lg transition-all group cursor-pointer relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50 rounded-bl-[100px] -z-10 group-hover:scale-110 transition-transform" />
-            <Workflow className="text-indigo-500 mb-6" size={32} />
-            <h3 className="text-xl font-black text-slate-800 mb-2">{flow}</h3>
-            <p className="text-xs font-medium text-slate-500 mb-6">Manage automated steps, triggers, and assignees.</p>
-            <button className="text-[10px] font-black uppercase tracking-widest text-indigo-600 flex items-center gap-2">
-              Edit Pipeline <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
-            </button>
-          </div>
-        ))}
-      </div>
+
+      {isWorkflowsLoading ? <Loader2 className="animate-spin text-indigo-500 mx-auto" /> : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {workflows?.map((wf: any) => {
+            const isExpanded = expandedWorkflowKey === wf.key;
+            return (
+              <div key={wf.key} className="bg-white rounded-[2.5rem] border border-slate-200 hover:border-indigo-300 hover:shadow-lg transition-all relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50 rounded-bl-[100px] -z-10" />
+                <div className="p-8">
+                  <div className="flex justify-between items-start mb-6">
+                    <Workflow className="text-indigo-500" size={32} />
+                    <button
+                      onClick={() => updateWorkflow.mutate({ key: wf.key, data: { enabled: !wf.enabled } })}
+                      className={`w-12 h-7 rounded-full transition-colors relative shrink-0 ${wf.enabled ? 'bg-indigo-500' : 'bg-slate-200'}`}
+                      title={wf.enabled ? 'Enabled' : 'Disabled'}
+                    >
+                      <div className={`w-5 h-5 bg-white rounded-full absolute top-1 transition-transform ${wf.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                    </button>
+                  </div>
+                  <h3 className="text-xl font-black text-slate-800 mb-2">{wf.name}</h3>
+                  <p className="text-xs font-medium text-slate-500 mb-6">{wf.description}</p>
+                  <button onClick={() => openWorkflow(wf)} className="text-[10px] font-black uppercase tracking-widest text-indigo-600 flex items-center gap-2">
+                    {isExpanded ? 'Close Pipeline' : 'Edit Pipeline'}
+                    {isExpanded ? <ChevronDown size={14} /> : <ArrowRight size={14} />}
+                  </button>
+                </div>
+
+                <AnimatePresence>
+                  {isExpanded && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="overflow-hidden border-t border-slate-100 bg-slate-50/50"
+                    >
+                      <div className="p-6 space-y-3">
+                        {workflowStepsDraft.map((step, i) => (
+                          <div key={step.id} className="flex items-center gap-2 bg-white p-3 rounded-xl border border-slate-100">
+                            <ListChecks size={14} className="text-indigo-400 shrink-0" />
+                            <input
+                              value={step.name}
+                              onChange={(e) => setWorkflowStepsDraft((prev) => prev.map((s, idx) => idx === i ? { ...s, name: e.target.value } : s))}
+                              className="flex-1 text-xs font-bold text-slate-700 outline-none min-w-0"
+                            />
+                            <input
+                              value={step.assignee}
+                              onChange={(e) => setWorkflowStepsDraft((prev) => prev.map((s, idx) => idx === i ? { ...s, assignee: e.target.value } : s))}
+                              className="w-28 text-[10px] font-black text-indigo-500 uppercase text-right outline-none shrink-0"
+                            />
+                            <button onClick={() => setWorkflowStepsDraft((prev) => prev.filter((_, idx) => idx !== i))} className="text-slate-300 hover:text-rose-500 shrink-0">
+                              <X size={14} />
+                            </button>
+                          </div>
+                        ))}
+
+                        <div className="flex gap-2">
+                          <input
+                            value={newStepName}
+                            onChange={(e) => setNewStepName(e.target.value)}
+                            placeholder="New step..."
+                            className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-xl font-bold text-xs outline-none min-w-0"
+                          />
+                          <input
+                            value={newStepAssignee}
+                            onChange={(e) => setNewStepAssignee(e.target.value)}
+                            placeholder="Assignee"
+                            className="w-28 px-3 py-2 bg-white border border-slate-200 rounded-xl font-bold text-xs outline-none shrink-0"
+                          />
+                          <button
+                            onClick={() => {
+                              if (!newStepName.trim()) return;
+                              setWorkflowStepsDraft((prev) => [...prev, { id: `s${Date.now()}`, name: newStepName.trim(), assignee: newStepAssignee.trim() || 'Unassigned' }]);
+                              setNewStepName('');
+                              setNewStepAssignee('');
+                            }}
+                            className="px-3 py-2 bg-slate-800 text-white rounded-xl shrink-0"
+                          >
+                            <Plus size={14} />
+                          </button>
+                        </div>
+
+                        <button
+                          onClick={() => updateWorkflow.mutate({ key: wf.key, data: { steps: workflowStepsDraft } })}
+                          disabled={updateWorkflow.isPending}
+                          className="w-full flex items-center justify-center gap-2 py-3 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 disabled:opacity-50"
+                        >
+                          <Save size={14} /> {updateWorkflow.isPending ? 'Saving...' : 'Save Pipeline'}
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 
@@ -766,14 +1210,14 @@ const Settings: React.FC = () => {
       <div className="bg-white rounded-[3rem] border border-slate-200 shadow-sm p-10 space-y-8">
         <h3 className="font-black text-slate-800 text-lg">Generate New Key</h3>
         <div className="flex gap-4">
-          <input 
-            type="text" 
-            placeholder="Key Description (e.g., Zapier Integration)" 
+          <input
+            type="text"
+            placeholder="Key Description (e.g., Zapier Integration)"
             value={newKeyName}
             onChange={(e) => setNewKeyName(e.target.value)}
-            className="flex-1 px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none focus:ring-4 focus:ring-indigo-500/10 font-bold" 
+            className="flex-1 px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none focus:ring-4 focus:ring-indigo-500/10 font-bold"
           />
-          <button 
+          <button
             onClick={() => {
               if (newKeyName) {
                 createApiKeyMutation.mutate({ name: newKeyName });
@@ -806,11 +1250,23 @@ const Settings: React.FC = () => {
                     </div>
                   </div>
                   <div className="flex items-center gap-4">
-                    <button className="p-3 bg-white text-slate-400 hover:text-indigo-600 rounded-xl shadow-sm transition-colors border border-slate-200">
-                      <Copy size={16} />
+                    <button
+                      onClick={() => {
+                        navigator.clipboard?.writeText(key.key);
+                        setCopiedKeyId(key.id);
+                        setTimeout(() => setCopiedKeyId((c) => (c === key.id ? null : c)), 1500);
+                      }}
+                      className="p-3 bg-white text-slate-400 hover:text-indigo-600 rounded-xl shadow-sm transition-colors border border-slate-200"
+                      title="Copy key"
+                    >
+                      {copiedKeyId === key.id ? <CheckCheck size={16} className="text-emerald-500" /> : <Copy size={16} />}
                     </button>
-                    <button 
-                      onClick={() => deleteApiKeyMutation.mutate(key.id)}
+                    <button
+                      onClick={async () => {
+                        if (await confirm(`Revoke API key "${key.name}"? Anything using it will stop working immediately.`, 'Revoke API Key')) {
+                          deleteApiKeyMutation.mutate(key.id);
+                        }
+                      }}
                       className="p-3 bg-white text-rose-400 hover:bg-rose-50 hover:text-rose-600 rounded-xl shadow-sm transition-colors border border-slate-200"
                     >
                       <Trash2 size={16} />
@@ -825,18 +1281,76 @@ const Settings: React.FC = () => {
     </div>
   );
 
-  const renderPlaceholder = (title: string, desc: string) => (
-    <div className="flex flex-col items-center justify-center text-center py-20 px-4">
-      <div className="w-32 h-32 bg-indigo-50 rounded-full flex items-center justify-center mb-8 border-4 border-white shadow-xl shadow-indigo-100/50">
-        <PlaySquare size={48} className="text-indigo-300" />
+  const renderData = () => (
+    <div className="space-y-10">
+      <div className="flex justify-between items-end">
+        <div>
+          <h2 className="text-2xl font-black text-slate-800">Data & Backup</h2>
+          <p className="text-sm text-slate-500 font-medium">A snapshot of what's stored, and an on-demand export of your company's records.</p>
+        </div>
+        <button
+          onClick={async () => {
+            setIsExporting(true);
+            try { await exportCompanyData(); } catch (e: any) { popupAlert(e.message, 'Export Failed'); }
+            setIsExporting(false);
+          }}
+          disabled={isExporting}
+          className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-100 flex items-center gap-2 disabled:opacity-50"
+        >
+          <Download size={16} /> {isExporting ? 'Preparing Export...' : 'Export Full Backup (JSON)'}
+        </button>
       </div>
-      <h2 className="text-3xl font-black text-slate-800 mb-4 tracking-tight">{title}</h2>
-      <p className="text-slate-500 font-medium max-w-md">{desc}</p>
-      <button className="mt-8 px-8 py-3 bg-white text-indigo-600 border-2 border-indigo-100 rounded-2xl font-black text-xs uppercase tracking-widest hover:border-indigo-500 transition-colors">
-        Notify Me When Live
-      </button>
+
+      {isDataStatsLoading ? <Loader2 className="animate-spin text-indigo-500 mx-auto" /> : (
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+          {[
+            { label: 'Employees', value: dataStats?.employees ?? 0, sub: `${dataStats?.activeEmployees ?? 0} active`, icon: <Users size={22} /> },
+            { label: 'Departments', value: dataStats?.departments ?? 0, icon: <Globe size={22} /> },
+            { label: 'Locations', value: dataStats?.locations ?? 0, icon: <MapPin size={22} /> },
+            { label: 'Documents', value: dataStats?.documents ?? 0, icon: <FileText size={22} /> },
+            { label: 'Payroll Runs', value: dataStats?.payrollRuns ?? 0, icon: <Zap size={22} /> },
+            { label: 'Job Requisitions', value: dataStats?.jobRequisitions ?? 0, icon: <LayoutGrid size={22} /> },
+          ].map((stat) => (
+            <div key={stat.label} className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm">
+              <div className="w-12 h-12 bg-indigo-50 text-indigo-500 rounded-2xl flex items-center justify-center mb-6">
+                {stat.icon}
+              </div>
+              <p className="text-3xl font-black text-slate-800">{stat.value.toLocaleString()}</p>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">{stat.label}</p>
+              {stat.sub && <p className="text-[10px] font-bold text-emerald-500 mt-1">{stat.sub}</p>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="bg-white rounded-[3rem] border border-slate-200 shadow-sm p-10 flex items-center gap-6">
+        <div className="w-14 h-14 bg-slate-50 text-slate-400 rounded-2xl flex items-center justify-center shrink-0">
+          <HardDrive size={26} />
+        </div>
+        <div>
+          <h4 className="font-bold text-slate-800">About this export</h4>
+          <p className="text-xs font-medium text-slate-500 mt-1 leading-relaxed">
+            Downloads a sanitized JSON snapshot of company profile, settings, employees, departments, locations, roles, and payroll runs.
+            Password hashes and raw document files are never included. Every export is recorded in the Audit Logs.
+          </p>
+        </div>
+      </div>
     </div>
   );
+
+  if (!isAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center text-center py-24 px-4 min-h-[60vh]">
+        <div className="w-28 h-28 bg-indigo-50 rounded-full flex items-center justify-center mb-8 border-4 border-white shadow-xl shadow-indigo-100/50">
+          <ShieldCheck size={44} className="text-indigo-300" />
+        </div>
+        <h2 className="text-2xl font-black text-slate-800 mb-3 tracking-tight">Org Setup is Admin-Only</h2>
+        <p className="text-slate-500 font-medium max-w-md">
+          Company profile, roles &amp; permissions, integrations, and other organization-wide settings are managed by your Super Admin or HR Admin. Reach out to them if something needs to change.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col lg:flex-row gap-10 min-h-[calc(100vh-160px)] pb-20">
@@ -852,19 +1366,19 @@ const Settings: React.FC = () => {
                 </div>
                 <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Configuration Suite</p>
              </div>
-             
+
              <nav className="p-4 space-y-8 py-8">
                 {['General', 'Automation', 'Communications', 'Compliance', 'Advanced'].map(group => (
                   <div key={group}>
                      <h4 className="px-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">{group}</h4>
                      <div className="space-y-1">
                         {sections.filter(s => s.group === group).map(section => (
-                          <button 
+                          <button
                             key={section.id}
                             onClick={() => setActiveSection(section.id)}
                             className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-widest transition-all ${
-                              activeSection === section.id 
-                                ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-100' 
+                              activeSection === section.id
+                                ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-100'
                                 : 'text-slate-500 hover:bg-slate-50 hover:text-indigo-600'
                             }`}
                           >
@@ -897,10 +1411,9 @@ const Settings: React.FC = () => {
                 {activeSection === 'workflows' && renderWorkflows()}
                 {activeSection === 'api' && renderApi()}
                 {activeSection === 'org' && renderOrg()}
-                {['email', 'notifications', 'data'].includes(activeSection) && renderPlaceholder(
-                  sections.find(s => s.id === activeSection)?.name || 'In Development',
-                  "We're crafting an extraordinary experience for this module. It will be available in an upcoming release."
-                )}
+                {activeSection === 'notifications' && renderNotifications()}
+                {activeSection === 'email' && renderEmailTemplates()}
+                {activeSection === 'data' && renderData()}
              </motion.div>
           </AnimatePresence>
        </main>

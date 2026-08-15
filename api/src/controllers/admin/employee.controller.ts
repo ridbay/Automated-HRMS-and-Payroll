@@ -1,5 +1,6 @@
 import { Context } from 'hono';
 import { EmployeeService } from '../../services/employee.service';
+import { AuditService } from '../../services/audit.service';
 import { AppEnv } from '../../types';
 
 export const getEmployees = async (c: Context<AppEnv>) => {
@@ -38,6 +39,14 @@ export const createEmployee = async (c: Context<AppEnv>) => {
   
   try {
     const result = await service.createForCompany(companyId, body);
+    await new AuditService(c.env.DB).log(companyId, {
+      actorId: c.get('employeeId'),
+      subjectId: result.id,
+      action: `Created employee ${result.name} ${result.lastName}`,
+      module: 'workforce',
+      details: `Role: ${result.role} · Department: ${result.department || 'Unassigned'}`,
+      ip: c.req.header('cf-connecting-ip'),
+    });
     return c.json(result, 201);
   } catch (err: any) {
     const errorMessage = err.message || '';
@@ -58,6 +67,14 @@ export const updateEmployee = async (c: Context<AppEnv>) => {
   const body = await c.req.json();
   
   const result = await service.updateEmployeeByAdmin(companyId, employeeId, body);
+  await new AuditService(c.env.DB).log(companyId, {
+    actorId: c.get('employeeId'),
+    subjectId: employeeId,
+    action: `Updated employee profile for ${result?.name || ''} ${result?.lastName || ''}`.trim(),
+    module: 'workforce',
+    details: `Changed: ${Object.keys(body).join(', ')}`,
+    ip: c.req.header('cf-connecting-ip'),
+  });
   return c.json(result);
 };
 
@@ -65,8 +82,18 @@ export const deleteEmployee = async (c: Context<AppEnv>) => {
   const companyId = c.get('companyId');
   const employeeId = c.req.param('id') as string;
   const service = new EmployeeService(c.env.DB);
-  
+
+  // Grab the name before the row is gone — deleteEmployee only returns { success }.
+  const subject = await service.getEmployeeProfile(companyId, employeeId);
   const result = await service.deleteEmployee(companyId, employeeId);
+  await new AuditService(c.env.DB).log(companyId, {
+    actorId: c.get('employeeId'),
+    subjectId: c.get('employeeId'), // the deleted employee no longer exists to file this under
+    action: `Deleted employee ${subject?.name || ''} ${subject?.lastName || ''}`.trim() || `Deleted employee ${employeeId}`,
+    module: 'workforce',
+    severity: 'warning',
+    ip: c.req.header('cf-connecting-ip'),
+  });
   return c.json(result);
 };
 

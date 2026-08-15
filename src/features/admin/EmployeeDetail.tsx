@@ -39,9 +39,10 @@ import {
   Box,
   Edit2,
   Save,
+  X,
   XCircle,
 } from "lucide-react";
-import { getDocumentDownloadUrl, useEmployeeLeaveBalances, useUpdateLeaveBalances, useEmployeeProfile, useEmployeeDirectReports, useAddAdminEmergencyContact, useDeleteAdminEmergencyContact, useUploadEmployeeDocument, useDeleteEmployeeDocument, useUpdateAdminEmployee, useEmployeeAssessments, useCreateAssessment, useEmployeePayslips, useEmployeeBenefits, useUpdateEmployeeBenefits, useEmployeeTrainings, useAddEmployeeTraining, useEmployeeLeaveRequests, useEmployeeAuditLogs, useEmployeeAssets, useAddEmployeeAsset, useDeleteEmployeeAsset } from "../../api/client";
+import { getDocumentDownloadUrl, useEmployeeLeaveBalances, useUpdateLeaveBalances, useEmployeeProfile, useEmployeeDirectReports, useAddAdminEmergencyContact, useDeleteAdminEmergencyContact, useUploadEmployeeDocument, useDeleteEmployeeDocument, useUpdateAdminEmployee, useEmployeeAssessments, useCreateAssessment, useEmployeePayslips, useEmployeeBenefits, useUpdateEmployeeBenefits, useEmployeeTrainings, useAddEmployeeTraining, useEmployeeLeaveRequests, useEmployeeAuditLogs, useEmployeeAssets, useAddEmployeeAsset, useDeleteEmployeeAsset, useReviewCycles } from "../../api/client";
 import { usePopup } from "../../components/PopupProvider";
 import { Employee } from "../../types/index";
 import { MOCK_ASSETS } from "../../data/mocks";
@@ -72,6 +73,13 @@ const EmployeeDetail: React.FC<Props> = ({ employee: initialEmployee, onBack }) 
   
   const { data: assessmentsData } = useEmployeeAssessments(initialEmployee.id);
   const createAssessmentMutation = useCreateAssessment();
+  const { data: reviewCyclesData } = useReviewCycles();
+  const reviewCycles = reviewCyclesData?.cycles || [];
+  const ratingScale = reviewCyclesData?.ratingScale || [];
+  const activePerformanceCycle = reviewCycles.find((c: any) => c.status === "active");
+  const [showLogReviewModal, setShowLogReviewModal] = useState(false);
+  const emptyLogReviewForm = { cycleName: "", managerRating: "", managerComment: "" };
+  const [logReviewForm, setLogReviewForm] = useState(emptyLogReviewForm);
   
   const { data: payslipsData } = useEmployeePayslips(initialEmployee.id);
   
@@ -518,19 +526,13 @@ const EmployeeDetail: React.FC<Props> = ({ employee: initialEmployee, onBack }) 
                       <p className="text-xs text-slate-400 font-bold mt-1">Manage employee assessments and ratings</p>
                     </div>
                     <button
-                      onClick={async () => {
-                        const cycleName = await prompt("Cycle Name (e.g. Q1 2024, H1 2024):");
-                        if (!cycleName) return;
-                        const managerRating = await prompt("Rating (e.g. Exceeds Expectations, Meets Expectations):");
-                        if (!managerRating) return;
-                        const managerComment = await prompt("Manager Comment:");
-                        if (!managerComment) return;
-                        
-                        createAssessmentMutation.mutate({ employeeId: employee.id, data: { cycleName, managerRating, managerComment } });
+                      onClick={() => {
+                        setLogReviewForm({ ...emptyLogReviewForm, cycleName: activePerformanceCycle?.name || "" });
+                        setShowLogReviewModal(true);
                       }}
                       className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg hover:shadow-indigo-600/20"
                     >
-                      {createAssessmentMutation.isPending ? "Logging..." : "+ Log Review"}
+                      + Log Review
                     </button>
                   </div>
                   
@@ -562,6 +564,102 @@ const EmployeeDetail: React.FC<Props> = ({ employee: initialEmployee, onBack }) 
                   </div>
                 </div>
               )}
+
+              <AnimatePresence>
+                {showLogReviewModal && (
+                  <div className="fixed inset-0 z-[200] flex items-center justify-center p-6">
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      onClick={() => setShowLogReviewModal(false)}
+                      className="absolute inset-0 bg-slate-900/70 backdrop-blur-md"
+                    />
+                    <motion.div
+                      initial={{ scale: 0.9, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      exit={{ scale: 0.9, opacity: 0 }}
+                      className="relative bg-white w-full max-w-lg rounded-[3rem] shadow-2xl overflow-hidden"
+                    >
+                      <div className="p-10 bg-indigo-600 text-white flex justify-between items-start">
+                        <div>
+                          <h2 className="text-2xl font-black mb-1">Log Performance Review</h2>
+                          <p className="text-indigo-100 text-sm font-medium">
+                            {employee.name} {employee.lastName}
+                          </p>
+                        </div>
+                        <button onClick={() => setShowLogReviewModal(false)} className="p-3 bg-white/10 hover:bg-white/20 rounded-2xl transition-all">
+                          <X size={20} />
+                        </button>
+                      </div>
+                      <div className="p-10 space-y-6">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Cycle</label>
+                          {reviewCycles.length > 0 ? (
+                            <select
+                              value={logReviewForm.cycleName}
+                              onChange={(e) => setLogReviewForm({ ...logReviewForm, cycleName: e.target.value })}
+                              className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-700"
+                            >
+                              <option value="">Select a cycle…</option>
+                              {reviewCycles.map((c: any) => (
+                                <option key={c.id} value={c.name}>{c.name}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input
+                              type="text"
+                              value={logReviewForm.cycleName}
+                              onChange={(e) => setLogReviewForm({ ...logReviewForm, cycleName: e.target.value })}
+                              placeholder="e.g. H1 2026"
+                              className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-700"
+                            />
+                          )}
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Rating</label>
+                          <select
+                            value={logReviewForm.managerRating}
+                            onChange={(e) => setLogReviewForm({ ...logReviewForm, managerRating: e.target.value })}
+                            className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-700"
+                          >
+                            <option value="">Select rating…</option>
+                            {ratingScale.map((r) => (
+                              <option key={r.value} value={r.value}>{r.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Comment</label>
+                          <textarea
+                            rows={4}
+                            value={logReviewForm.managerComment}
+                            onChange={(e) => setLogReviewForm({ ...logReviewForm, managerComment: e.target.value })}
+                            className="w-full px-6 py-4 bg-slate-50 border-none rounded-3xl outline-none font-medium resize-none"
+                          />
+                        </div>
+                      </div>
+                      <div className="p-8 bg-slate-50 border-t border-slate-100 flex justify-end gap-4">
+                        <button onClick={() => setShowLogReviewModal(false)} className="px-8 py-4 bg-white border border-slate-200 text-slate-500 rounded-2xl font-black text-xs uppercase tracking-widest">
+                          Cancel
+                        </button>
+                        <button
+                          disabled={!logReviewForm.cycleName.trim() || !logReviewForm.managerRating || createAssessmentMutation.isPending}
+                          onClick={() => {
+                            createAssessmentMutation.mutate(
+                              { employeeId: employee.id, data: logReviewForm },
+                              { onSuccess: () => setShowLogReviewModal(false) }
+                            );
+                          }}
+                          className="px-10 py-4 bg-indigo-600 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-xl shadow-indigo-100 disabled:opacity-50"
+                        >
+                          {createAssessmentMutation.isPending ? "Logging…" : "Log Review"}
+                        </button>
+                      </div>
+                    </motion.div>
+                  </div>
+                )}
+              </AnimatePresence>
 
               {activeTab === "documents" && (
                 <div className="bg-white p-10 rounded-[3.5rem] border border-slate-200 shadow-sm space-y-8">

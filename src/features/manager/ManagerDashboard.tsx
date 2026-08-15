@@ -83,6 +83,12 @@ import {
   useCreateJobRequisition,
   useDepartments,
   useLocations,
+  useMyDirectReports,
+  useTeamGoals,
+  useAssignTeamGoal,
+  useTeamPendingAssessments,
+  useSubmitManagerReview,
+  useTeamPerformanceAnalytics,
 } from "../../api/client";
 import EmployeeDetailModal from "./components/EmployeeDetailModal";
 import ApprovalCenter from "./components/ApprovalCenter";
@@ -113,6 +119,49 @@ const ManagerDashboard: React.FC = () => {
 
   const { data: teamPendingLeaves = [] } = useTeamPendingLeaves();
   const updateLeaveStatus = useUpdateTeamLeaveStatus();
+
+  // Performance & Growth: direct reports, their goals, pending self-assessment
+  // reviews, and this manager's team rating distribution.
+  const { data: directReports = [] } = useMyDirectReports();
+  const { data: teamGoals = [] } = useTeamGoals();
+  const assignGoal = useAssignTeamGoal();
+  const { data: teamPendingData } = useTeamPendingAssessments();
+  const pendingReviews = teamPendingData?.pending || [];
+  const ratingScale = teamPendingData?.ratingScale || [];
+  const submitManagerReview = useSubmitManagerReview();
+  const { data: teamAnalytics } = useTeamPerformanceAnalytics();
+
+  const [showAssignGoalModal, setShowAssignGoalModal] = useState(false);
+  const emptyAssignGoalForm = { employeeId: "", title: "", description: "", priority: "medium", dueDate: "" };
+  const [assignGoalForm, setAssignGoalForm] = useState(emptyAssignGoalForm);
+
+  const [reviewingAssessment, setReviewingAssessment] = useState<any>(null);
+  const [reviewRating, setReviewRating] = useState("");
+  const [reviewComment, setReviewComment] = useState("");
+
+  const handleAssignGoal = () => {
+    if (!assignGoalForm.employeeId || !assignGoalForm.title.trim()) return;
+    assignGoal.mutate(assignGoalForm, {
+      onSuccess: () => {
+        setShowAssignGoalModal(false);
+        setAssignGoalForm(emptyAssignGoalForm);
+      },
+    });
+  };
+
+  const handleSubmitManagerReview = () => {
+    if (!reviewingAssessment || !reviewRating) return;
+    submitManagerReview.mutate(
+      { id: reviewingAssessment.id, managerRating: reviewRating, managerComment: reviewComment },
+      {
+        onSuccess: () => {
+          setReviewingAssessment(null);
+          setReviewRating("");
+          setReviewComment("");
+        },
+      }
+    );
+  };
 
   // Requisitions ("Requirement" requests) this manager has raised, plus the
   // form to submit a new one. HR Admin/Super Admin review & approve these
@@ -215,13 +264,6 @@ const ManagerDashboard: React.FC = () => {
       },
     ],
   };
-
-  const performanceData = [
-    { name: "Sarah J.", score: 4.8 },
-    { name: "Michael C.", score: 4.5 },
-    { name: "Emma D.", score: 4.2 },
-    { name: "James W.", score: 3.9 },
-  ];
 
   const meetings = [
     { id: 1, with: "Sarah Johnson", date: "Today, 2:00 PM", type: "1-on-1" },
@@ -596,73 +638,124 @@ const ManagerDashboard: React.FC = () => {
             Team Performance
           </h2>
           <p className="text-sm text-slate-500 font-medium">
-            Metrics and growth tracking.
+            Goals, reviews and growth for your direct reports.
           </p>
         </div>
-        <button className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl">
-          Schedule Reviews
+        <button
+          onClick={() => setShowAssignGoalModal(true)}
+          className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl flex items-center gap-2"
+        >
+          <Plus size={16} /> Assign Goal
         </button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <section className="bg-white p-10 rounded-[3.5rem] border border-slate-200 shadow-sm">
           <h3 className="text-xl font-black text-slate-800 mb-8">
-            Performance Distribution
+            Team Rating Distribution
           </h3>
           <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={performanceData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis
-                  dataKey="name"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fontSize: 10, fontWeight: "bold" }}
-                />
-                <Tooltip />
-                <Bar
-                  dataKey="score"
-                  fill="#4f46e5"
-                  radius={[10, 10, 0, 0]}
-                  barSize={40}
-                />
-              </BarChart>
-            </ResponsiveContainer>
+            {teamAnalytics?.distribution?.some((d: any) => d.count > 0) ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={teamAnalytics.distribution}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis
+                    dataKey="name"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 10, fontWeight: "bold" }}
+                  />
+                  <Tooltip />
+                  <Bar
+                    dataKey="count"
+                    fill="#4f46e5"
+                    radius={[10, 10, 0, 0]}
+                    barSize={40}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex items-center justify-center text-slate-400 text-sm font-medium text-center px-8">
+                No completed reviews for your team yet this cycle.
+              </div>
+            )}
           </div>
         </section>
 
         <section className="bg-white p-10 rounded-[3.5rem] border border-slate-200 shadow-sm">
           <h3 className="text-xl font-black text-slate-800 mb-8">
-            Pending Reviews
+            Pending Reviews {pendingReviews.length > 0 && <span className="text-indigo-600">({pendingReviews.length})</span>}
           </h3>
           <div className="space-y-6">
-            {teamMembers.slice(0, 3).map((m, i) => (
-              <div
-                key={i}
-                className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl"
-              >
-                <div className="flex items-center gap-4">
-                  <img
-                    src={m.avatar}
-                    className="w-10 h-10 rounded-xl object-cover"
-                  />
-                  <div>
-                    <p className="text-sm font-black text-slate-800">
-                      {m.name}
-                    </p>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase">
-                      Due in 3 Days
-                    </p>
+            {pendingReviews.length === 0 ? (
+              <p className="text-sm text-slate-400 font-medium">
+                No self-assessments waiting on your review right now.
+              </p>
+            ) : (
+              pendingReviews.map((a: any) => (
+                <div
+                  key={a.id}
+                  className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl"
+                >
+                  <div className="flex items-center gap-4">
+                    <img
+                      src={a.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(a.employeeName || "Employee")}&background=random`}
+                      className="w-10 h-10 rounded-xl object-cover"
+                    />
+                    <div>
+                      <p className="text-sm font-black text-slate-800">
+                        {a.employeeName} {a.employeeLastName}
+                      </p>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase">
+                        {a.cycleName}
+                      </p>
+                    </div>
                   </div>
+                  <button
+                    onClick={() => {
+                      setReviewingAssessment(a);
+                      setReviewRating("");
+                      setReviewComment("");
+                    }}
+                    className="px-4 py-2 bg-white border border-slate-200 text-indigo-600 rounded-xl text-[10px] font-black uppercase hover:bg-indigo-50"
+                  >
+                    Review
+                  </button>
                 </div>
-                <button className="px-4 py-2 bg-white border border-slate-200 text-indigo-600 rounded-xl text-[10px] font-black uppercase hover:bg-indigo-50">
-                  Start
-                </button>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </section>
       </div>
+
+      <section className="bg-white p-10 rounded-[3.5rem] border border-slate-200 shadow-sm">
+        <h3 className="text-xl font-black text-slate-800 mb-8">Team Goals & OKRs</h3>
+        {teamGoals.length === 0 ? (
+          <p className="text-sm text-slate-400 font-medium">
+            No goals set for your direct reports yet — assign one to get started.
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {teamGoals.map((g: any) => (
+              <div key={g.id} className="p-6 bg-slate-50 rounded-3xl border border-slate-100">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">
+                    {g.employeeName} {g.employeeLastName}
+                  </p>
+                  <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${g.status === "completed" ? "bg-emerald-100 text-emerald-600" : g.status === "at_risk" ? "bg-amber-100 text-amber-600" : "bg-indigo-100 text-indigo-600"}`}>
+                    {g.status.replace("_", " ")}
+                  </span>
+                </div>
+                <h4 className="text-sm font-black text-slate-800 mb-3">{g.title}</h4>
+                <div className="w-full h-2 bg-white rounded-full overflow-hidden">
+                  <div className="h-full bg-indigo-600" style={{ width: `${g.progress}%` }} />
+                </div>
+                <p className="text-right text-xs font-black text-slate-600 mt-2">{g.progress}%</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   );
 
@@ -948,6 +1041,179 @@ const ManagerDashboard: React.FC = () => {
                   className="px-10 py-4 bg-indigo-600 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-xl shadow-indigo-100 hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:hover:scale-100"
                 >
                   {createRequisition.isPending ? "Submitting…" : "Submit Request"}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Assign Goal Modal */}
+      <AnimatePresence>
+        {showAssignGoalModal && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-6">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowAssignGoalModal(false)}
+              className="absolute inset-0 bg-slate-900/80 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="relative bg-white w-full max-w-lg rounded-[3rem] shadow-2xl overflow-hidden"
+            >
+              <div className="bg-indigo-600 p-10 text-white flex justify-between items-start">
+                <div>
+                  <h2 className="text-2xl font-black mb-1 tracking-tighter">Assign Goal</h2>
+                  <p className="text-indigo-100 text-sm font-medium">Set a new objective for a direct report.</p>
+                </div>
+                <button onClick={() => setShowAssignGoalModal(false)} className="p-3 bg-white/10 hover:bg-white/20 rounded-2xl transition-all">
+                  <X size={22} />
+                </button>
+              </div>
+              <div className="p-10 space-y-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Team Member</label>
+                  <select
+                    value={assignGoalForm.employeeId}
+                    onChange={(e) => setAssignGoalForm({ ...assignGoalForm, employeeId: e.target.value })}
+                    className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-800"
+                  >
+                    <option value="">Select a direct report…</option>
+                    {directReports.map((r: any) => (
+                      <option key={r.id} value={r.id}>{r.name} {r.lastName}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Goal Title</label>
+                  <input
+                    type="text"
+                    value={assignGoalForm.title}
+                    onChange={(e) => setAssignGoalForm({ ...assignGoalForm, title: e.target.value })}
+                    placeholder="e.g. Ship the Q3 billing revamp"
+                    className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-800"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Priority</label>
+                    <select
+                      value={assignGoalForm.priority}
+                      onChange={(e) => setAssignGoalForm({ ...assignGoalForm, priority: e.target.value })}
+                      className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-700"
+                    >
+                      <option value="high">High</option>
+                      <option value="medium">Medium</option>
+                      <option value="low">Low</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Due Date</label>
+                    <input
+                      type="date"
+                      value={assignGoalForm.dueDate}
+                      onChange={(e) => setAssignGoalForm({ ...assignGoalForm, dueDate: e.target.value })}
+                      className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-700"
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="p-8 bg-slate-50 border-t border-slate-100 flex justify-end gap-4">
+                <button onClick={() => setShowAssignGoalModal(false)} className="px-8 py-4 bg-white border border-slate-200 text-slate-500 rounded-2xl font-black text-xs uppercase tracking-widest">
+                  Cancel
+                </button>
+                <button
+                  disabled={!assignGoalForm.employeeId || !assignGoalForm.title.trim() || assignGoal.isPending}
+                  onClick={handleAssignGoal}
+                  className="px-10 py-4 bg-indigo-600 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-xl shadow-indigo-100 disabled:opacity-50"
+                >
+                  {assignGoal.isPending ? "Assigning…" : "Assign Goal"}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Manager Review Modal */}
+      <AnimatePresence>
+        {reviewingAssessment && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-6">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setReviewingAssessment(null)}
+              className="absolute inset-0 bg-slate-900/80 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="relative bg-white w-full max-w-xl rounded-[3rem] shadow-2xl overflow-hidden"
+            >
+              <div className="bg-indigo-600 p-10 text-white flex justify-between items-start">
+                <div>
+                  <h2 className="text-2xl font-black mb-1 tracking-tighter">
+                    Review {reviewingAssessment.employeeName} {reviewingAssessment.employeeLastName}
+                  </h2>
+                  <p className="text-indigo-100 text-sm font-medium">{reviewingAssessment.cycleName}</p>
+                </div>
+                <button onClick={() => setReviewingAssessment(null)} className="p-3 bg-white/10 hover:bg-white/20 rounded-2xl transition-all">
+                  <X size={22} />
+                </button>
+              </div>
+              <div className="p-10 space-y-6">
+                {reviewingAssessment.selfComment && (
+                  <div className="p-4 bg-slate-50 rounded-2xl">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Self Comment</p>
+                    <p className="text-sm font-medium text-slate-700">{reviewingAssessment.selfComment}</p>
+                  </div>
+                )}
+                {reviewingAssessment.selfRating && (
+                  <div className="p-4 bg-slate-50 rounded-2xl">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Self Rating</p>
+                    <p className="text-sm font-bold text-slate-700">{reviewingAssessment.selfRating.replace(/_/g, " ")}</p>
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Your Rating</label>
+                  <select
+                    value={reviewRating}
+                    onChange={(e) => setReviewRating(e.target.value)}
+                    className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-700"
+                  >
+                    <option value="">Select rating…</option>
+                    {ratingScale.map((r) => (
+                      <option key={r.value} value={r.value}>{r.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Comment</label>
+                  <textarea
+                    rows={5}
+                    value={reviewComment}
+                    onChange={(e) => setReviewComment(e.target.value)}
+                    placeholder="What stood out this cycle?"
+                    className="w-full px-6 py-4 bg-slate-50 border-none rounded-3xl outline-none font-medium resize-none"
+                  />
+                </div>
+              </div>
+              <div className="p-8 bg-slate-50 border-t border-slate-100 flex justify-end gap-4">
+                <button onClick={() => setReviewingAssessment(null)} className="px-8 py-4 bg-white border border-slate-200 text-slate-500 rounded-2xl font-black text-xs uppercase tracking-widest">
+                  Cancel
+                </button>
+                <button
+                  disabled={!reviewRating || submitManagerReview.isPending}
+                  onClick={handleSubmitManagerReview}
+                  className="px-10 py-4 bg-indigo-600 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-xl shadow-indigo-100 disabled:opacity-50"
+                >
+                  {submitManagerReview.isPending ? "Saving…" : "Submit Review"}
                 </button>
               </div>
             </motion.div>

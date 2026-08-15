@@ -1298,6 +1298,198 @@ export const useDeleteRole = () => {
   });
 };
 
+// --- Public Holidays ---
+export const useHolidays = (enabled: boolean = true) => {
+  return useQuery({
+    queryKey: ['holidays'],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/admin/holidays`);
+      if (!res.ok) throw new Error('Failed to fetch holidays');
+      return res.json();
+    },
+    enabled,
+  });
+};
+
+export const useCreateHoliday = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: { name: string; date: string }) => {
+      const res = await fetchWithTenant(`${API_URL}/admin/holidays`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('Failed to add holiday');
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['holidays'] }),
+  });
+};
+
+export const useDeleteHoliday = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetchWithTenant(`${API_URL}/admin/holidays/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to remove holiday');
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['holidays'] }),
+  });
+};
+
+// --- Email Templates ---
+export const useEmailTemplates = (enabled: boolean = true) => {
+  return useQuery({
+    queryKey: ['emailTemplates'],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/admin/email-templates`);
+      if (!res.ok) throw new Error('Failed to fetch email templates');
+      return res.json();
+    },
+    enabled,
+  });
+};
+
+export const useUpdateEmailTemplate = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ key, data }: { key: string; data: { subject?: string; body?: string } }) => {
+      const res = await fetchWithTenant(`${API_URL}/admin/email-templates/${key}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('Failed to update email template');
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['emailTemplates'] }),
+  });
+};
+
+// --- Integrations ---
+export const useIntegrations = (enabled: boolean = true) => {
+  return useQuery({
+    queryKey: ['integrations'],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/admin/integrations`);
+      if (!res.ok) throw new Error('Failed to fetch integrations');
+      return res.json();
+    },
+    enabled,
+  });
+};
+
+export const useToggleIntegration = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (key: string) => {
+      const res = await fetchWithTenant(`${API_URL}/admin/integrations/${key}/toggle`, { method: 'PUT' });
+      if (!res.ok) throw new Error('Failed to update integration');
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['integrations'] }),
+  });
+};
+
+// --- Workflows ---
+export const useWorkflows = (enabled: boolean = true) => {
+  return useQuery({
+    queryKey: ['workflows'],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/admin/workflows`);
+      if (!res.ok) throw new Error('Failed to fetch workflows');
+      return res.json();
+    },
+    enabled,
+  });
+};
+
+export const useUpdateWorkflow = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ key, data }: { key: string; data: { steps?: any[]; enabled?: boolean; description?: string } }) => {
+      const res = await fetchWithTenant(`${API_URL}/admin/workflows/${key}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('Failed to update workflow');
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['workflows'] }),
+  });
+};
+
+// --- Data & Backup ---
+export const useDataStats = (enabled: boolean = true) => {
+  return useQuery({
+    queryKey: ['dataStats'],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/admin/data/stats`);
+      if (!res.ok) throw new Error('Failed to fetch data stats');
+      return res.json();
+    },
+    enabled,
+  });
+};
+
+// Triggers a browser download of a full sanitized JSON backup of the company's data.
+export const exportCompanyData = async () => {
+  const res = await fetchWithTenant(`${API_URL}/admin/data/export`);
+  if (!res.ok) throw new Error('Failed to export company data');
+  const blob = await res.blob();
+  const disposition = res.headers.get('Content-Disposition') || '';
+  const match = disposition.match(/filename="?([^"]+)"?/);
+  const filename = match ? match[1] : `zenhr-export-${new Date().toISOString().slice(0, 10)}.json`;
+
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+};
+
+// --- Audit Logs ---
+export const useAuditLogs = (filters: { module?: string; search?: string } = {}, enabled: boolean = true) => {
+  return useQuery({
+    queryKey: ['auditLogs', filters],
+    queryFn: async () => {
+      const query = new URLSearchParams();
+      if (filters.module) query.set('module', filters.module);
+      if (filters.search) query.set('search', filters.search);
+      const qs = query.toString();
+      const res = await fetchWithTenant(`${API_URL}/admin/audit-logs${qs ? `?${qs}` : ''}`);
+      if (!res.ok) throw new Error('Failed to fetch audit logs');
+      return res.json();
+    },
+    enabled,
+  });
+};
+
+// Triggers a browser download of the audit log as CSV.
+export const exportAuditLogsCsv = async () => {
+  const res = await fetchWithTenant(`${API_URL}/admin/audit-logs/export`);
+  if (!res.ok) throw new Error('Failed to export audit log');
+  const blob = await res.blob();
+  const disposition = res.headers.get('Content-Disposition') || '';
+  const match = disposition.match(/filename="?([^"]+)"?/);
+  const filename = match ? match[1] : `audit-log-${new Date().toISOString().slice(0, 10)}.csv`;
+
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+};
+
 // --- Employee Self-Service API ---
 
 export const useMyProfile = () => {
@@ -1925,6 +2117,25 @@ export const useShoutouts = () => {
   });
 };
 
+export const useSendShoutout = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: { toEmployeeName: string; toEmployeeId?: string; type: string; message: string }) => {
+      const res = await fetchWithTenant(`${API_URL}/employee/feedback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || 'Failed to send shoutout'); }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['shoutouts'] });
+      queryClient.invalidateQueries({ queryKey: ['myPerformanceSummary'] });
+    },
+  });
+};
+
 export const useMyAssessments = () => {
   return useQuery({
     queryKey: ['myAssessments'],
@@ -1936,15 +2147,17 @@ export const useMyAssessments = () => {
   });
 };
 
-export const useActiveCycleAssessment = (cycleName: string) => {
+// Resolves the company's active review cycle server-side and returns both
+// it and (if one exists) the caller's own assessment against it — no cycle
+// name is ever chosen client-side.
+export const useActiveCycleAssessment = () => {
   return useQuery({
-    queryKey: ['activeCycleAssessment', cycleName],
-    queryFn: async () => {
-      const res = await fetchWithTenant(`${API_URL}/employee/assessments/active?cycle=${encodeURIComponent(cycleName)}`);
+    queryKey: ['activeCycleAssessment'],
+    queryFn: async (): Promise<{ assessment: any | null; activeCycle: any | null }> => {
+      const res = await fetchWithTenant(`${API_URL}/employee/assessments/active`);
       if (!res.ok) throw new Error('Failed to fetch active assessment');
       return res.json();
     },
-    enabled: !!cycleName,
   });
 };
 
@@ -2004,7 +2217,7 @@ export const useEmployeeBenefits = (employeeId: string) => {
   return useQuery({
     queryKey: ['employeeBenefits', employeeId],
     queryFn: async () => {
-      const res = await fetchWithTenant(`${API_URL}/benefits/employee/${employeeId}`);
+      const res = await fetchWithTenant(`${API_URL}/admin/benefits/employee/${employeeId}`);
       if (!res.ok) throw new Error('Failed to fetch benefits');
       return res.json();
     },
@@ -2016,7 +2229,7 @@ export const useUpdateEmployeeBenefits = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ employeeId, data }: { employeeId: string; data: any }) => {
-      const res = await fetchWithTenant(`${API_URL}/benefits/employee/${employeeId}`, {
+      const res = await fetchWithTenant(`${API_URL}/admin/benefits/employee/${employeeId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -2064,7 +2277,9 @@ export const useEmployeeAssessments = (employeeId: string) => {
   return useQuery({
     queryKey: ['employeeAssessments', employeeId],
     queryFn: async () => {
-      const res = await fetchWithTenant(`${API_URL}/performance/employee/${employeeId}`);
+      // NOTE: this was pointing at `/performance/employee/:id` (missing the
+      // `/admin` prefix the route is actually mounted under) and 404ing.
+      const res = await fetchWithTenant(`${API_URL}/admin/performance/employee/${employeeId}`);
       if (!res.ok) throw new Error('Failed to fetch assessments');
       return res.json();
     },
@@ -2076,7 +2291,7 @@ export const useCreateAssessment = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ employeeId, data }: { employeeId: string; data: any }) => {
-      const res = await fetchWithTenant(`${API_URL}/performance/employee/${employeeId}`, {
+      const res = await fetchWithTenant(`${API_URL}/admin/performance/employee/${employeeId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -2171,5 +2386,839 @@ export const useCancelTransition = () => {
       return res.json();
     },
     onSuccess: () => invalidateTransitions(queryClient),
+  });
+};
+
+// --- Reports & Analytics ---
+
+// Full company-wide report (SUPER_ADMIN / HR_ADMIN / PAYROLL_OFFICER).
+export const useReportsOverview = (enabled: boolean = true) => {
+  return useQuery({
+    queryKey: ['reportsOverview'],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/admin/reports/overview`);
+      if (!res.ok) throw new Error('Failed to fetch reports overview');
+      const json = await res.json();
+      return json.data;
+    },
+    enabled,
+  });
+};
+
+// Recruitment-focused slice, also reachable by RECRUITER.
+export const useRecruitmentReport = (enabled: boolean = true) => {
+  return useQuery({
+    queryKey: ['recruitmentReport'],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/admin/reports/recruitment`);
+      if (!res.ok) throw new Error('Failed to fetch recruitment report');
+      const json = await res.json();
+      return json.data;
+    },
+    enabled,
+  });
+};
+
+// Payroll-focused slice, also reachable by PAYROLL_OFFICER.
+export const usePayrollReport = (enabled: boolean = true) => {
+  return useQuery({
+    queryKey: ['payrollReport'],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/admin/reports/payroll`);
+      if (!res.ok) throw new Error('Failed to fetch payroll report');
+      const json = await res.json();
+      return json.data;
+    },
+    enabled,
+  });
+};
+
+// Manager-scoped: Reports & Analytics for the caller's own direct reports.
+export const useTeamReport = (enabled: boolean = true) => {
+  return useQuery({
+    queryKey: ['teamReport'],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/employee/reports/team`);
+      if (!res.ok) throw new Error('Failed to fetch team report');
+      const json = await res.json();
+      return json.data;
+    },
+    enabled,
+  });
+};
+
+// Triggers a browser download of a CSV export for the given report type
+// ('employees' | 'requisitions' | 'leave' | 'payroll'). Payroll exports need
+// a period (month/year) to know which pay run to pull payslips from.
+export const downloadReportCsv = async (type: 'employees' | 'requisitions' | 'leave' | 'payroll', params?: { month?: number; year?: number }) => {
+  const query = new URLSearchParams({ type });
+  if (params?.month) query.append('month', String(params.month));
+  if (params?.year) query.append('year', String(params.year));
+
+  const res = await fetchWithTenant(`${API_URL}/admin/reports/export?${query.toString()}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to generate export');
+  }
+  const blob = await res.blob();
+  const disposition = res.headers.get('Content-Disposition') || '';
+  const match = disposition.match(/filename="?([^"]+)"?/);
+  const filename = match ? match[1] : `${type}-export.csv`;
+
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+};
+
+// =============================================================================
+// Benefits & Wellbeing
+// =============================================================================
+
+// ---------- Admin: plan catalog, enrollments, wellness programs, claims ----------
+
+export const useBenefitsOverview = (enabled: boolean = true) => {
+  return useQuery({
+    queryKey: ['benefitsOverview'],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/admin/benefits/overview`);
+      if (!res.ok) throw new Error('Failed to fetch benefits overview');
+      return res.json();
+    },
+    enabled,
+  });
+};
+
+export const useBenefitPlans = (status?: string) => {
+  return useQuery({
+    queryKey: ['benefitPlans', status || 'all'],
+    queryFn: async () => {
+      const query = status ? `?status=${status}` : '';
+      const res = await fetchWithTenant(`${API_URL}/admin/benefits/plans${query}`);
+      if (!res.ok) throw new Error('Failed to fetch benefit plans');
+      return res.json();
+    },
+  });
+};
+
+export const useCreateBenefitPlan = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: any) => {
+      const res = await fetchWithTenant(`${API_URL}/admin/benefits/plans`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || 'Failed to create plan'); }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['benefitPlans'] });
+      queryClient.invalidateQueries({ queryKey: ['benefitsOverview'] });
+    },
+  });
+};
+
+export const useUpdateBenefitPlan = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ planId, data }: { planId: string; data: any }) => {
+      const res = await fetchWithTenant(`${API_URL}/admin/benefits/plans/${planId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || 'Failed to update plan'); }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['benefitPlans'] });
+      queryClient.invalidateQueries({ queryKey: ['benefitsOverview'] });
+    },
+  });
+};
+
+export const useDeleteBenefitPlan = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (planId: string) => {
+      const res = await fetchWithTenant(`${API_URL}/admin/benefits/plans/${planId}`, { method: 'DELETE' });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || 'Failed to delete plan'); }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['benefitPlans'] });
+      queryClient.invalidateQueries({ queryKey: ['benefitsOverview'] });
+    },
+  });
+};
+
+export const useAdminEnrollments = (filters: { planId?: string; employeeId?: string; status?: string } = {}) => {
+  return useQuery({
+    queryKey: ['adminBenefitEnrollments', filters],
+    queryFn: async () => {
+      const query = new URLSearchParams();
+      if (filters.planId) query.append('planId', filters.planId);
+      if (filters.employeeId) query.append('employeeId', filters.employeeId);
+      if (filters.status) query.append('status', filters.status);
+      const res = await fetchWithTenant(`${API_URL}/admin/benefits/enrollments?${query.toString()}`);
+      if (!res.ok) throw new Error('Failed to fetch enrollments');
+      return res.json();
+    },
+  });
+};
+
+export const useAdminEnrollEmployee = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: { employeeId: string; planId: string; coverageLevel?: string; notes?: string }) => {
+      const res = await fetchWithTenant(`${API_URL}/admin/benefits/enrollments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || 'Failed to enroll employee'); }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminBenefitEnrollments'] });
+      queryClient.invalidateQueries({ queryKey: ['benefitsOverview'] });
+    },
+  });
+};
+
+export const useAdminUpdateEnrollmentStatus = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ enrollmentId, status }: { enrollmentId: string; status: 'enrolled' | 'waived' | 'cancelled' }) => {
+      const res = await fetchWithTenant(`${API_URL}/admin/benefits/enrollments/${enrollmentId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || 'Failed to update enrollment'); }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminBenefitEnrollments'] });
+      queryClient.invalidateQueries({ queryKey: ['benefitsOverview'] });
+    },
+  });
+};
+
+export const useAdminWellnessPrograms = () => {
+  return useQuery({
+    queryKey: ['adminWellnessPrograms'],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/admin/benefits/wellness/programs`);
+      if (!res.ok) throw new Error('Failed to fetch wellness programs');
+      return res.json();
+    },
+  });
+};
+
+export const useCreateWellnessProgram = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: any) => {
+      const res = await fetchWithTenant(`${API_URL}/admin/benefits/wellness/programs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || 'Failed to create program'); }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminWellnessPrograms'] });
+      queryClient.invalidateQueries({ queryKey: ['benefitsOverview'] });
+    },
+  });
+};
+
+export const useUpdateWellnessProgram = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ programId, data }: { programId: string; data: any }) => {
+      const res = await fetchWithTenant(`${API_URL}/admin/benefits/wellness/programs/${programId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || 'Failed to update program'); }
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['adminWellnessPrograms'] }),
+  });
+};
+
+export const useDeleteWellnessProgram = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (programId: string) => {
+      const res = await fetchWithTenant(`${API_URL}/admin/benefits/wellness/programs/${programId}`, { method: 'DELETE' });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || 'Failed to delete program'); }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminWellnessPrograms'] });
+      queryClient.invalidateQueries({ queryKey: ['benefitsOverview'] });
+    },
+  });
+};
+
+export const useWellnessProgramParticipants = (programId?: string) => {
+  return useQuery({
+    queryKey: ['wellnessProgramParticipants', programId],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/admin/benefits/wellness/programs/${programId}/participants`);
+      if (!res.ok) throw new Error('Failed to fetch participants');
+      return res.json();
+    },
+    enabled: !!programId,
+  });
+};
+
+export const useAdminBenefitClaims = (filters: { status?: string; kind?: string; employeeId?: string } = {}) => {
+  return useQuery({
+    queryKey: ['adminBenefitClaims', filters],
+    queryFn: async () => {
+      const query = new URLSearchParams();
+      if (filters.status) query.append('status', filters.status);
+      if (filters.kind) query.append('kind', filters.kind);
+      if (filters.employeeId) query.append('employeeId', filters.employeeId);
+      const res = await fetchWithTenant(`${API_URL}/admin/benefits/claims?${query.toString()}`);
+      if (!res.ok) throw new Error('Failed to fetch claims');
+      return res.json();
+    },
+  });
+};
+
+export const useReviewBenefitClaim = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ claimId, status, notes }: { claimId: string; status: 'approved' | 'rejected'; notes?: string }) => {
+      const res = await fetchWithTenant(`${API_URL}/admin/benefits/claims/${claimId}/review`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status, notes }),
+      });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || 'Failed to review claim'); }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminBenefitClaims'] });
+      queryClient.invalidateQueries({ queryKey: ['benefitsOverview'] });
+    },
+  });
+};
+
+// ---------- Employee self-service ----------
+
+export const useMyBenefitsSummary = () => {
+  return useQuery({
+    queryKey: ['myBenefitsSummary'],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/employee/benefits/me/summary`);
+      if (!res.ok) throw new Error('Failed to fetch benefits summary');
+      return res.json();
+    },
+  });
+};
+
+export const useAvailableBenefitPlans = () => {
+  return useQuery({
+    queryKey: ['availableBenefitPlans'],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/employee/benefits/plans`);
+      if (!res.ok) throw new Error('Failed to fetch plans');
+      return res.json();
+    },
+  });
+};
+
+export const useMyEnrollments = () => {
+  return useQuery({
+    queryKey: ['myEnrollments'],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/employee/benefits/enrollments`);
+      if (!res.ok) throw new Error('Failed to fetch enrollments');
+      return res.json();
+    },
+  });
+};
+
+const invalidateMyBenefits = (queryClient: ReturnType<typeof useQueryClient>) => {
+  queryClient.invalidateQueries({ queryKey: ['myBenefitsSummary'] });
+  queryClient.invalidateQueries({ queryKey: ['myEnrollments'] });
+};
+
+export const useEnrollInPlan = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: { planId: string; coverageLevel?: string; notes?: string }) => {
+      const res = await fetchWithTenant(`${API_URL}/employee/benefits/enrollments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || 'Failed to enroll'); }
+      return res.json();
+    },
+    onSuccess: () => invalidateMyBenefits(queryClient),
+  });
+};
+
+export const useCancelMyEnrollment = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (enrollmentId: string) => {
+      const res = await fetchWithTenant(`${API_URL}/employee/benefits/enrollments/${enrollmentId}/cancel`, { method: 'PATCH' });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || 'Failed to cancel enrollment'); }
+      return res.json();
+    },
+    onSuccess: () => invalidateMyBenefits(queryClient),
+  });
+};
+
+export const useMyDependents = () => {
+  return useQuery({
+    queryKey: ['myDependents'],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/employee/benefits/dependents`);
+      if (!res.ok) throw new Error('Failed to fetch dependents');
+      return res.json();
+    },
+  });
+};
+
+export const useAddDependent = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: { name: string; relationship: string; dateOfBirth?: string }) => {
+      const res = await fetchWithTenant(`${API_URL}/employee/benefits/dependents`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || 'Failed to add dependent'); }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['myDependents'] });
+      queryClient.invalidateQueries({ queryKey: ['myBenefitsSummary'] });
+    },
+  });
+};
+
+export const useDeleteDependent = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (dependentId: string) => {
+      const res = await fetchWithTenant(`${API_URL}/employee/benefits/dependents/${dependentId}`, { method: 'DELETE' });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || 'Failed to remove dependent'); }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['myDependents'] });
+      queryClient.invalidateQueries({ queryKey: ['myBenefitsSummary'] });
+    },
+  });
+};
+
+export const useWellnessPrograms = () => {
+  return useQuery({
+    queryKey: ['wellnessPrograms'],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/employee/benefits/wellness/programs`);
+      if (!res.ok) throw new Error('Failed to fetch wellness programs');
+      return res.json();
+    },
+  });
+};
+
+const invalidateWellness = (queryClient: ReturnType<typeof useQueryClient>) => {
+  queryClient.invalidateQueries({ queryKey: ['wellnessPrograms'] });
+  queryClient.invalidateQueries({ queryKey: ['myBenefitsSummary'] });
+};
+
+export const useJoinWellnessProgram = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (programId: string) => {
+      const res = await fetchWithTenant(`${API_URL}/employee/benefits/wellness/programs/${programId}/join`, { method: 'POST' });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || 'Failed to join program'); }
+      return res.json();
+    },
+    onSuccess: () => invalidateWellness(queryClient),
+  });
+};
+
+export const useUpdateMyProgramProgress = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ programId, progress }: { programId: string; progress: number }) => {
+      const res = await fetchWithTenant(`${API_URL}/employee/benefits/wellness/programs/${programId}/progress`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ progress }),
+      });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || 'Failed to update progress'); }
+      return res.json();
+    },
+    onSuccess: () => invalidateWellness(queryClient),
+  });
+};
+
+export const useLeaveWellnessProgram = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (programId: string) => {
+      const res = await fetchWithTenant(`${API_URL}/employee/benefits/wellness/programs/${programId}/leave`, { method: 'POST' });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || 'Failed to leave program'); }
+      return res.json();
+    },
+    onSuccess: () => invalidateWellness(queryClient),
+  });
+};
+
+export const useMyBenefitClaims = () => {
+  return useQuery({
+    queryKey: ['myBenefitClaims'],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/employee/benefits/claims`);
+      if (!res.ok) throw new Error('Failed to fetch claims');
+      return res.json();
+    },
+  });
+};
+
+export const useSubmitBenefitClaim = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: { kind: 'health' | 'wellness'; category: string; amount: number; provider?: string; description?: string }) => {
+      const res = await fetchWithTenant(`${API_URL}/employee/benefits/claims`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || 'Failed to submit claim'); }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['myBenefitClaims'] });
+      queryClient.invalidateQueries({ queryKey: ['myBenefitsSummary'] });
+    },
+  });
+};
+
+// =============================================================================
+// Performance & Growth
+// =============================================================================
+
+// --- Goals / OKRs (self-service) ---
+
+export const useMyGoals = () => {
+  return useQuery({
+    queryKey: ['myGoals'],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/employee/goals`);
+      if (!res.ok) throw new Error('Failed to fetch goals');
+      return res.json();
+    },
+  });
+};
+
+export const useCreateGoal = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: any) => {
+      const res = await fetchWithTenant(`${API_URL}/employee/goals`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || 'Failed to create goal'); }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['myGoals'] });
+      queryClient.invalidateQueries({ queryKey: ['myPerformanceSummary'] });
+    },
+  });
+};
+
+export const useUpdateGoal = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: any }) => {
+      const res = await fetchWithTenant(`${API_URL}/employee/goals/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || 'Failed to update goal'); }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['myGoals'] });
+      queryClient.invalidateQueries({ queryKey: ['teamGoals'] });
+      queryClient.invalidateQueries({ queryKey: ['myPerformanceSummary'] });
+    },
+  });
+};
+
+export const useCompanyObjectives = () => {
+  return useQuery({
+    queryKey: ['companyObjectives'],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/employee/goals/company`);
+      if (!res.ok) throw new Error('Failed to fetch company objectives');
+      return res.json();
+    },
+  });
+};
+
+// --- Manager: direct reports, team goals & reviews ---
+
+export const useMyDirectReports = () => {
+  return useQuery({
+    queryKey: ['myDirectReports'],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/employee/team/members`);
+      if (!res.ok) throw new Error('Failed to fetch direct reports');
+      return res.json();
+    },
+  });
+};
+
+export const useTeamGoals = () => {
+  return useQuery({
+    queryKey: ['teamGoals'],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/employee/goals/team`);
+      if (!res.ok) throw new Error('Failed to fetch team goals');
+      return res.json();
+    },
+  });
+};
+
+export const useAssignTeamGoal = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: any) => {
+      const res = await fetchWithTenant(`${API_URL}/employee/goals/team`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || 'Failed to assign goal'); }
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['teamGoals'] }),
+  });
+};
+
+export const useTeamPerformanceAnalytics = () => {
+  return useQuery({
+    queryKey: ['teamPerformanceAnalytics'],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/employee/assessments/team-analytics`);
+      if (!res.ok) throw new Error('Failed to fetch team analytics');
+      return res.json();
+    },
+  });
+};
+
+export const useTeamPendingAssessments = () => {
+  return useQuery({
+    queryKey: ['teamPendingAssessments'],
+    queryFn: async (): Promise<{ pending: any[]; ratingScale: { value: string; label: string; score: number }[] }> => {
+      const res = await fetchWithTenant(`${API_URL}/employee/assessments/team-pending`);
+      if (!res.ok) throw new Error('Failed to fetch pending team reviews');
+      return res.json();
+    },
+  });
+};
+
+export const useSubmitManagerReview = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, managerRating, managerComment }: { id: string; managerRating: string; managerComment?: string }) => {
+      const res = await fetchWithTenant(`${API_URL}/employee/assessments/${id}/manager-review`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ managerRating, managerComment }),
+      });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || 'Failed to submit review'); }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['teamPendingAssessments'] });
+      queryClient.invalidateQueries({ queryKey: ['adminAssessments'] });
+      queryClient.invalidateQueries({ queryKey: ['adminPerformanceAnalytics'] });
+      queryClient.invalidateQueries({ queryKey: ['employeeAssessments'] });
+    },
+  });
+};
+
+// --- Personal performance dashboard ---
+
+export const useMyPerformanceSummary = () => {
+  return useQuery({
+    queryKey: ['myPerformanceSummary'],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/employee/performance/summary`);
+      if (!res.ok) throw new Error('Failed to fetch performance summary');
+      return res.json();
+    },
+  });
+};
+
+// --- Admin/HR: review cycles ---
+
+export const useReviewCycles = (enabled: boolean = true) => {
+  return useQuery({
+    queryKey: ['reviewCycles'],
+    queryFn: async (): Promise<{ cycles: any[]; ratingScale: { value: string; label: string; score: number }[] }> => {
+      const res = await fetchWithTenant(`${API_URL}/admin/performance/cycles`);
+      if (!res.ok) throw new Error('Failed to fetch review cycles');
+      return res.json();
+    },
+    enabled,
+  });
+};
+
+export const useCreateReviewCycle = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: any) => {
+      const res = await fetchWithTenant(`${API_URL}/admin/performance/cycles`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || 'Failed to create cycle'); }
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['reviewCycles'] }),
+  });
+};
+
+export const useUpdateReviewCycle = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: any }) => {
+      const res = await fetchWithTenant(`${API_URL}/admin/performance/cycles/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('Failed to update cycle');
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['reviewCycles'] }),
+  });
+};
+
+const invalidateCycles = (queryClient: ReturnType<typeof useQueryClient>) => {
+  queryClient.invalidateQueries({ queryKey: ['reviewCycles'] });
+  queryClient.invalidateQueries({ queryKey: ['adminPerformanceAnalytics'] });
+  queryClient.invalidateQueries({ queryKey: ['activeCycleAssessment'] });
+  queryClient.invalidateQueries({ queryKey: ['myPerformanceSummary'] });
+};
+
+export const useActivateReviewCycle = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetchWithTenant(`${API_URL}/admin/performance/cycles/${id}/activate`, { method: 'POST' });
+      if (!res.ok) throw new Error('Failed to activate cycle');
+      return res.json();
+    },
+    onSuccess: () => invalidateCycles(queryClient),
+  });
+};
+
+export const useCloseReviewCycle = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetchWithTenant(`${API_URL}/admin/performance/cycles/${id}/close`, { method: 'POST' });
+      if (!res.ok) throw new Error('Failed to close cycle');
+      return res.json();
+    },
+    onSuccess: () => invalidateCycles(queryClient),
+  });
+};
+
+export const useDeleteReviewCycle = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetchWithTenant(`${API_URL}/admin/performance/cycles/${id}`, { method: 'DELETE' });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || 'Failed to delete cycle'); }
+      return res.json();
+    },
+    onSuccess: () => invalidateCycles(queryClient),
+  });
+};
+
+// --- Admin/HR: company-wide performance analytics & browsing ---
+
+export const useAdminPerformanceAnalytics = (cycleId?: string) => {
+  return useQuery({
+    queryKey: ['adminPerformanceAnalytics', cycleId],
+    queryFn: async () => {
+      const query = cycleId ? `?cycleId=${cycleId}` : '';
+      const res = await fetchWithTenant(`${API_URL}/admin/performance/analytics${query}`);
+      if (!res.ok) throw new Error('Failed to fetch performance analytics');
+      return res.json();
+    },
+  });
+};
+
+export const useAdminAssessments = (filters: { cycleId?: string; status?: string } = {}) => {
+  const params = new URLSearchParams(Object.entries(filters).filter(([, v]) => !!v) as [string, string][]).toString();
+  return useQuery({
+    queryKey: ['adminAssessments', filters],
+    queryFn: async (): Promise<{ assessments: any[]; ratingScale: { value: string; label: string; score: number }[] }> => {
+      const res = await fetchWithTenant(`${API_URL}/admin/performance/assessments${params ? `?${params}` : ''}`);
+      if (!res.ok) throw new Error('Failed to fetch assessments');
+      return res.json();
+    },
+  });
+};
+
+export const useAdminGoals = (scope?: string) => {
+  return useQuery({
+    queryKey: ['adminGoals', scope],
+    queryFn: async () => {
+      const query = scope ? `?scope=${scope}` : '';
+      const res = await fetchWithTenant(`${API_URL}/admin/performance/goals${query}`);
+      if (!res.ok) throw new Error('Failed to fetch goals');
+      return res.json();
+    },
+  });
+};
+
+export const useCreateCompanyGoal = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: any) => {
+      const res = await fetchWithTenant(`${API_URL}/admin/performance/goals`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || 'Failed to create objective'); }
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['adminGoals'] }),
   });
 };

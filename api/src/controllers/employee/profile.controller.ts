@@ -30,6 +30,23 @@ export const getDirectory = async (c: Context<AppEnv>) => {
   return c.json(directory);
 };
 
+// The caller's own direct reports — a lightweight, self-scoped list (id,
+// name, avatar, role, department) used by manager-facing goal/review UIs
+// that just need to know "who do I manage", without the full admin
+// employee-management surface.
+export const getMyDirectReports = async (c: Context<AppEnv>) => {
+  const companyId = c.get('companyId');
+  const employeeId = c.get('employeeId');
+  if (!employeeId) {
+    return c.json({ error: 'Unauthorized: No employee ID found' }, 401);
+  }
+
+  const service = new EmployeeService(c.env.DB);
+  const directory = await service.getDirectory(companyId);
+  const directReports = directory.filter((emp: any) => emp.managerId === employeeId);
+  return c.json(directReports);
+};
+
 export const updateMyProfile = async (c: Context<AppEnv>) => {
   const companyId = c.get('companyId');
   const employeeId = c.get('employeeId');

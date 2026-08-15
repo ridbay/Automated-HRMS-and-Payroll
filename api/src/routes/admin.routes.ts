@@ -23,17 +23,41 @@ import {
   updateTransitionTaskStatus,
   cancelTransition,
 } from "../controllers/admin/transition.controller";
+import {
+  getCycles,
+  createCycle,
+  updateCycle,
+  activateCycle,
+  closeCycle,
+  deleteCycle,
+} from "../controllers/admin/reviewCycle.controller";
 import { authMiddleware } from "../middlewares/auth.middleware";
 import { requireRole, requirePermission } from "../middlewares/role.middleware";
 import payrollRoutes from "./payroll.routes";
 import leaveAdminRoutes from "./leave-admin.routes";
 import requisitionRoutes from "./requisition.routes";
 import attendanceAdminRoutes from "./attendance-admin.routes";
+import benefitsAdminRoutes from "./benefits-admin.routes";
 import { SettingsService } from "../services/settings.service";
 import { CompanyService } from "../services/company.service";
 import { OrgService } from "../services/org.service";
 import { RoleService } from "../services/role.service";
 import { DashboardService } from "../services/dashboard.service";
+import { AuditService } from "../services/audit.service";
+import {
+  HolidayService,
+  EmailTemplateService,
+  IntegrationService,
+  WorkflowService,
+  DataExportService,
+} from "../services/controlCenter.service";
+import {
+  getOverview as getReportsOverview,
+  getWorkforceReport,
+  getRecruitmentReport,
+  getPayrollReport,
+  exportReport,
+} from "../controllers/admin/reports.controller";
 
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../db/schema";
@@ -141,8 +165,14 @@ adminRoutes.delete("/employees/:id", adminOnly, del("workforce"), deleteEmployee
 adminRoutes.post("/employees/:id/emergency-contacts", adminOnly, edit("workforce"), addEmergencyContact);
 adminRoutes.delete("/employees/:id/emergency-contacts/:contactId", adminOnly, edit("workforce"), deleteEmergencyContact);
 
-import { getEmployeeAssessments, addEmployeeAssessment } from "../controllers/admin/performance.controller";
-import { getEmployeeBenefits, updateEmployeeBenefits } from "../controllers/admin/benefits.controller";
+import {
+  getEmployeeAssessments,
+  addEmployeeAssessment,
+  getCompanyAssessments,
+  getCompanyAnalytics,
+  getCompanyGoals,
+  createCompanyGoal,
+} from "../controllers/admin/performance.controller";
 import { getEmployeeTrainings, addEmployeeTraining } from "../controllers/admin/training.controller";
 
 // Documents
@@ -167,10 +197,19 @@ adminRoutes.patch("/transitions/:id/cancel", adminOnly, del("workforce"), cancel
 adminRoutes.get("/performance/employee/:id", adminOnly, view("performance"), getEmployeeAssessments);
 adminRoutes.post("/performance/employee/:id", adminOnly, create("performance"), addEmployeeAssessment);
 
-// Benefits has no matrix module (dropped "Wallet" as decorative, see role.middleware
-// plan notes) — stays gated on the fixed role only.
-adminRoutes.get("/benefits/employee/:id", adminOnly, getEmployeeBenefits);
-adminRoutes.put("/benefits/employee/:id", adminOnly, updateEmployeeBenefits);
+// Performance & Growth: review cycles, company-wide analytics, and browsing
+// assessments/goals across the whole company.
+adminRoutes.get("/performance/cycles", adminOnly, view("performance"), getCycles);
+adminRoutes.post("/performance/cycles", adminOnly, create("performance"), createCycle);
+adminRoutes.put("/performance/cycles/:id", adminOnly, edit("performance"), updateCycle);
+adminRoutes.post("/performance/cycles/:id/activate", adminOnly, edit("performance"), activateCycle);
+adminRoutes.post("/performance/cycles/:id/close", adminOnly, edit("performance"), closeCycle);
+adminRoutes.delete("/performance/cycles/:id", adminOnly, edit("performance"), deleteCycle);
+
+adminRoutes.get("/performance/analytics", adminOnly, view("performance"), getCompanyAnalytics);
+adminRoutes.get("/performance/assessments", adminOnly, view("performance"), getCompanyAssessments);
+adminRoutes.get("/performance/goals", adminOnly, view("performance"), getCompanyGoals);
+adminRoutes.post("/performance/goals", adminOnly, create("performance"), createCompanyGoal);
 
 adminRoutes.get("/training/employee/:id", adminOnly, view("performance"), getEmployeeTrainings);
 adminRoutes.post("/training/employee/:id", adminOnly, create("performance"), addEmployeeTraining);
@@ -179,6 +218,10 @@ adminRoutes.route("/payroll", payrollRoutes);
 adminRoutes.route("/leaves", leaveAdminRoutes);
 adminRoutes.route("/job-requisitions", requisitionRoutes);
 adminRoutes.route("/attendance", attendanceAdminRoutes);
+// Benefits & Wellbeing (plan catalog, enrollments, wellness programs, claims,
+// plus the legacy per-employee financial snapshot under /benefits/employee/:id)
+// — no matrix module maps to this today, see benefits-admin.routes.ts.
+adminRoutes.route("/benefits", benefitsAdminRoutes);
 
 // No matrix module maps to this today — stays gated on the fixed role only.
 adminRoutes.get("/dashboard/stats", adminOnly, async (c: any) => {
@@ -192,6 +235,21 @@ adminRoutes.get("/dashboard/stats", adminOnly, async (c: any) => {
   }
 });
 
+// Reports & Analytics — no matrix module maps to this today, so access is
+// gated on fixed roles only, mirroring dashboard/stats above. Payroll/
+// Recruitment get their own narrower role lists so PAYROLL_OFFICER and
+// RECRUITER can reach the slice of reporting relevant to their job without
+// exposing the full company-wide overview.
+const reportsOverviewOnly = requireRole("SUPER_ADMIN", "HR_ADMIN", "PAYROLL_OFFICER");
+const reportsRecruitmentOnly = requireRole("SUPER_ADMIN", "HR_ADMIN", "RECRUITER");
+const reportsPayrollOnly = requireRole("SUPER_ADMIN", "HR_ADMIN", "PAYROLL_OFFICER");
+
+adminRoutes.get("/reports/overview", reportsOverviewOnly, getReportsOverview);
+adminRoutes.get("/reports/workforce", adminOnly, getWorkforceReport);
+adminRoutes.get("/reports/recruitment", reportsRecruitmentOnly, getRecruitmentReport);
+adminRoutes.get("/reports/payroll", reportsPayrollOnly, getPayrollReport);
+adminRoutes.get("/reports/export", reportsOverviewOnly, exportReport);
+
 adminRoutes.get("/settings", adminOnly, view("settings"), async (c: any) => {
   const companyId = c.get("companyId");
   const settingsService = new SettingsService(c.env.DB);
@@ -204,6 +262,14 @@ adminRoutes.put("/settings", adminOnly, edit("settings"), async (c: any) => {
   const payload = await c.req.json();
   const settingsService = new SettingsService(c.env.DB);
   const settings = await settingsService.updateSettings(companyId, payload);
+  await new AuditService(c.env.DB).log(companyId, {
+    actorId: c.get("employeeId"),
+    action: "Updated security & system settings",
+    module: "settings",
+    details: `Changed: ${Object.keys(payload).join(", ")}`,
+    severity: "warning",
+    ip: c.req.header("cf-connecting-ip"),
+  });
   return c.json(settings);
 });
 
@@ -221,6 +287,13 @@ adminRoutes.post("/api-keys", adminOnly, edit("settings"), async (c: any) => {
   const { name } = await c.req.json();
   const settingsService = new SettingsService(c.env.DB);
   const key = await settingsService.createApiKey(companyId, name);
+  await new AuditService(c.env.DB).log(companyId, {
+    actorId: c.get("employeeId"),
+    action: `Created API key "${name}"`,
+    module: "api",
+    severity: "warning",
+    ip: c.req.header("cf-connecting-ip"),
+  });
   return c.json(key);
 });
 
@@ -230,6 +303,13 @@ adminRoutes.delete("/api-keys/:id", adminOnly, edit("settings"), async (c: any) 
   const settingsService = new SettingsService(c.env.DB);
   const deleted = await settingsService.deleteApiKey(companyId, id);
   if (!deleted) return c.json({ error: "Not found" }, 404);
+  await new AuditService(c.env.DB).log(companyId, {
+    actorId: c.get("employeeId"),
+    action: `Revoked API key "${deleted.name}"`,
+    module: "api",
+    severity: "warning",
+    ip: c.req.header("cf-connecting-ip"),
+  });
   return c.json(deleted);
 });
 
@@ -246,6 +326,13 @@ adminRoutes.put("/company", adminOnly, edit("settings"), async (c: any) => {
   const payload = await c.req.json();
   const companyService = new CompanyService(c.env.DB);
   const company = await companyService.updateCompany(companyId, payload);
+  await new AuditService(c.env.DB).log(companyId, {
+    actorId: c.get("employeeId"),
+    action: "Updated company profile",
+    module: "company",
+    details: `Changed: ${Object.keys(payload).join(", ")}`,
+    ip: c.req.header("cf-connecting-ip"),
+  });
   return c.json(company);
 });
 
@@ -260,7 +347,14 @@ adminRoutes.post("/departments", adminOnly, create("workforce"), async (c: any) 
   const companyId = c.get("companyId");
   const payload = await c.req.json();
   const orgService = new OrgService(c.env.DB);
-  return c.json(await orgService.createDepartment(companyId, payload));
+  const department = await orgService.createDepartment(companyId, payload);
+  await new AuditService(c.env.DB).log(companyId, {
+    actorId: c.get("employeeId"),
+    action: `Created department "${department.name}"`,
+    module: "departments",
+    ip: c.req.header("cf-connecting-ip"),
+  });
+  return c.json(department);
 });
 
 adminRoutes.put("/departments/:id", adminOnly, edit("workforce"), async (c: any) => {
@@ -269,15 +363,27 @@ adminRoutes.put("/departments/:id", adminOnly, edit("workforce"), async (c: any)
   const orgService = new OrgService(c.env.DB);
   const updated = await orgService.updateDepartment(companyId, c.req.param("id"), payload);
   if (!updated) return c.json({ error: "Not found" }, 404);
+  await new AuditService(c.env.DB).log(companyId, {
+    actorId: c.get("employeeId"),
+    action: `Updated department "${updated.name}"`,
+    module: "departments",
+    ip: c.req.header("cf-connecting-ip"),
+  });
   return c.json(updated);
 });
 
 adminRoutes.delete("/departments/:id", adminOnly, del("workforce"), async (c: any) => {
   const companyId = c.get("companyId");
   const orgService = new OrgService(c.env.DB);
-  return c.json(
-    await orgService.deleteDepartment(companyId, c.req.param("id")),
-  );
+  const deleted = await orgService.deleteDepartment(companyId, c.req.param("id"));
+  await new AuditService(c.env.DB).log(companyId, {
+    actorId: c.get("employeeId"),
+    action: `Deleted department "${deleted?.name || c.req.param("id")}"`,
+    module: "departments",
+    severity: "warning",
+    ip: c.req.header("cf-connecting-ip"),
+  });
+  return c.json(deleted);
 });
 
 adminRoutes.get("/departments/:id/members", adminOnly, view("workforce"), async (c: any) => {
@@ -313,13 +419,28 @@ adminRoutes.post("/locations", adminOnly, create("workforce"), async (c: any) =>
   const companyId = c.get("companyId");
   const payload = await c.req.json();
   const orgService = new OrgService(c.env.DB);
-  return c.json(await orgService.createLocation(companyId, payload));
+  const location = await orgService.createLocation(companyId, payload);
+  await new AuditService(c.env.DB).log(companyId, {
+    actorId: c.get("employeeId"),
+    action: `Added location "${location.name}"`,
+    module: "locations",
+    ip: c.req.header("cf-connecting-ip"),
+  });
+  return c.json(location);
 });
 
 adminRoutes.delete("/locations/:id", adminOnly, del("workforce"), async (c: any) => {
   const companyId = c.get("companyId");
   const orgService = new OrgService(c.env.DB);
-  return c.json(await orgService.deleteLocation(companyId, c.req.param("id")));
+  const deleted = await orgService.deleteLocation(companyId, c.req.param("id"));
+  await new AuditService(c.env.DB).log(companyId, {
+    actorId: c.get("employeeId"),
+    action: `Removed location "${deleted?.name || c.req.param("id")}"`,
+    module: "locations",
+    severity: "warning",
+    ip: c.req.header("cf-connecting-ip"),
+  });
+  return c.json(deleted);
 });
 
 // Roles Routes
@@ -333,22 +454,193 @@ adminRoutes.post("/roles", adminOnly, edit("settings"), async (c: any) => {
   const companyId = c.get("companyId");
   const payload = await c.req.json();
   const roleService = new RoleService(c.env.DB);
-  return c.json(await roleService.createRole(companyId, payload));
+  const role = await roleService.createRole(companyId, payload);
+  await new AuditService(c.env.DB).log(companyId, {
+    actorId: c.get("employeeId"),
+    action: `Created role "${role.name}"`,
+    module: "roles",
+    severity: "warning",
+    ip: c.req.header("cf-connecting-ip"),
+  });
+  return c.json(role);
 });
 
 adminRoutes.put("/roles/:id", adminOnly, edit("settings"), async (c: any) => {
   const companyId = c.get("companyId");
   const payload = await c.req.json();
   const roleService = new RoleService(c.env.DB);
-  return c.json(
-    await roleService.updateRole(companyId, c.req.param("id"), payload),
-  );
+  const role = await roleService.updateRole(companyId, c.req.param("id"), payload);
+  await new AuditService(c.env.DB).log(companyId, {
+    actorId: c.get("employeeId"),
+    action: `Modified permissions for role "${role?.name || c.req.param("id")}"`,
+    module: "roles",
+    severity: "warning",
+    ip: c.req.header("cf-connecting-ip"),
+  });
+  return c.json(role);
 });
 
 adminRoutes.delete("/roles/:id", adminOnly, edit("settings"), async (c: any) => {
   const companyId = c.get("companyId");
   const roleService = new RoleService(c.env.DB);
-  return c.json(await roleService.deleteRole(companyId, c.req.param("id")));
+  const deleted = await roleService.deleteRole(companyId, c.req.param("id"));
+  await new AuditService(c.env.DB).log(companyId, {
+    actorId: c.get("employeeId"),
+    action: `Deleted role "${deleted?.name || c.req.param("id")}"`,
+    module: "roles",
+    severity: "warning",
+    ip: c.req.header("cf-connecting-ip"),
+  });
+  return c.json(deleted);
+});
+
+// ---------------- Public Holidays ----------------
+adminRoutes.get("/holidays", adminOnly, view("settings"), async (c: any) => {
+  const companyId = c.get("companyId");
+  const service = new HolidayService(c.env.DB);
+  return c.json(await service.list(companyId));
+});
+
+adminRoutes.post("/holidays", adminOnly, edit("settings"), async (c: any) => {
+  const companyId = c.get("companyId");
+  const payload = await c.req.json();
+  const service = new HolidayService(c.env.DB);
+  const holiday = await service.create(companyId, payload);
+  await new AuditService(c.env.DB).log(companyId, {
+    actorId: c.get("employeeId"),
+    action: `Added public holiday "${holiday.name}" (${holiday.date})`,
+    module: "settings",
+    ip: c.req.header("cf-connecting-ip"),
+  });
+  return c.json(holiday);
+});
+
+adminRoutes.delete("/holidays/:id", adminOnly, edit("settings"), async (c: any) => {
+  const companyId = c.get("companyId");
+  const service = new HolidayService(c.env.DB);
+  const deleted = await service.delete(companyId, c.req.param("id"));
+  if (!deleted) return c.json({ error: "Not found" }, 404);
+  await new AuditService(c.env.DB).log(companyId, {
+    actorId: c.get("employeeId"),
+    action: `Removed public holiday "${deleted.name}"`,
+    module: "settings",
+    ip: c.req.header("cf-connecting-ip"),
+  });
+  return c.json(deleted);
+});
+
+// ---------------- Email Templates ----------------
+adminRoutes.get("/email-templates", adminOnly, view("settings"), async (c: any) => {
+  const companyId = c.get("companyId");
+  const service = new EmailTemplateService(c.env.DB);
+  return c.json(await service.list(companyId));
+});
+
+adminRoutes.put("/email-templates/:key", adminOnly, edit("settings"), async (c: any) => {
+  const companyId = c.get("companyId");
+  const payload = await c.req.json();
+  const service = new EmailTemplateService(c.env.DB);
+  const template = await service.update(companyId, c.req.param("key"), payload);
+  if (!template) return c.json({ error: "Not found" }, 404);
+  await new AuditService(c.env.DB).log(companyId, {
+    actorId: c.get("employeeId"),
+    action: `Updated email template "${template.name}"`,
+    module: "email",
+    ip: c.req.header("cf-connecting-ip"),
+  });
+  return c.json(template);
+});
+
+// ---------------- Integrations ----------------
+adminRoutes.get("/integrations", adminOnly, view("settings"), async (c: any) => {
+  const companyId = c.get("companyId");
+  const service = new IntegrationService(c.env.DB);
+  return c.json(await service.list(companyId));
+});
+
+adminRoutes.put("/integrations/:key/toggle", adminOnly, edit("settings"), async (c: any) => {
+  const companyId = c.get("companyId");
+  const service = new IntegrationService(c.env.DB);
+  const integration = await service.toggle(companyId, c.req.param("key"));
+  if (!integration) return c.json({ error: "Not found" }, 404);
+  await new AuditService(c.env.DB).log(companyId, {
+    actorId: c.get("employeeId"),
+    action: `${integration.status === "connected" ? "Connected" : "Disconnected"} ${integration.name}`,
+    module: "integrations",
+    ip: c.req.header("cf-connecting-ip"),
+  });
+  return c.json(integration);
+});
+
+// ---------------- Workflows ----------------
+adminRoutes.get("/workflows", adminOnly, view("settings"), async (c: any) => {
+  const companyId = c.get("companyId");
+  const service = new WorkflowService(c.env.DB);
+  return c.json(await service.list(companyId));
+});
+
+adminRoutes.put("/workflows/:key", adminOnly, edit("settings"), async (c: any) => {
+  const companyId = c.get("companyId");
+  const payload = await c.req.json();
+  const service = new WorkflowService(c.env.DB);
+  const workflow = await service.update(companyId, c.req.param("key"), payload);
+  if (!workflow) return c.json({ error: "Not found" }, 404);
+  await new AuditService(c.env.DB).log(companyId, {
+    actorId: c.get("employeeId"),
+    action: `Updated workflow "${workflow.name}"`,
+    module: "workflows",
+    ip: c.req.header("cf-connecting-ip"),
+  });
+  return c.json(workflow);
+});
+
+// ---------------- Data & Backup ----------------
+adminRoutes.get("/data/stats", adminOnly, view("settings"), async (c: any) => {
+  const companyId = c.get("companyId");
+  const service = new DataExportService(c.env.DB);
+  return c.json(await service.getStats(companyId));
+});
+
+adminRoutes.get("/data/export", adminOnly, view("settings"), async (c: any) => {
+  const companyId = c.get("companyId");
+  const service = new DataExportService(c.env.DB);
+  const data = await service.exportAll(companyId);
+  await new AuditService(c.env.DB).log(companyId, {
+    actorId: c.get("employeeId"),
+    action: "Exported full company data backup",
+    module: "settings",
+    severity: "warning",
+    ip: c.req.header("cf-connecting-ip"),
+  });
+  c.header("Content-Type", "application/json");
+  c.header("Content-Disposition", `attachment; filename="zenhr-export-${new Date().toISOString().slice(0, 10)}.json"`);
+  return c.body(JSON.stringify(data, null, 2));
+});
+
+// ---------------- Audit Logs ----------------
+adminRoutes.get("/audit-logs", adminOnly, view("settings"), async (c: any) => {
+  const companyId = c.get("companyId");
+  const service = new AuditService(c.env.DB);
+  const logs = await service.getCompanyLogs(companyId, {
+    module: c.req.query("module") || undefined,
+    search: c.req.query("search") || undefined,
+    limit: 200,
+  });
+  return c.json(logs);
+});
+
+adminRoutes.get("/audit-logs/export", adminOnly, view("settings"), async (c: any) => {
+  const companyId = c.get("companyId");
+  const service = new AuditService(c.env.DB);
+  const logs = await service.getCompanyLogs(companyId, { limit: 1000 });
+  const escape = (v: any) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const header = ["Timestamp", "Actor", "Action", "Module", "Severity", "Details", "IP Address"].map(escape).join(",");
+  const rows = logs.map((l: any) =>
+    [l.createdAt, l.actorName, l.action, l.module || "", l.severity, l.details, l.ipAddress || ""].map(escape).join(",")
+  );
+  c.header("Content-Type", "text/csv");
+  c.header("Content-Disposition", `attachment; filename="audit-log-${new Date().toISOString().slice(0, 10)}.csv"`);
+  return c.body([header, ...rows].join("\n"));
 });
 
 export default adminRoutes;

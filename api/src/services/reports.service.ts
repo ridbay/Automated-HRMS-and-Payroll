@@ -95,17 +95,17 @@ export class ReportsService {
       },
     });
 
+    // Employed today = anyone not fully separated. 'notice' covers employees
+    // serving out an in-progress offboarding — still headcount, just flagged.
     const now = new Date();
     const currentMonthKey = monthKey(now);
-    const active = all.filter((e: any) => e.status === 'active' || e.status === 'onboarding');
-    const withHireDate = active.filter((e: any) => !!e.hireDate);
+    const current = all.filter((e: any) => e.status !== 'terminated');
+    const withHireDate = current.filter((e: any) => !!e.hireDate);
 
     const tenures = withHireDate.map((e: any) => yearsBetween(e.hireDate, now));
     const avgTenureYears = tenures.length ? +(tenures.reduce((a: number, b: number) => a + b, 0) / tenures.length).toFixed(1) : 0;
 
     const statusCounts = groupCount(all, (e: any) => e.status || 'unknown');
-    const nonActiveCount = all.length - active.length;
-    const attritionRate = all.length > 0 ? +((nonActiveCount / all.length) * 100).toFixed(1) : 0;
 
     const tenureBuckets: Record<string, number> = { '<1yr': 0, '1-2yr': 0, '2-4yr': 0, '4-6yr': 0, '6yr+': 0 };
     for (const t of tenures) {
@@ -116,41 +116,68 @@ export class ReportsService {
       else tenureBuckets['6yr+']++;
     }
 
-    // Headcount trend (last 12 months): real hires-per-month from hireDate, plus
-    // cumulative headcount as of each month end among employees on record today.
+    // Completed offboardings are the authoritative record of when someone actually
+    // left (vs. inferring it from a status column that can be touched for other
+    // reasons), so exits/attrition are derived from the transitions table.
+    const exitConditions = [
+      eq(schema.transitions.companyId, companyId),
+      eq(schema.transitions.type, 'Offboarding'),
+      eq(schema.transitions.status, 'Completed'),
+    ];
+    if (scope.employeeIds) exitConditions.push(inArray(schema.transitions.employeeId, scope.employeeIds));
+    const exits = await this.db.query.transitions.findMany({
+      where: and(...exitConditions),
+      columns: { employeeId: true, completedAt: true, targetDate: true, reason: true },
+    });
+    const exitDate = (t: any) => (t.completedAt || t.targetDate || '').slice(0, 7);
+
+    const cutoff12mo = monthKey(new Date(now.getFullYear(), now.getMonth() - 11, 1));
+    const exitsLast12Months = exits.filter((t: any) => exitDate(t) >= cutoff12mo).length;
+    const attritionRate = current.length > 0
+      ? +((exitsLast12Months / (current.length + exitsLast12Months)) * 100).toFixed(1)
+      : 0;
+
+    // Headcount trend (last 12 months): real hires-per-month from hireDate, real
+    // exits-per-month from completed offboardings, and cumulative headcount as of
+    // each month end (hires to date minus exits to date, among employees on record today).
     const sortedByHire = [...withHireDate].sort((a: any, b: any) => (a.hireDate < b.hireDate ? -1 : 1));
     const headcountTrend = lastNMonths(12).map(({ key, label }) => ({
       month: label,
       hires: sortedByHire.filter((e: any) => e.hireDate.startsWith(key)).length,
-      total: sortedByHire.filter((e: any) => e.hireDate.slice(0, 7) <= key).length,
+      exits: exits.filter((t: any) => exitDate(t) === key).length,
+      total: sortedByHire.filter((e: any) => e.hireDate.slice(0, 7) <= key).length
+        - exits.filter((t: any) => exitDate(t) && exitDate(t) <= key).length,
     }));
 
     return {
       summary: {
-        totalHeadcount: active.length,
+        totalHeadcount: current.length,
         activeCount: statusCounts['active'] || 0,
         onboardingCount: statusCounts['onboarding'] || 0,
-        newHiresThisMonth: active.filter((e: any) => e.hireDate?.startsWith(currentMonthKey)).length,
+        onNoticeCount: statusCounts['notice'] || 0,
+        newHiresThisMonth: current.filter((e: any) => e.hireDate?.startsWith(currentMonthKey)).length,
         avgTenureYears,
         attritionRate,
+        exitsLast12Months,
       },
       headcountTrend,
-      departmentDistribution: toChartArray(groupCount(active, (e: any) => e.department || 'Unassigned')),
-      genderDistribution: Object.entries(groupCount(active, (e: any) => e.gender || 'Unspecified'))
+      departmentDistribution: toChartArray(groupCount(current, (e: any) => e.department || 'Unassigned')),
+      genderDistribution: Object.entries(groupCount(current, (e: any) => e.gender || 'Unspecified'))
         .map(([name, value]) => ({ name, value, fill: GENDER_COLORS[name] || '#94a3b8' })),
-      employmentTypeDistribution: toChartArray(groupCount(active, (e: any) => e.employmentType || 'Unspecified')),
-      locationDistribution: toChartArray(groupCount(active, (e: any) => e.location || 'Unspecified')),
+      employmentTypeDistribution: toChartArray(groupCount(current, (e: any) => e.employmentType || 'Unspecified')),
+      locationDistribution: toChartArray(groupCount(current, (e: any) => e.location || 'Unspecified')),
       tenureDistribution: Object.entries(tenureBuckets).map(([name, value]) => ({ name, value })),
       statusBreakdown: toChartArray(statusCounts),
+      exitReasonBreakdown: toChartArray(groupCount(exits, (t: any) => t.reason || 'Unspecified')),
     };
   }
 
   private emptyWorkforceReport() {
     return {
-      summary: { totalHeadcount: 0, activeCount: 0, onboardingCount: 0, newHiresThisMonth: 0, avgTenureYears: 0, attritionRate: 0 },
-      headcountTrend: lastNMonths(12).map(({ label }) => ({ month: label, hires: 0, total: 0 })),
+      summary: { totalHeadcount: 0, activeCount: 0, onboardingCount: 0, onNoticeCount: 0, newHiresThisMonth: 0, avgTenureYears: 0, attritionRate: 0, exitsLast12Months: 0 },
+      headcountTrend: lastNMonths(12).map(({ label }) => ({ month: label, hires: 0, exits: 0, total: 0 })),
       departmentDistribution: [], genderDistribution: [], employmentTypeDistribution: [],
-      locationDistribution: [], tenureDistribution: [], statusBreakdown: [],
+      locationDistribution: [], tenureDistribution: [], statusBreakdown: [], exitReasonBreakdown: [],
     };
   }
 

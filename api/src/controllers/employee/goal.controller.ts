@@ -1,67 +1,72 @@
 import { Context } from 'hono';
 import { AppEnv } from '../../types';
-import { drizzle } from 'drizzle-orm/d1';
-import { goals } from '../../models/goal.model';
-import { eq, and, desc } from 'drizzle-orm';
+import { GoalService } from '../../services/goal.service';
+
+const parseGoal = (g: any) => ({ ...g, keyResults: g.keyResults ? JSON.parse(g.keyResults) : [] });
 
 export const getMyGoals = async (c: Context<AppEnv>) => {
   const employeeId = c.get('employeeId')!;
   const companyId = c.get('companyId');
-  const db = drizzle(c.env.DB);
-
-  const rows = await db
-    .select()
-    .from(goals)
-    .where(and(eq(goals.employeeId, employeeId), eq(goals.companyId, companyId)))
-    .orderBy(desc(goals.createdAt));
-
-  // Parse stored JSON key results
-  const result = rows.map((g) => ({
-    ...g,
-    keyResults: g.keyResults ? JSON.parse(g.keyResults) : [],
-  }));
-
-  return c.json(result);
+  const service = new GoalService(c.env.DB);
+  const rows = await service.getMyGoals(companyId, employeeId);
+  return c.json(rows.map(parseGoal));
 };
 
 export const createGoal = async (c: Context<AppEnv>) => {
   const employeeId = c.get('employeeId')!;
   const companyId = c.get('companyId');
   const body = await c.req.json();
-  const db = drizzle(c.env.DB);
-
-  const id = `GOAL-${crypto.randomUUID().split('-')[0].toUpperCase()}`;
-
-  await db.insert(goals).values({
-    id,
-    companyId,
-    employeeId,
-    title: body.title,
-    description: body.description || null,
-    priority: body.priority || 'medium',
-    status: body.status || 'on_track',
-    progress: body.progress ?? 0,
-    dueDate: body.dueDate || null,
-    keyResults: body.keyResults ? JSON.stringify(body.keyResults) : null,
-  });
-
+  const service = new GoalService(c.env.DB);
+  const { id } = await service.createGoal(companyId, employeeId, body);
   return c.json({ id, message: 'Goal created' }, 201);
 };
 
 export const updateGoalProgress = async (c: Context<AppEnv>) => {
   const employeeId = c.get('employeeId')!;
   const companyId = c.get('companyId');
+  const role = c.get('role');
   const id = c.req.param('id');
   if (!id) return c.json({ error: 'Goal id is required' }, 400);
 
-  const { progress, status } = await c.req.json();
-  const db = drizzle(c.env.DB);
+  const body = await c.req.json();
+  const service = new GoalService(c.env.DB);
+  const updated = await service.updateGoal(companyId, employeeId, role, id, body);
 
-  await db
-    .update(goals)
-    .set({ progress, status, updatedAt: new Date().toISOString() })
-    .where(and(eq(goals.id, id), eq(goals.employeeId, employeeId), eq(goals.companyId, companyId)));
-
-  return c.json({ message: 'Goal updated' });
+  if (!updated) {
+    return c.json({ error: 'Goal not found, or you do not have permission to edit it' }, 404);
+  }
+  return c.json(parseGoal(updated));
 };
 
+// A manager's view of every direct report's goals.
+export const getTeamGoals = async (c: Context<AppEnv>) => {
+  const employeeId = c.get('employeeId')!;
+  const companyId = c.get('companyId');
+  const service = new GoalService(c.env.DB);
+  const rows = await service.getTeamGoals(companyId, employeeId);
+  return c.json(rows.map(parseGoal));
+};
+
+// Read-only: the company/department-level objectives HR/Admin have set, so
+// employees can see what their own goals should align to.
+export const getCompanyObjectives = async (c: Context<AppEnv>) => {
+  const companyId = c.get('companyId');
+  const service = new GoalService(c.env.DB);
+  const rows = await service.getCompanyGoals(companyId, 'company');
+  return c.json(rows.map(parseGoal));
+};
+
+// A manager assigning a goal to one of their direct reports.
+export const assignTeamGoal = async (c: Context<AppEnv>) => {
+  const managerId = c.get('employeeId')!;
+  const companyId = c.get('companyId');
+  const body = await c.req.json();
+
+  if (!body.employeeId) {
+    return c.json({ error: 'employeeId is required' }, 400);
+  }
+
+  const service = new GoalService(c.env.DB);
+  const { id } = await service.createGoal(companyId, body.employeeId, { ...body, scope: body.scope || 'team' }, managerId);
+  return c.json({ id, message: 'Goal assigned' }, 201);
+};

@@ -7,7 +7,7 @@ import { eq, desc } from 'drizzle-orm';
 export const sendShoutout = async (c: Context<AppEnv>) => {
   const companyId = c.get('companyId');
   const employeeId = c.get('employeeId');
-  const { toEmployeeName, type, message } = await c.req.json();
+  const { toEmployeeName, toEmployeeId, type, message } = await c.req.json();
 
   if (!toEmployeeName || !type || !message) {
     return c.json({ error: 'recipient, type and message are required' }, 400);
@@ -20,6 +20,7 @@ export const sendShoutout = async (c: Context<AppEnv>) => {
     id,
     companyId,
     fromEmployeeId: employeeId!,
+    toEmployeeId: toEmployeeId || null,
     toEmployeeName,
     type,
     message,

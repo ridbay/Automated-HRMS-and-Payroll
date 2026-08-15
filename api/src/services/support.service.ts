@@ -2,7 +2,10 @@ import { D1Database } from '@cloudflare/workers-types';
 import { drizzle } from 'drizzle-orm/d1';
 import { supportTickets, supportTicketMessages, employees } from '../db/schema';
 import { eq, desc, and } from 'drizzle-orm';
-import { randomUUID } from 'crypto';
+
+// Cloudflare Workers expose Web Crypto as a global — no Node "crypto" import
+// (which needs nodejs_compat + a newer compatibility_date to resolve) needed.
+const randomUUID = () => crypto.randomUUID();
 
 export class SupportService {
   private db;
