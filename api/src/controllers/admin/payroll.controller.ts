@@ -76,7 +76,7 @@ export const updateSalaryComponent = async (c: Context<AppEnv>) => {
   try {
     const service = new PayrollService(c.env.DB);
     const payload = await c.req.json();
-    const updated = await service.updateSalaryComponent((c.get('companyId') as string), c.req.param('id'), payload);
+    const updated = await service.updateSalaryComponent((c.get('companyId') as string), (c.req.param('id') as string), payload);
     if (!updated) return c.json({ error: 'Not found' }, 404);
     return c.json({ data: updated });
   } catch (error: any) {
@@ -87,7 +87,7 @@ export const updateSalaryComponent = async (c: Context<AppEnv>) => {
 export const deleteSalaryComponent = async (c: Context<AppEnv>) => {
   try {
     const service = new PayrollService(c.env.DB);
-    const deleted = await service.deleteSalaryComponent((c.get('companyId') as string), c.req.param('id'));
+    const deleted = await service.deleteSalaryComponent((c.get('companyId') as string), (c.req.param('id') as string));
     if (!deleted) return c.json({ error: 'Not found' }, 404);
     return c.json({ data: deleted });
   } catch (error: any) {
@@ -119,7 +119,7 @@ export const updatePayGrade = async (c: Context<AppEnv>) => {
   try {
     const service = new PayrollService(c.env.DB);
     const payload = await c.req.json();
-    const updated = await service.updatePayGrade((c.get('companyId') as string), c.req.param('id'), payload);
+    const updated = await service.updatePayGrade((c.get('companyId') as string), (c.req.param('id') as string), payload);
     if (!updated) return c.json({ error: 'Not found' }, 404);
     return c.json({ data: updated });
   } catch (error: any) {
@@ -130,7 +130,7 @@ export const updatePayGrade = async (c: Context<AppEnv>) => {
 export const deletePayGrade = async (c: Context<AppEnv>) => {
   try {
     const service = new PayrollService(c.env.DB);
-    const deleted = await service.deletePayGrade((c.get('companyId') as string), c.req.param('id'));
+    const deleted = await service.deletePayGrade((c.get('companyId') as string), (c.req.param('id') as string));
     if (!deleted) return c.json({ error: 'Not found' }, 404);
     return c.json({ data: deleted });
   } catch (error: any) {
@@ -165,7 +165,7 @@ export const updateLoan = async (c: Context<AppEnv>) => {
   try {
     const service = new PayrollService(c.env.DB);
     const payload = await c.req.json();
-    const updated = await service.updateLoan((c.get('companyId') as string), c.req.param('id'), payload);
+    const updated = await service.updateLoan((c.get('companyId') as string), (c.req.param('id') as string), payload);
     if (!updated) return c.json({ error: 'Not found' }, 404);
     return c.json({ data: updated });
   } catch (error: any) {
@@ -176,7 +176,7 @@ export const updateLoan = async (c: Context<AppEnv>) => {
 export const deleteLoan = async (c: Context<AppEnv>) => {
   try {
     const service = new PayrollService(c.env.DB);
-    const deleted = await service.deleteLoan((c.get('companyId') as string), c.req.param('id'));
+    const deleted = await service.deleteLoan((c.get('companyId') as string), (c.req.param('id') as string));
     if (!deleted) return c.json({ error: 'Not found' }, 404);
     return c.json({ data: deleted });
   } catch (error: any) {
@@ -187,7 +187,7 @@ export const deleteLoan = async (c: Context<AppEnv>) => {
 export const getLoanRepayments = async (c: Context<AppEnv>) => {
   try {
     const service = new PayrollService(c.env.DB);
-    return c.json({ data: await service.getLoanRepayments((c.get('companyId') as string), c.req.param('id')) });
+    return c.json({ data: await service.getLoanRepayments((c.get('companyId') as string), (c.req.param('id') as string)) });
   } catch (error: any) {
     return c.json({ error: error.message }, 500);
   }
@@ -249,7 +249,7 @@ export const getPayrollRuns = async (c: Context<AppEnv>) => {
 export const getPayrollRun = async (c: Context<AppEnv>) => {
   try {
     const service = new PayrollService(c.env.DB);
-    const run = await service.getRun((c.get('companyId') as string), c.req.param('id'));
+    const run = await service.getRun((c.get('companyId') as string), (c.req.param('id') as string));
     if (!run) return c.json({ error: 'Not found' }, 404);
     return c.json({ data: run });
   } catch (error: any) {
@@ -260,7 +260,7 @@ export const getPayrollRun = async (c: Context<AppEnv>) => {
 export const approvePayrollRun = async (c: Context<AppEnv>) => {
   try {
     const service = new PayrollService(c.env.DB);
-    const run = await service.approveRun((c.get('companyId') as string), c.req.param('id'), c.get('employeeId'));
+    const run = await service.approveRun((c.get('companyId') as string), (c.req.param('id') as string), c.get('employeeId'));
     if (!run) return c.json({ error: 'Not found' }, 404);
     return c.json({ data: run });
   } catch (error: any) {
@@ -272,7 +272,7 @@ export const rejectPayrollRun = async (c: Context<AppEnv>) => {
   try {
     const service = new PayrollService(c.env.DB);
     const { reason } = await c.req.json().catch(() => ({ reason: undefined }));
-    const run = await service.rejectRun((c.get('companyId') as string), c.req.param('id'), reason);
+    const run = await service.rejectRun((c.get('companyId') as string), (c.req.param('id') as string), reason);
     if (!run) return c.json({ error: 'Not found' }, 404);
     return c.json({ data: run });
   } catch (error: any) {
@@ -283,7 +283,7 @@ export const rejectPayrollRun = async (c: Context<AppEnv>) => {
 export const markPayrollRunPaid = async (c: Context<AppEnv>) => {
   try {
     const service = new PayrollService(c.env.DB);
-    const run = await service.markRunPaid((c.get('companyId') as string), c.req.param('id'));
+    const run = await service.markRunPaid((c.get('companyId') as string), (c.req.param('id') as string));
     if (!run) return c.json({ error: 'Not found' }, 404);
     return c.json({ data: run });
   } catch (error: any) {
@@ -294,7 +294,7 @@ export const markPayrollRunPaid = async (c: Context<AppEnv>) => {
 export const getBankFile = async (c: Context<AppEnv>) => {
   try {
     const service = new PayrollService(c.env.DB);
-    const file = await service.getBankFile((c.get('companyId') as string), c.req.param('id'));
+    const file = await service.getBankFile((c.get('companyId') as string), (c.req.param('id') as string));
     if (!file) return c.json({ error: 'Not found' }, 404);
     c.header('Content-Type', 'text/csv');
     c.header('Content-Disposition', `attachment; filename="${file.filename}"`);
@@ -318,7 +318,7 @@ export const completeComplianceTask = async (c: Context<AppEnv>) => {
   try {
     const service = new PayrollService(c.env.DB);
     const { reference } = await c.req.json().catch(() => ({ reference: undefined }));
-    const task = await service.completeComplianceTask((c.get('companyId') as string), c.req.param('id'), c.get('employeeId'), reference);
+    const task = await service.completeComplianceTask((c.get('companyId') as string), (c.req.param('id') as string), c.get('employeeId'), reference);
     if (!task) return c.json({ error: 'Not found' }, 404);
     return c.json({ data: task });
   } catch (error: any) {
@@ -341,7 +341,7 @@ export const getPayrollDashboard = async (c: Context<AppEnv>) => {
 // ---------------- Employee payslip history (admin lookup) ----------------
 export const getEmployeePayslips = async (c: Context<AppEnv>) => {
   try {
-    const employeeId = c.req.param('id') as string;
+    const employeeId = (c.req.param('id') as string) as string;
     const companyId = (c.get('companyId') as string) as string;
     const db = drizzle(c.env.DB, { schema });
 

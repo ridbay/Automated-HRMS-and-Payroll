@@ -32,7 +32,6 @@ import {
   MoreHorizontal,
   X,
   FileText,
-  Share2,
   CalendarDays,
   TrendingUp,
   Laptop,
@@ -147,18 +146,21 @@ const Attendance: React.FC = () => {
   let lateEntries = 0;
   let totalArrivalMinutes = 0;
   let arrivalCount = 0;
+  let presentDaysThisMonth = 0;
 
   monthlyHistory.forEach((r: any) => {
     if (r.clockIn) {
+      presentDaysThisMonth++;
       const clockInTime = new Date(r.clockIn);
       const hours = clockInTime.getHours();
       const minutes = clockInTime.getMinutes();
-      
+
       totalArrivalMinutes += (hours * 60 + minutes);
       arrivalCount++;
 
-      // Consider late if clock in is after 09:15 AM
-      if (hours > 9 || (hours === 9 && minutes > 15)) {
+      // Server tags the record "late" against the company's configured
+      // grace period at clock-in time (see attendance.service.ts policy).
+      if (r.status === 'late') {
         lateEntries++;
       }
     }
@@ -170,6 +172,19 @@ const Attendance: React.FC = () => {
   const avgArrivalAmPm = avgArrivalHours >= 12 ? 'PM' : 'AM';
   const displayAvgArrivalHours = avgArrivalHours > 12 ? avgArrivalHours - 12 : (avgArrivalHours === 0 ? 12 : avgArrivalHours);
   const formattedAvgArrival = arrivalCount > 0 ? `${displayAvgArrivalHours.toString().padStart(2, '0')}:${avgArrivalMins.toString().padStart(2, '0')} ${avgArrivalAmPm}` : 'N/A';
+
+  // Working (Mon–Fri) days elapsed so far this month, used as the denominator
+  // for the "Present This Month" stat card.
+  const workingDaysElapsedThisMonth = (() => {
+    const now = new Date();
+    const lastDay = now.getDate();
+    let count = 0;
+    for (let day = 1; day <= lastDay; day++) {
+      const dow = new Date(statsYear, statsMonth, day).getDay();
+      if (dow !== 0 && dow !== 6) count++;
+    }
+    return count;
+  })();
 
   useEffect(() => {
     const ticker = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -307,6 +322,38 @@ const Attendance: React.FC = () => {
     return `${h}h ${m}m worked`;
   };
 
+  const formatHoursDecimal = (hours: number | undefined | null) => {
+    const total = hours || 0;
+    const h = Math.floor(total);
+    const m = Math.round((total - h) * 60);
+    return `${h}h ${m}m`;
+  };
+
+  const handleExportMonthlyCsv = () => {
+    const rows = [
+      ["Date", "Status", "Clock In", "Clock Out", "Work Hours", "Overtime", "Notes"],
+      ...monthlyHistory.map((r: any) => [
+        r.date,
+        r.status || "",
+        r.clockIn ? new Date(r.clockIn).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "",
+        r.clockOut ? new Date(r.clockOut).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "",
+        (r.workHours || 0).toFixed(2),
+        (r.overtime || 0).toFixed(2),
+        (r.note || "").replace(/"/g, '""'),
+      ]),
+    ];
+    const csv = rows.map((row) => row.map((cell: string) => `"${cell}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `attendance-report-${new Date().toISOString().slice(0, 7)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const renderClock = () => (
     <div className="space-y-10 max-w-5xl mx-auto pb-20">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
@@ -345,7 +392,9 @@ const Attendance: React.FC = () => {
               <div
                 className={`w-2 h-2 rounded-full ${isClockedIn ? "bg-emerald-500 animate-pulse" : "bg-slate-300"}`}
               />
-              {isClockedIn ? `Clocked In since 09:15 AM` : "Clocked Out"}
+              {isClockedIn && activeSession?.clockIn
+                ? `Clocked In since ${new Date(activeSession.clockIn).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+                : "Clocked Out"}
             </div>
             <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">
               {currentTime.toLocaleDateString("en-US", {
@@ -460,7 +509,7 @@ const Attendance: React.FC = () => {
                 Present This Month
               </p>
               <h4 className="text-2xl font-black text-slate-800 tracking-tight">
-                20 / 22{" "}
+                {presentDaysThisMonth} / {workingDaysElapsedThisMonth}{" "}
                 <span className="text-xs font-bold text-slate-400">Days</span>
               </h4>
             </div>
@@ -472,7 +521,7 @@ const Attendance: React.FC = () => {
                 Avg Arrival
               </p>
               <h4 className="text-2xl font-black text-slate-800 tracking-tight">
-                09:05 AM
+                {formattedAvgArrival}
               </h4>
             </div>
           </div>
@@ -673,13 +722,24 @@ const Attendance: React.FC = () => {
                       {selectedDayData.status || "Present"}
                     </span>
                   </div>
-                  {/* Mocked data for demo if not in history */}
                   <div className="flex justify-between items-center text-xs font-bold">
                     <span className="text-slate-400 uppercase tracking-widest">
                       Total Work Hours
                     </span>
-                    <span className="text-slate-800">8h 0m</span>
+                    <span className="text-slate-800">
+                      {formatHoursDecimal(selectedDayData.workHours)}
+                    </span>
                   </div>
+                  {selectedDayData.overtime > 0 && (
+                    <div className="flex justify-between items-center text-xs font-bold">
+                      <span className="text-slate-400 uppercase tracking-widest">
+                        Overtime
+                      </span>
+                      <span className="text-indigo-600">
+                        {formatHoursDecimal(selectedDayData.overtime)}
+                      </span>
+                    </div>
+                  )}
                 </div>
                 {selectedDayData.note && (
                   <div className="p-6 bg-indigo-50/50 rounded-[2rem] border border-indigo-100 flex items-start gap-4">
@@ -865,7 +925,9 @@ const Attendance: React.FC = () => {
                     className={`px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest ${
                       ot.status === "approved"
                         ? "bg-emerald-50 text-emerald-600"
-                        : "bg-amber-50 text-amber-600"
+                        : ot.status === "rejected"
+                          ? "bg-rose-50 text-rose-600"
+                          : "bg-amber-50 text-amber-600"
                     }`}
                   >
                     {ot.status}
@@ -875,21 +937,31 @@ const Attendance: React.FC = () => {
                   "{ot.reason}"
                 </p>
                 <div className="flex items-center justify-between pt-6 border-t border-slate-50">
-                  <div className="flex items-center gap-3">
-                    <img
-                      src="https://i.pravatar.cc/150?u=marcus"
-                      className="w-8 h-8 rounded-xl object-cover"
-                    />
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                      Approved by Marcus R.
-                    </p>
+                  <div className="flex-1 min-w-0">
+                    {ot.status === "pending" ? (
+                      <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest flex items-center gap-1.5">
+                        <Clock size={12} /> Awaiting manager review
+                      </p>
+                    ) : (
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest truncate">
+                        {ot.managerComment
+                          ? `"${ot.managerComment}"`
+                          : ot.status === "approved"
+                            ? "Approved by your manager"
+                            : "Declined by your manager"}
+                      </p>
+                    )}
                   </div>
-                  <button className="p-2 text-slate-300 hover:text-indigo-600">
-                    <ChevronRight size={18} />
-                  </button>
                 </div>
               </div>
             ))}
+            {overtimeRequests.length === 0 && (
+              <div className="p-10 text-center bg-white rounded-[2.5rem] border border-dashed border-slate-200">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                  No overtime requests yet.
+                </p>
+              </div>
+            )}
           </div>
         </section>
       </div>
@@ -968,15 +1040,31 @@ const Attendance: React.FC = () => {
                 Attendance Analytics
               </h3>
               <p className="text-slate-500 max-w-sm font-medium text-lg leading-relaxed">
-                Generate your monthly attendance report for reimbursement or
-                audit purposes.
+                {monthName} {currentYear} summary for reimbursement or audit
+                purposes.
               </p>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mt-12 w-full max-w-2xl">
+                {[
+                  { label: "Present Days", val: presentDaysThisMonth },
+                  { label: "Total Hours", val: `${totalMonthlyHours.toFixed(1)}h` },
+                  { label: "Overtime", val: `${totalMonthlyOvertime.toFixed(1)}h` },
+                  { label: "Late Entries", val: lateEntries },
+                ].map((s) => (
+                  <div key={s.label} className="bg-slate-50 p-6 rounded-[2rem] text-center">
+                    <p className="text-2xl font-black text-slate-800 tracking-tight">{s.val}</p>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">{s.label}</p>
+                  </div>
+                ))}
+              </div>
+
               <div className="flex gap-4 mt-12">
-                <button className="px-10 py-5 bg-indigo-600 text-white rounded-[2rem] font-black text-sm uppercase tracking-widest shadow-2xl flex items-center gap-3">
-                  <Download size={20} /> Export Monthly PDF
-                </button>
-                <button className="px-10 py-5 bg-white border border-slate-200 text-slate-600 rounded-[2rem] font-black text-sm uppercase tracking-widest flex items-center gap-3">
-                  <Share2 size={20} /> Share via Email
+                <button
+                  onClick={handleExportMonthlyCsv}
+                  disabled={monthlyHistory.length === 0}
+                  className="px-10 py-5 bg-indigo-600 text-white rounded-[2rem] font-black text-sm uppercase tracking-widest shadow-2xl flex items-center gap-3 disabled:opacity-50"
+                >
+                  <Download size={20} /> Export Monthly CSV
                 </button>
               </div>
             </div>

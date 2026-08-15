@@ -2,8 +2,13 @@ import { Context } from 'hono';
 import { AttendanceService } from '../../services/attendance.service';
 import { AppEnv } from '../../types';
 
+// GET / and GET /summary also admit MANAGER (see attendance-admin.routes.ts) — in
+// that case results are narrowed to the caller's own direct reports, same as the
+// employee-scoped /employee/attendance/team* routes narrow by managerId.
 export const getAllAttendance = async (c: Context<AppEnv>) => {
   const companyId = c.get('companyId') as string;
+  const role = c.get('role');
+  const employeeId = c.get('employeeId');
   const attendanceService = new AttendanceService(c.env.DB);
 
   const records = await attendanceService.getCompanyAttendance(companyId, {
@@ -11,15 +16,18 @@ export const getAllAttendance = async (c: Context<AppEnv>) => {
     from: c.req.query('from'),
     to: c.req.query('to'),
     employeeId: c.req.query('employeeId'),
+    managerId: role === 'MANAGER' ? employeeId : undefined,
   });
   return c.json(records);
 };
 
 export const getAttendanceSummary = async (c: Context<AppEnv>) => {
   const companyId = c.get('companyId') as string;
+  const role = c.get('role');
+  const employeeId = c.get('employeeId');
   const date = c.req.query('date') || new Date().toISOString().split('T')[0];
   const attendanceService = new AttendanceService(c.env.DB);
-  const summary = await attendanceService.getAttendanceSummary(companyId, date);
+  const summary = await attendanceService.getAttendanceSummary(companyId, date, role === 'MANAGER' ? employeeId : undefined);
   return c.json(summary);
 };
 

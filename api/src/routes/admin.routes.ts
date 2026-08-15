@@ -20,6 +20,7 @@ import { requireRole, requirePermission } from "../middlewares/role.middleware";
 import payrollRoutes from "./payroll.routes";
 import leaveAdminRoutes from "./leave-admin.routes";
 import requisitionRoutes from "./requisition.routes";
+import attendanceAdminRoutes from "./attendance-admin.routes";
 import { SettingsService } from "../services/settings.service";
 import { CompanyService } from "../services/company.service";
 import { OrgService } from "../services/org.service";
@@ -147,6 +148,7 @@ adminRoutes.post("/training/employee/:id", adminOnly, create("performance"), add
 adminRoutes.route("/payroll", payrollRoutes);
 adminRoutes.route("/leaves", leaveAdminRoutes);
 adminRoutes.route("/job-requisitions", requisitionRoutes);
+adminRoutes.route("/attendance", attendanceAdminRoutes);
 
 // No matrix module maps to this today — stays gated on the fixed role only.
 adminRoutes.get("/dashboard/stats", adminOnly, async (c: any) => {

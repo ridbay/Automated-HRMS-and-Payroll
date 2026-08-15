@@ -114,6 +114,53 @@ const ManagerDashboard: React.FC = () => {
   const { data: teamPendingLeaves = [] } = useTeamPendingLeaves();
   const updateLeaveStatus = useUpdateTeamLeaveStatus();
 
+  // Requisitions ("Requirement" requests) this manager has raised, plus the
+  // form to submit a new one. HR Admin/Super Admin review & approve these
+  // from the Recruitment module.
+  const [showRequisitionModal, setShowRequisitionModal] = useState(false);
+  const emptyReqForm = {
+    title: "",
+    department: "",
+    location: "",
+    priority: "Medium" as "High" | "Medium" | "Low",
+    targetHireDate: "",
+    budgetRange: "",
+    justification: "",
+  };
+  const [reqForm, setReqForm] = useState(emptyReqForm);
+  const [reqFormError, setReqFormError] = useState<string | null>(null);
+
+  const { data: myRequisitions = [], isLoading: myRequisitionsLoading } = useMyJobRequisitions();
+  const { data: departments = [] } = useDepartments();
+  const { data: locations = [] } = useLocations();
+  const createRequisition = useCreateJobRequisition();
+
+  const handleSubmitRequisition = () => {
+    if (!reqForm.title.trim() || !reqForm.department || !reqForm.location) {
+      setReqFormError("Job title, department and location are required.");
+      return;
+    }
+    setReqFormError(null);
+    createRequisition.mutate(
+      {
+        title: reqForm.title.trim(),
+        department: reqForm.department,
+        location: reqForm.location,
+        priority: reqForm.priority,
+        targetHireDate: reqForm.targetHireDate || undefined,
+        budgetRange: reqForm.budgetRange.trim() || undefined,
+        justification: reqForm.justification.trim() || undefined,
+      } as any,
+      {
+        onSuccess: () => {
+          setShowRequisitionModal(false);
+          setReqForm(emptyReqForm);
+        },
+        onError: (err: any) => setReqFormError(err.message || "Failed to submit request."),
+      },
+    );
+  };
+
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat("en-NG", {
       style: "currency",
@@ -383,25 +430,60 @@ const ManagerDashboard: React.FC = () => {
 
         {/* Right Col */}
         <div className="space-y-10">
-          {/* Open Positions */}
+          {/* My Hiring Requests ("Requirement" requests) */}
           <section className="bg-slate-900 rounded-[3rem] p-10 text-white shadow-2xl relative overflow-hidden">
             <Briefcase className="absolute -bottom-6 -right-6 w-32 h-32 text-indigo-500/20 rotate-12" />
-            <h3 className="text-xl font-black mb-6">Open Positions</h3>
-            <div className="space-y-4 mb-8">
-              <div className="bg-white/10 p-4 rounded-2xl backdrop-blur-sm border border-white/5">
-                <p className="text-sm font-bold">Senior Product Designer</p>
-                <div className="flex justify-between items-center mt-2">
-                  <span className="text-[10px] font-black uppercase text-indigo-300">
-                    Design Dept
-                  </span>
-                  <span className="bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded text-[9px] font-black uppercase">
-                    3 Candidates
-                  </span>
-                </div>
-              </div>
+            <div className="flex items-center justify-between mb-6 relative">
+              <h3 className="text-xl font-black">My Hiring Requests</h3>
+              <button
+                onClick={() => setShowRequisitionModal(true)}
+                className="p-2.5 bg-white/10 hover:bg-white/20 rounded-xl transition-all"
+                title="Request a new hire"
+              >
+                <Plus size={16} />
+              </button>
             </div>
-            <button className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl">
-              View Pipeline
+            <div className="space-y-4 mb-8 max-h-64 overflow-y-auto scrollbar-hide relative">
+              {myRequisitionsLoading && (
+                <p className="text-xs text-indigo-200 font-bold">Loading…</p>
+              )}
+              {!myRequisitionsLoading && myRequisitions.length === 0 && (
+                <p className="text-xs text-indigo-200 font-bold">
+                  No requests yet — raise one below to open a new position.
+                </p>
+              )}
+              {myRequisitions.slice(0, 4).map((req) => (
+                <div
+                  key={req.id}
+                  className="bg-white/10 p-4 rounded-2xl backdrop-blur-sm border border-white/5"
+                >
+                  <p className="text-sm font-bold">{req.title}</p>
+                  <div className="flex justify-between items-center mt-2">
+                    <span className="text-[10px] font-black uppercase text-indigo-300">
+                      {req.department}
+                    </span>
+                    <span
+                      className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${
+                        req.status === "Open"
+                          ? "bg-emerald-500/20 text-emerald-300"
+                          : req.status === "Rejected"
+                            ? "bg-rose-500/20 text-rose-300"
+                            : req.status === "Pending Approval"
+                              ? "bg-sky-500/20 text-sky-300"
+                              : "bg-amber-500/20 text-amber-300"
+                      }`}
+                    >
+                      {req.status}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={() => setShowRequisitionModal(true)}
+              className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl relative"
+            >
+              + Request New Hire
             </button>
           </section>
 
@@ -704,6 +786,172 @@ const ManagerDashboard: React.FC = () => {
             employee={viewingEmployee}
             onClose={() => setViewingEmployee(null)}
           />
+        )}
+      </AnimatePresence>
+
+      {/* Request New Hire ("Requirement") Modal */}
+      <AnimatePresence>
+        {showRequisitionModal && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-6">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowRequisitionModal(false)}
+              className="absolute inset-0 bg-slate-900/80 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="relative bg-white w-full max-w-2xl max-h-[90vh] rounded-[3rem] shadow-2xl overflow-hidden flex flex-col"
+            >
+              <div className="bg-indigo-600 p-10 text-white flex justify-between items-start shrink-0">
+                <div>
+                  <h2 className="text-2xl font-black mb-1 tracking-tighter">
+                    Request New Hire
+                  </h2>
+                  <p className="text-indigo-100 text-sm font-medium">
+                    Submit a headcount request for HR/Admin review.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowRequisitionModal(false)}
+                  className="p-3 bg-white/10 hover:bg-white/20 rounded-2xl transition-all"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-10 space-y-6 scrollbar-hide">
+                {reqFormError && (
+                  <div className="p-4 bg-rose-50 border border-rose-100 text-rose-600 rounded-2xl text-xs font-bold">
+                    {reqFormError}
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    Job Title
+                  </label>
+                  <input
+                    type="text"
+                    value={reqForm.title}
+                    onChange={(e) => setReqForm({ ...reqForm, title: e.target.value })}
+                    placeholder="e.g. Senior Product Designer"
+                    className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-800"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                      Department
+                    </label>
+                    <select
+                      value={reqForm.department}
+                      onChange={(e) => setReqForm({ ...reqForm, department: e.target.value })}
+                      className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-800"
+                    >
+                      <option value="">Select department</option>
+                      {departments.map((d: any) => (
+                        <option key={d.id} value={d.name}>{d.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                      Location
+                    </label>
+                    <select
+                      value={reqForm.location}
+                      onChange={(e) => setReqForm({ ...reqForm, location: e.target.value })}
+                      className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-800"
+                    >
+                      <option value="">Select location</option>
+                      {locations.map((l: any) => (
+                        <option key={l.id} value={l.name}>{l.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                      Urgency
+                    </label>
+                    <select
+                      value={reqForm.priority}
+                      onChange={(e) => setReqForm({ ...reqForm, priority: e.target.value as any })}
+                      className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-800"
+                    >
+                      <option value="High">High</option>
+                      <option value="Medium">Medium</option>
+                      <option value="Low">Low</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                      Target Hire Date
+                    </label>
+                    <input
+                      type="date"
+                      value={reqForm.targetHireDate}
+                      onChange={(e) => setReqForm({ ...reqForm, targetHireDate: e.target.value })}
+                      className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-800"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    Budget Range (optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={reqForm.budgetRange}
+                    onChange={(e) => setReqForm({ ...reqForm, budgetRange: e.target.value })}
+                    placeholder="e.g. ₦1.2M - ₦1.8M"
+                    className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-800"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    Justification
+                  </label>
+                  <textarea
+                    rows={4}
+                    value={reqForm.justification}
+                    onChange={(e) => setReqForm({ ...reqForm, justification: e.target.value })}
+                    placeholder="Why is this hire needed right now?"
+                    className="w-full px-6 py-4 bg-slate-50 border-none rounded-3xl outline-none font-medium text-sm resize-none"
+                  />
+                </div>
+              </div>
+
+              <div className="p-8 bg-slate-50 border-t border-slate-100 flex justify-end gap-4 shrink-0">
+                <button
+                  onClick={() => {
+                    setShowRequisitionModal(false);
+                    setReqForm(emptyReqForm);
+                    setReqFormError(null);
+                  }}
+                  className="px-8 py-4 bg-white border border-slate-200 text-slate-500 rounded-2xl font-black text-xs uppercase tracking-widest"
+                >
+                  Cancel
+                </button>
+                <button
+                  disabled={createRequisition.isPending}
+                  onClick={handleSubmitRequisition}
+                  className="px-10 py-4 bg-indigo-600 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-xl shadow-indigo-100 hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:hover:scale-100"
+                >
+                  {createRequisition.isPending ? "Submitting…" : "Submit Request"}
+                </button>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

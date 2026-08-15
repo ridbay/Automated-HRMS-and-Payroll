@@ -620,14 +620,6 @@ const Recruitment: React.FC = () => {
                       Nothing here
                     </p>
                   )}
-                  {canManageRequisitions && status === "Pending Approval" && (
-                    <button
-                      onClick={() => setShowJobPostingModal(true)}
-                      className="w-full py-4 border-2 border-dashed border-slate-200 text-slate-300 hover:border-indigo-200 hover:text-indigo-600 rounded-[2rem] font-black text-[10px] uppercase tracking-widest transition-all"
-                    >
-                      + Add Requisition
-                    </button>
-                  )}
                 </div>
               </div>
             );

@@ -404,6 +404,7 @@ const Settings: React.FC = () => {
     { key: 'payroll', label: 'Payroll', actions: ['view', 'approve'] },
     { key: 'performance', label: 'Performance', actions: ['view', 'create', 'edit'] },
     { key: 'leave', label: 'Leave & Time Off', actions: ['view', 'approve'] },
+    { key: 'attendance', label: 'Time & Attendance', actions: ['view', 'edit', 'approve'] },
     { key: 'settings', label: 'Settings', actions: ['view', 'edit'] },
   ];
   const PERMISSION_COLUMNS: { key: string; label: string }[] = [

@@ -22,6 +22,7 @@ import AssetManagement from "./features/admin/AssetManagement";
 import Onboarding from "./features/admin/Onboarding";
 import Directory from "./features/core/Directory";
 import AdminLeaveRequests from "./features/admin/AdminLeaveRequests";
+import AttendanceManagement from "./features/admin/AttendanceManagement";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { NavigationProvider, useNavigation } from "./context/NavigationContext";
 
@@ -71,6 +72,9 @@ const AppContent: React.FC = () => {
       case "directory":
         return <Directory />;
       case "attendance":
+        if (user.role === "MANAGER" || user.role === "HR_ADMIN" || user.role === "SUPER_ADMIN") {
+          return <AttendanceManagement />;
+        }
         return <Attendance />;
       case "performance":
         if (user.role === "MANAGER") return <ManagerDashboard />;

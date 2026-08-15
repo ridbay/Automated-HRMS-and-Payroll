@@ -175,7 +175,7 @@ export class PayrollService {
       orderBy: [desc(schema.loans.createdAt)],
     });
     const employees = await this.db.query.employees.findMany({ where: eq(schema.employees.companyId, companyId) });
-    const byId = new Map(employees.map((e: any) => [e.id, e]));
+    const byId = new Map<string, any>(employees.map((e: any) => [e.id, e]));
     return rows.map((l: any) => {
       const emp = byId.get(l.employeeId);
       return { ...l, employeeName: emp ? `${emp.name} ${emp.lastName || ''}`.trim() : 'Unknown' };
