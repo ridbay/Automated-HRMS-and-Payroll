@@ -24,3 +24,4 @@ export * from '../models/peerReview.model';
 export * from '../models/transition.model';
 export * from '../models/support.model';
 export * from '../models/controlCenter.model';
+export * from '../models/ats.model';

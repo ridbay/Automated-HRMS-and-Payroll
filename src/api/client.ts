@@ -87,9 +87,9 @@ export const createEmployee = async (newEmployee: Partial<Employee>): Promise<Em
   return res.json();
 };
 
-// The API doesn't track the candidate pipeline yet, so every requisition it
-// returns is padded with a zeroed-out stage breakdown to satisfy the shape
-// the UI (kanban/grid/list) already renders against.
+// The API now computes real per-stage candidate counts server-side
+// (RequisitionService.withPipelineCounts); this just guards older cached
+// responses / requisitions with no candidates yet against a missing field.
 const withEmptyPipeline = (req: any): JobRequisition => ({
   ...req,
   applicantsByStage: req.applicantsByStage || {

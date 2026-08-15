@@ -1,6 +1,6 @@
 import { D1Database } from '@cloudflare/workers-types';
 import { drizzle } from 'drizzle-orm/d1';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
 import * as schema from '../db/schema';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -29,12 +29,40 @@ export class RequisitionService {
     this.db = drizzle(dbBinding, { schema });
   }
 
+  // Attaches real, server-computed candidate-per-stage counts (from the ATS
+  // `candidates` table) instead of the zero-padded shape the frontend used
+  // to fabricate client-side (src/api/client.ts's withEmptyPipeline) before
+  // candidates existed. Queried directly here (both tables share the same
+  // drizzle instance/schema) rather than via a separate AtsService instance,
+  // to avoid re-deriving a raw D1Database binding out of an existing
+  // drizzle wrapper.
+  private async withPipelineCounts<T extends { id: string }>(companyId: string, rows: T[]) {
+    const empty = { applied: 0, screening: 0, interview: 0, offer: 0, hired: 0 };
+    if (rows.length === 0) return rows as (T & { applicantsByStage: typeof empty })[];
+
+    const requisitionIds = rows.map((r) => r.id);
+    const candidateRows = await this.db.query.candidates.findMany({
+      where: and(eq(schema.candidates.companyId, companyId), inArray(schema.candidates.requisitionId, requisitionIds)),
+      columns: { requisitionId: true, status: true },
+    });
+
+    const counts = new Map<string, typeof empty>();
+    for (const c of candidateRows) {
+      if (!c.requisitionId) continue;
+      const bucket = counts.get(c.requisitionId) || { ...empty };
+      if (c.status in bucket) (bucket as any)[c.status] += 1;
+      counts.set(c.requisitionId, bucket);
+    }
+
+    return rows.map((r) => ({ ...r, applicantsByStage: counts.get(r.id) || empty }));
+  }
+
   async getAllByCompany(companyId: string) {
     const rows = await this.db.query.jobRequisitions.findMany({
       where: eq(schema.jobRequisitions.companyId, companyId),
       orderBy: (jobRequisitions: any, { desc }: any) => [desc(jobRequisitions.createdAt)],
     });
-    return rows.map(withComputedDaysOpen);
+    return this.withPipelineCounts(companyId, rows.map(withComputedDaysOpen));
   }
 
   async getPendingByCompany(companyId: string) {

@@ -1,7 +1,14 @@
 import { Hono } from 'hono';
+import { listOpenPositions, getOpenPosition, applyToPosition } from '../controllers/public.controller';
 
-// Placeholder so the worker keeps bundling while the real public routes are
-// built out in a concurrent session — replace with actual handlers.
+// Intentionally unauthenticated — mounted before authMiddleware in
+// src/index.ts, no x-company-id header required. The public careers page
+// (src/features/public/CareersPage.tsx) and its application form are the
+// only consumers.
 const publicRoutes = new Hono();
+
+publicRoutes.get('/careers/:companyIdentifier', listOpenPositions);
+publicRoutes.get('/careers/:companyIdentifier/:requisitionId', getOpenPosition);
+publicRoutes.post('/careers/:companyIdentifier/:requisitionId/apply', applyToPosition);
 
 export default publicRoutes;

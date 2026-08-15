@@ -1,8 +1,9 @@
-import { D1Database, R2Bucket } from '@cloudflare/workers-types';
+import { D1Database, R2Bucket, Ai } from '@cloudflare/workers-types';
 
 export type Bindings = {
   DB: D1Database;
   BUCKET: R2Bucket;
+  AI: Ai;
   JWT_SECRET?: string;
   NODE_ENV?: 'development' | 'production';
 };

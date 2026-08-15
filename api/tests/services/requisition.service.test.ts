@@ -22,6 +22,9 @@ describe('Requisition Service', () => {
       returning: vi.fn().mockReturnThis(),
       query: {
         jobRequisitions: { findMany: vi.fn() },
+        // getAllByCompany also folds in real per-stage candidate counts
+        // (see RequisitionService.withPipelineCounts) — default to none.
+        candidates: { findMany: vi.fn().mockResolvedValue([]) },
       }
     };
 

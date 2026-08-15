@@ -39,6 +39,7 @@ import { requireRole, requirePermission } from "../middlewares/role.middleware";
 import payrollRoutes from "./payroll.routes";
 import leaveAdminRoutes from "./leave-admin.routes";
 import requisitionRoutes from "./requisition.routes";
+import atsRoutes from "./ats.routes";
 import attendanceAdminRoutes from "./attendance-admin.routes";
 import benefitsAdminRoutes from "./benefits-admin.routes";
 import { SettingsService } from "../services/settings.service";
@@ -225,6 +226,9 @@ adminRoutes.post("/training/employee/:id", adminOnly, create("performance"), add
 adminRoutes.route("/payroll", payrollRoutes);
 adminRoutes.route("/leaves", leaveAdminRoutes);
 adminRoutes.route("/job-requisitions", requisitionRoutes);
+// Candidates / interviews / offers — the real ATS pipeline behind the
+// requisitions above. Same role model, see ats.routes.ts.
+adminRoutes.route("/ats", atsRoutes);
 adminRoutes.route("/attendance", attendanceAdminRoutes);
 // Benefits & Wellbeing (plan catalog, enrollments, wellness programs, claims,
 // plus the legacy per-employee financial snapshot under /benefits/employee/:id)

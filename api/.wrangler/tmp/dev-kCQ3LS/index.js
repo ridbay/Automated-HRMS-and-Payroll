@@ -5,7 +5,7 @@ var __export = (target, all) => {
     __defProp(target, name, { get: all[name], enumerable: true });
 };
 
-// .wrangler/tmp/bundle-l1eDsL/checked-fetch.js
+// .wrangler/tmp/bundle-MRdSYo/checked-fetch.js
 var urls = /* @__PURE__ */ new Set();
 function checkURL(request, init) {
   const url = request instanceof URL ? request : new URL(
@@ -8134,6 +8134,10 @@ __export(schema_exports, {
   benefitEnrollmentsRelations: () => benefitEnrollmentsRelations,
   benefitPlans: () => benefitPlans,
   benefitPlansRelations: () => benefitPlansRelations,
+  candidateTimelineEvents: () => candidateTimelineEvents,
+  candidateTimelineEventsRelations: () => candidateTimelineEventsRelations,
+  candidates: () => candidates,
+  candidatesRelations: () => candidatesRelations,
   companies: () => companies,
   companySettings: () => companySettings,
   complianceTasks: () => complianceTasks,
@@ -8153,6 +8157,10 @@ __export(schema_exports, {
   feedbacks: () => feedbacks,
   goals: () => goals,
   integrations: () => integrations,
+  interviewScorecards: () => interviewScorecards,
+  interviewScorecardsRelations: () => interviewScorecardsRelations,
+  interviews: () => interviews,
+  interviewsRelations: () => interviewsRelations,
   jobRequisitions: () => jobRequisitions,
   leaveBalances: () => leaveBalances,
   leaveRequests: () => leaveRequests,
@@ -8161,6 +8169,8 @@ __export(schema_exports, {
   loans: () => loans,
   loansRelations: () => loansRelations,
   locations: () => locations,
+  offers: () => offers,
+  offersRelations: () => offersRelations,
   overtimeRequests: () => overtimeRequests,
   payGrades: () => payGrades,
   payrollRuns: () => payrollRuns,
@@ -8458,6 +8468,12 @@ var jobRequisitions = sqliteTable("job_requisitions", {
   daysOpen: integer("days_open").notNull(),
   justification: text("justification"),
   budgetRange: text("budget_range"),
+  // Public careers page fields — nullable so existing requisitions (created
+  // before the careers page existed) don't need backfilling to keep working
+  // internally; they just won't have public copy until an admin adds it.
+  description: text("description"),
+  requirements: text("requirements"),
+  isPubliclyListed: integer("is_publicly_listed", { mode: "boolean" }).notNull().default(true),
   // Who requested this requisition (audit trail for the approval workflow)
   requestedById: text("requested_by_id"),
   requestedByName: text("requested_by_name"),
@@ -9162,6 +9178,137 @@ var workflows = sqliteTable("workflows", {
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").$onUpdate(() => (/* @__PURE__ */ new Date()).toISOString())
 });
+
+// src/models/ats.model.ts
+var candidates = sqliteTable("candidates", {
+  id: text("id").primaryKey(),
+  companyId: text("company_id").notNull().references(() => companies.id),
+  requisitionId: text("requisition_id").references(() => jobRequisitions.id),
+  name: text("name").notNull(),
+  email: text("email").notNull(),
+  phone: text("phone"),
+  location: text("location"),
+  currentTitle: text("current_title"),
+  currentEmployer: text("current_employer"),
+  experienceYears: real("experience_years"),
+  education: text("education"),
+  skills: text("skills", { mode: "json" }).$type().default(sql`'[]'`),
+  // 'LinkedIn' | 'Referral' | 'Job Board' | 'Career Page'
+  source: text("source").notNull().default("Career Page"),
+  salaryExpectation: text("salary_expectation"),
+  linkedinUrl: text("linkedin_url"),
+  githubUrl: text("github_url"),
+  portfolioUrl: text("portfolio_url"),
+  coverLetter: text("cover_letter"),
+  // R2 object key (same convention as employeeDocuments.fileKey), not a URL.
+  resumeFileKey: text("resume_file_key"),
+  rating: real("rating"),
+  // 'applied' | 'screening' | 'interview' | 'offer' | 'hired' | 'rejected'
+  status: text("status").notNull().default("applied"),
+  appliedDate: text("applied_date").notNull().default(sql`CURRENT_TIMESTAMP`),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").$onUpdate(() => (/* @__PURE__ */ new Date()).toISOString())
+});
+var candidateTimelineEvents = sqliteTable("candidate_timeline_events", {
+  id: text("id").primaryKey(),
+  candidateId: text("candidate_id").notNull().references(() => candidates.id),
+  companyId: text("company_id").notNull().references(() => companies.id),
+  event: text("event").notNull(),
+  note: text("note"),
+  actorId: text("actor_id"),
+  actorName: text("actor_name"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`)
+});
+var interviews = sqliteTable("interviews", {
+  id: text("id").primaryKey(),
+  companyId: text("company_id").notNull().references(() => companies.id),
+  candidateId: text("candidate_id").notNull().references(() => candidates.id),
+  requisitionId: text("requisition_id").references(() => jobRequisitions.id),
+  // 'Phone' | 'Video' | 'In-person' | 'Panel'
+  type: text("type").notNull(),
+  // 'Screening' | 'Technical' | 'Cultural' | 'Final'
+  stage: text("stage").notNull(),
+  dateTime: text("date_time").notNull(),
+  durationMinutes: integer("duration_minutes").notNull().default(60),
+  // JSON array of employeeIds
+  interviewerIds: text("interviewer_ids", { mode: "json" }).$type().default(sql`'[]'`),
+  meetingLink: text("meeting_link"),
+  // 'Scheduled' | 'Completed' | 'Cancelled'
+  status: text("status").notNull().default("Scheduled"),
+  createdBy: text("created_by"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").$onUpdate(() => (/* @__PURE__ */ new Date()).toISOString())
+});
+var interviewScorecards = sqliteTable("interview_scorecards", {
+  id: text("id").primaryKey(),
+  interviewId: text("interview_id").notNull().references(() => interviews.id),
+  companyId: text("company_id").notNull().references(() => companies.id),
+  interviewerId: text("interviewer_id"),
+  interviewerName: text("interviewer_name"),
+  technical: integer("technical"),
+  communication: integer("communication"),
+  cultural: integer("cultural"),
+  notes: text("notes"),
+  // 'Hire' | 'Maybe' | 'No Hire'
+  recommendation: text("recommendation"),
+  submittedAt: text("submitted_at").notNull().default(sql`CURRENT_TIMESTAMP`)
+});
+var offers = sqliteTable("offers", {
+  id: text("id").primaryKey(),
+  companyId: text("company_id").notNull().references(() => companies.id),
+  candidateId: text("candidate_id").notNull().references(() => candidates.id),
+  requisitionId: text("requisition_id").references(() => jobRequisitions.id),
+  title: text("title").notNull(),
+  department: text("department"),
+  salary: integer("salary").notNull(),
+  currency: text("currency").notNull().default("NGN"),
+  startDate: text("start_date"),
+  expiryDate: text("expiry_date"),
+  // 'draft' | 'pending_approval' | 'sent' | 'accepted' | 'declined' | 'rescinded'
+  status: text("status").notNull().default("draft"),
+  letterBody: text("letter_body"),
+  approvedById: text("approved_by_id"),
+  approvedAt: text("approved_at"),
+  sentAt: text("sent_at"),
+  respondedAt: text("responded_at"),
+  createdBy: text("created_by"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").$onUpdate(() => (/* @__PURE__ */ new Date()).toISOString())
+});
+var candidatesRelations = relations(candidates, ({ one, many }) => ({
+  requisition: one(jobRequisitions, {
+    fields: [candidates.requisitionId],
+    references: [jobRequisitions.id]
+  }),
+  timeline: many(candidateTimelineEvents),
+  interviews: many(interviews),
+  offers: many(offers)
+}));
+var candidateTimelineEventsRelations = relations(candidateTimelineEvents, ({ one }) => ({
+  candidate: one(candidates, {
+    fields: [candidateTimelineEvents.candidateId],
+    references: [candidates.id]
+  })
+}));
+var interviewsRelations = relations(interviews, ({ one, many }) => ({
+  candidate: one(candidates, {
+    fields: [interviews.candidateId],
+    references: [candidates.id]
+  }),
+  scorecards: many(interviewScorecards)
+}));
+var interviewScorecardsRelations = relations(interviewScorecards, ({ one }) => ({
+  interview: one(interviews, {
+    fields: [interviewScorecards.interviewId],
+    references: [interviews.id]
+  })
+}));
+var offersRelations = relations(offers, ({ one }) => ({
+  candidate: one(candidates, {
+    fields: [offers.candidateId],
+    references: [candidates.id]
+  })
+}));
 
 // node_modules/hono/dist/utils/encode.js
 var decodeBase64Url = /* @__PURE__ */ __name((str) => {
@@ -15235,12 +15382,36 @@ var RequisitionService = class {
   constructor(dbBinding) {
     this.db = drizzle(dbBinding, { schema: schema_exports });
   }
+  // Attaches real, server-computed candidate-per-stage counts (from the ATS
+  // `candidates` table) instead of the zero-padded shape the frontend used
+  // to fabricate client-side (src/api/client.ts's withEmptyPipeline) before
+  // candidates existed. Queried directly here (both tables share the same
+  // drizzle instance/schema) rather than via a separate AtsService instance,
+  // to avoid re-deriving a raw D1Database binding out of an existing
+  // drizzle wrapper.
+  async withPipelineCounts(companyId, rows) {
+    const empty = { applied: 0, screening: 0, interview: 0, offer: 0, hired: 0 };
+    if (rows.length === 0) return rows;
+    const requisitionIds = rows.map((r) => r.id);
+    const candidateRows = await this.db.query.candidates.findMany({
+      where: and(eq(candidates.companyId, companyId), inArray(candidates.requisitionId, requisitionIds)),
+      columns: { requisitionId: true, status: true }
+    });
+    const counts = /* @__PURE__ */ new Map();
+    for (const c of candidateRows) {
+      if (!c.requisitionId) continue;
+      const bucket = counts.get(c.requisitionId) || { ...empty };
+      if (c.status in bucket) bucket[c.status] += 1;
+      counts.set(c.requisitionId, bucket);
+    }
+    return rows.map((r) => ({ ...r, applicantsByStage: counts.get(r.id) || empty }));
+  }
   async getAllByCompany(companyId) {
     const rows = await this.db.query.jobRequisitions.findMany({
       where: eq(jobRequisitions.companyId, companyId),
       orderBy: /* @__PURE__ */ __name((jobRequisitions2, { desc: desc4 }) => [desc4(jobRequisitions2.createdAt)], "orderBy")
     });
-    return rows.map(withComputedDaysOpen);
+    return this.withPipelineCounts(companyId, rows.map(withComputedDaysOpen));
   }
   async getPendingByCompany(companyId) {
     const rows = await this.db.query.jobRequisitions.findMany({
@@ -15431,6 +15602,530 @@ requisitionRoutes.patch("/:id/status", approvers, updateRequisitionStatus);
 requisitionRoutes.delete("/:id", approvers, deleteRequisition);
 var requisition_routes_default = requisitionRoutes;
 
+// src/services/ats.service.ts
+var genId3 = /* @__PURE__ */ __name((prefix) => `${prefix}-${crypto.randomUUID().split("-")[0].toUpperCase()}`, "genId");
+var VALID_CANDIDATE_STATUSES = ["applied", "screening", "interview", "offer", "hired", "rejected"];
+var AtsService = class {
+  static {
+    __name(this, "AtsService");
+  }
+  db;
+  constructor(dbBinding) {
+    this.db = drizzle(dbBinding, { schema: schema_exports });
+  }
+  async logTimeline(companyId, candidateId, actor, event, note) {
+    await this.db.insert(candidateTimelineEvents).values({
+      id: genId3("TL"),
+      candidateId,
+      companyId,
+      event,
+      note: note || null,
+      actorId: actor?.id || null,
+      actorName: actor?.name || "System"
+    });
+  }
+  // ---------------- Candidates ----------------
+  async listCandidates(companyId, filters = {}) {
+    const conditions = [eq(candidates.companyId, companyId)];
+    if (filters.requisitionId) conditions.push(eq(candidates.requisitionId, filters.requisitionId));
+    if (filters.status) conditions.push(eq(candidates.status, filters.status));
+    return this.db.query.candidates.findMany({
+      where: and(...conditions),
+      orderBy: [desc(candidates.createdAt)]
+    });
+  }
+  async getCandidate(companyId, id) {
+    const candidate = await this.db.query.candidates.findFirst({
+      where: and(eq(candidates.id, id), eq(candidates.companyId, companyId))
+    });
+    if (!candidate) return null;
+    const [timeline, interviews2, offerRows] = await Promise.all([
+      this.db.query.candidateTimelineEvents.findMany({
+        where: eq(candidateTimelineEvents.candidateId, id),
+        orderBy: [desc(candidateTimelineEvents.createdAt)]
+      }),
+      this.db.query.interviews.findMany({
+        where: eq(interviews.candidateId, id),
+        orderBy: [desc(interviews.dateTime)]
+      }),
+      this.db.query.offers.findMany({
+        where: eq(offers.candidateId, id),
+        orderBy: [desc(offers.createdAt)]
+      })
+    ]);
+    const interviewIds = interviews2.map((i) => i.id);
+    const scorecards = interviewIds.length ? await this.db.query.interviewScorecards.findMany({ where: inArray(interviewScorecards.interviewId, interviewIds) }) : [];
+    const scorecardsByInterview = /* @__PURE__ */ new Map();
+    for (const sc of scorecards) {
+      const list = scorecardsByInterview.get(sc.interviewId) || [];
+      list.push(sc);
+      scorecardsByInterview.set(sc.interviewId, list);
+    }
+    return {
+      ...candidate,
+      timeline,
+      interviews: interviews2.map((i) => ({ ...i, scorecards: scorecardsByInterview.get(i.id) || [] })),
+      offers: offerRows
+    };
+  }
+  async createCandidate(companyId, actor, data, resumeFileKey) {
+    if (!data.name || !data.email) throw new Error("name and email are required");
+    const id = genId3("CAND");
+    const row = {
+      id,
+      companyId,
+      requisitionId: data.requisitionId || null,
+      name: data.name,
+      email: data.email,
+      phone: data.phone || null,
+      location: data.location || null,
+      currentTitle: data.currentTitle || null,
+      currentEmployer: data.currentEmployer || null,
+      experienceYears: data.experienceYears != null ? Number(data.experienceYears) : null,
+      education: data.education || null,
+      skills: Array.isArray(data.skills) ? data.skills : [],
+      source: data.source || "Career Page",
+      salaryExpectation: data.salaryExpectation || null,
+      linkedinUrl: data.linkedinUrl || null,
+      githubUrl: data.githubUrl || null,
+      portfolioUrl: data.portfolioUrl || null,
+      coverLetter: data.coverLetter || null,
+      resumeFileKey: resumeFileKey || null,
+      status: "applied",
+      appliedDate: (/* @__PURE__ */ new Date()).toISOString().slice(0, 10)
+    };
+    await this.db.insert(candidates).values(row);
+    await this.logTimeline(companyId, id, actor, "Application submitted", data.requisitionId ? void 0 : "Added directly to talent pool");
+    return row;
+  }
+  async updateCandidateStatus(companyId, actor, id, status, note) {
+    if (!VALID_CANDIDATE_STATUSES.includes(status)) {
+      throw new Error(`status must be one of ${VALID_CANDIDATE_STATUSES.join(", ")}`);
+    }
+    const existing = await this.db.query.candidates.findFirst({
+      where: and(eq(candidates.id, id), eq(candidates.companyId, companyId))
+    });
+    if (!existing) return null;
+    await this.db.update(candidates).set({ status }).where(eq(candidates.id, id));
+    await this.logTimeline(companyId, id, actor, `Moved to "${status}"`, note);
+    return { ...existing, status };
+  }
+  async rateCandidate(companyId, id, rating) {
+    const existing = await this.db.query.candidates.findFirst({
+      where: and(eq(candidates.id, id), eq(candidates.companyId, companyId))
+    });
+    if (!existing) return null;
+    await this.db.update(candidates).set({ rating }).where(eq(candidates.id, id));
+    return { ...existing, rating };
+  }
+  // ---------------- Interviews ----------------
+  async listInterviews(companyId, filters = {}) {
+    const conditions = [eq(interviews.companyId, companyId)];
+    if (filters.candidateId) conditions.push(eq(interviews.candidateId, filters.candidateId));
+    return this.db.query.interviews.findMany({ where: and(...conditions), orderBy: [desc(interviews.dateTime)] });
+  }
+  async scheduleInterview(companyId, actor, data) {
+    if (!data.candidateId || !data.dateTime || !data.stage || !data.type) {
+      throw new Error("candidateId, type, stage and dateTime are required");
+    }
+    const candidate = await this.db.query.candidates.findFirst({
+      where: and(eq(candidates.id, data.candidateId), eq(candidates.companyId, companyId))
+    });
+    if (!candidate) throw new Error("Candidate not found");
+    const id = genId3("INT");
+    const row = {
+      id,
+      companyId,
+      candidateId: data.candidateId,
+      requisitionId: candidate.requisitionId || null,
+      type: data.type,
+      stage: data.stage,
+      dateTime: data.dateTime,
+      durationMinutes: Number(data.durationMinutes) || 60,
+      interviewerIds: Array.isArray(data.interviewerIds) ? data.interviewerIds : [],
+      meetingLink: data.meetingLink || null,
+      status: "Scheduled",
+      createdBy: actor?.id || null
+    };
+    await this.db.insert(interviews).values(row);
+    if (["applied", "screening"].includes(candidate.status)) {
+      await this.updateCandidateStatus(companyId, actor, data.candidateId, "interview");
+    } else {
+      await this.logTimeline(companyId, data.candidateId, actor, `${data.stage} interview scheduled`, data.meetingLink);
+    }
+    return row;
+  }
+  async updateInterviewStatus(companyId, id, status) {
+    if (!["Scheduled", "Completed", "Cancelled"].includes(status)) throw new Error("Invalid interview status");
+    const existing = await this.db.query.interviews.findFirst({
+      where: and(eq(interviews.id, id), eq(interviews.companyId, companyId))
+    });
+    if (!existing) return null;
+    await this.db.update(interviews).set({ status }).where(eq(interviews.id, id));
+    return { ...existing, status };
+  }
+  async submitScorecard(companyId, actor, interviewId, data) {
+    const interview = await this.db.query.interviews.findFirst({
+      where: and(eq(interviews.id, interviewId), eq(interviews.companyId, companyId))
+    });
+    if (!interview) throw new Error("Interview not found");
+    const row = {
+      id: genId3("SC"),
+      interviewId,
+      companyId,
+      interviewerId: actor?.id || null,
+      interviewerName: actor?.name || "Unknown",
+      technical: data.technical != null ? Number(data.technical) : null,
+      communication: data.communication != null ? Number(data.communication) : null,
+      cultural: data.cultural != null ? Number(data.cultural) : null,
+      notes: data.notes || null,
+      recommendation: data.recommendation || null
+    };
+    await this.db.insert(interviewScorecards).values(row);
+    await this.db.update(interviews).set({ status: "Completed" }).where(eq(interviews.id, interviewId));
+    await this.logTimeline(
+      companyId,
+      interview.candidateId,
+      actor,
+      `Scorecard submitted (${data.recommendation || "no recommendation"})`,
+      data.notes
+    );
+    return row;
+  }
+  // ---------------- Offers ----------------
+  async listOffers(companyId) {
+    return this.db.query.offers.findMany({ where: eq(offers.companyId, companyId), orderBy: [desc(offers.createdAt)] });
+  }
+  async createOffer(companyId, actor, data) {
+    if (!data.candidateId || !data.title || !data.salary) {
+      throw new Error("candidateId, title and salary are required");
+    }
+    const candidate = await this.db.query.candidates.findFirst({
+      where: and(eq(candidates.id, data.candidateId), eq(candidates.companyId, companyId))
+    });
+    if (!candidate) throw new Error("Candidate not found");
+    const letterBody = data.letterBody || `Dear ${candidate.name},
+
+We are delighted to offer you the position of ${data.title}` + (data.department ? ` in ${data.department}` : "") + `, with an annual compensation of ${data.currency || "NGN"} ${Number(data.salary).toLocaleString()}` + (data.startDate ? `, starting ${data.startDate}` : "") + `.
+
+Please review the terms and confirm your acceptance` + (data.expiryDate ? ` by ${data.expiryDate}` : "") + `.
+
+Congratulations!`;
+    const id = genId3("OFF");
+    const row = {
+      id,
+      companyId,
+      candidateId: data.candidateId,
+      requisitionId: candidate.requisitionId || null,
+      title: data.title,
+      department: data.department || null,
+      salary: Number(data.salary),
+      currency: data.currency || "NGN",
+      startDate: data.startDate || null,
+      expiryDate: data.expiryDate || null,
+      status: "draft",
+      letterBody,
+      createdBy: actor?.id || null
+    };
+    await this.db.insert(offers).values(row);
+    await this.logTimeline(companyId, data.candidateId, actor, `Offer drafted: ${data.title}`);
+    return row;
+  }
+  async sendOffer(companyId, actor, id) {
+    const offer = await this.db.query.offers.findFirst({ where: and(eq(offers.id, id), eq(offers.companyId, companyId)) });
+    if (!offer) return null;
+    if (!["draft", "pending_approval"].includes(offer.status)) throw new Error(`Cannot send an offer in "${offer.status}" status`);
+    const sentAt = (/* @__PURE__ */ new Date()).toISOString();
+    await this.db.update(offers).set({ status: "sent", sentAt }).where(eq(offers.id, id));
+    await this.updateCandidateStatus(companyId, actor, offer.candidateId, "offer");
+    await this.logTimeline(companyId, offer.candidateId, actor, `Offer sent: ${offer.title}`);
+    return { ...offer, status: "sent", sentAt };
+  }
+  // Records the candidate's decision — there's no candidate-facing portal
+  // yet, so HR/Recruiter logs the verbal/emailed response here.
+  async respondToOffer(companyId, actor, id, decision) {
+    const offer = await this.db.query.offers.findFirst({ where: and(eq(offers.id, id), eq(offers.companyId, companyId)) });
+    if (!offer) return null;
+    if (offer.status !== "sent") throw new Error(`Cannot record a response for an offer in "${offer.status}" status`);
+    const respondedAt = (/* @__PURE__ */ new Date()).toISOString();
+    await this.db.update(offers).set({ status: decision, respondedAt }).where(eq(offers.id, id));
+    if (decision === "accepted") {
+      await this.updateCandidateStatus(companyId, actor, offer.candidateId, "hired");
+    } else {
+      await this.logTimeline(companyId, offer.candidateId, actor, "Offer declined");
+    }
+    return { ...offer, status: decision, respondedAt };
+  }
+  async rescindOffer(companyId, actor, id) {
+    const offer = await this.db.query.offers.findFirst({ where: and(eq(offers.id, id), eq(offers.companyId, companyId)) });
+    if (!offer) return null;
+    await this.db.update(offers).set({ status: "rescinded" }).where(eq(offers.id, id));
+    await this.logTimeline(companyId, offer.candidateId, actor, "Offer rescinded");
+    return { ...offer, status: "rescinded" };
+  }
+};
+
+// src/services/storage.service.ts
+var StorageService = class {
+  constructor(bucket) {
+    this.bucket = bucket;
+  }
+  static {
+    __name(this, "StorageService");
+  }
+  async uploadFile(keyPrefix, file) {
+    const key = `${keyPrefix}/${Date.now()}-${file.name}`;
+    await this.bucket.put(key, await file.arrayBuffer(), {
+      httpMetadata: { contentType: file.type }
+    });
+    return key;
+  }
+  async deleteFile(key) {
+    if (!key) return;
+    try {
+      await this.bucket.delete(key);
+    } catch (e) {
+      console.error("Failed to delete R2 object", key, e);
+    }
+  }
+  async streamFile(key) {
+    if (!key) return null;
+    return this.bucket.get(key);
+  }
+};
+
+// src/controllers/admin/ats.controller.ts
+var getActor3 = /* @__PURE__ */ __name(async (c) => {
+  const employeeId = c.get("employeeId");
+  const role = c.get("role");
+  if (!employeeId) return { id: "system", name: "System", avatar: null, role };
+  const db = drizzle(c.env.DB, { schema: schema_exports });
+  const employee = await db.query.employees.findFirst({ where: eq(employees.id, employeeId) });
+  const name = employee ? [employee.name, employee.lastName].filter(Boolean).join(" ") : "Unknown";
+  return { id: employeeId, name, avatar: employee?.avatar || null, role };
+}, "getActor");
+var listCandidates = /* @__PURE__ */ __name(async (c) => {
+  try {
+    const companyId = c.get("companyId");
+    const service = new AtsService(c.env.DB);
+    const rows = await service.listCandidates(companyId, {
+      requisitionId: c.req.query("requisitionId"),
+      status: c.req.query("status")
+    });
+    return c.json({ data: rows });
+  } catch (error) {
+    return c.json({ error: error.message }, 500);
+  }
+}, "listCandidates");
+var getCandidate = /* @__PURE__ */ __name(async (c) => {
+  try {
+    const companyId = c.get("companyId");
+    const service = new AtsService(c.env.DB);
+    const candidate = await service.getCandidate(companyId, c.req.param("id"));
+    if (!candidate) return c.json({ error: "Not found" }, 404);
+    return c.json({ data: candidate });
+  } catch (error) {
+    return c.json({ error: error.message }, 500);
+  }
+}, "getCandidate");
+var createCandidate = /* @__PURE__ */ __name(async (c) => {
+  try {
+    const companyId = c.get("companyId");
+    const actor = await getActor3(c);
+    const service = new AtsService(c.env.DB);
+    const contentType = c.req.header("content-type") || "";
+    let payload;
+    let resumeFileKey = null;
+    if (contentType.includes("multipart/form-data")) {
+      const formData = await c.req.parseBody();
+      const file = formData.resume;
+      payload = { ...formData };
+      if (payload.skills && typeof payload.skills === "string") {
+        payload.skills = payload.skills.split(",").map((s) => s.trim()).filter(Boolean);
+      }
+      if (file && file.size > 0 && c.env.BUCKET) {
+        const storage = new StorageService(c.env.BUCKET);
+        resumeFileKey = await storage.uploadFile(`companies/${companyId}/candidates/resumes`, file);
+      }
+    } else {
+      payload = await c.req.json();
+    }
+    const created = await service.createCandidate(companyId, actor, payload, resumeFileKey);
+    return c.json({ data: created }, 201);
+  } catch (error) {
+    return c.json({ error: error.message }, error.message?.includes("required") ? 400 : 500);
+  }
+}, "createCandidate");
+var updateCandidateStatus = /* @__PURE__ */ __name(async (c) => {
+  try {
+    const companyId = c.get("companyId");
+    const actor = await getActor3(c);
+    const { status, note } = await c.req.json();
+    const service = new AtsService(c.env.DB);
+    const updated = await service.updateCandidateStatus(companyId, actor, c.req.param("id"), status, note);
+    if (!updated) return c.json({ error: "Not found" }, 404);
+    return c.json({ data: updated });
+  } catch (error) {
+    return c.json({ error: error.message }, error.message?.includes("must be one of") ? 400 : 500);
+  }
+}, "updateCandidateStatus");
+var rateCandidate = /* @__PURE__ */ __name(async (c) => {
+  try {
+    const companyId = c.get("companyId");
+    const { rating } = await c.req.json();
+    const service = new AtsService(c.env.DB);
+    const updated = await service.rateCandidate(companyId, c.req.param("id"), Number(rating));
+    if (!updated) return c.json({ error: "Not found" }, 404);
+    return c.json({ data: updated });
+  } catch (error) {
+    return c.json({ error: error.message }, 500);
+  }
+}, "rateCandidate");
+var getCandidateResume = /* @__PURE__ */ __name(async (c) => {
+  try {
+    const companyId = c.get("companyId");
+    const service = new AtsService(c.env.DB);
+    const candidate = await service.getCandidate(companyId, c.req.param("id"));
+    if (!candidate || !candidate.resumeFileKey) return c.json({ error: "No resume on file" }, 404);
+    if (!c.env.BUCKET) return c.json({ error: "File storage is not configured" }, 503);
+    const storage = new StorageService(c.env.BUCKET);
+    const object = await storage.streamFile(candidate.resumeFileKey);
+    if (!object) return c.json({ error: "Resume file not found" }, 404);
+    c.header("Content-Type", object.httpMetadata?.contentType || "application/octet-stream");
+    c.header("Content-Disposition", `inline; filename="${candidate.name.replace(/[^a-z0-9]+/gi, "-")}-resume"`);
+    return c.body(object.body);
+  } catch (error) {
+    return c.json({ error: error.message }, 500);
+  }
+}, "getCandidateResume");
+var listInterviews = /* @__PURE__ */ __name(async (c) => {
+  try {
+    const companyId = c.get("companyId");
+    const service = new AtsService(c.env.DB);
+    const rows = await service.listInterviews(companyId, { candidateId: c.req.query("candidateId") });
+    return c.json({ data: rows });
+  } catch (error) {
+    return c.json({ error: error.message }, 500);
+  }
+}, "listInterviews");
+var scheduleInterview = /* @__PURE__ */ __name(async (c) => {
+  try {
+    const companyId = c.get("companyId");
+    const actor = await getActor3(c);
+    const payload = await c.req.json();
+    const service = new AtsService(c.env.DB);
+    const created = await service.scheduleInterview(companyId, actor, payload);
+    return c.json({ data: created }, 201);
+  } catch (error) {
+    return c.json({ error: error.message }, error.message?.includes("required") || error.message?.includes("not found") ? 400 : 500);
+  }
+}, "scheduleInterview");
+var updateInterviewStatus = /* @__PURE__ */ __name(async (c) => {
+  try {
+    const companyId = c.get("companyId");
+    const { status } = await c.req.json();
+    const service = new AtsService(c.env.DB);
+    const updated = await service.updateInterviewStatus(companyId, c.req.param("id"), status);
+    if (!updated) return c.json({ error: "Not found" }, 404);
+    return c.json({ data: updated });
+  } catch (error) {
+    return c.json({ error: error.message }, 400);
+  }
+}, "updateInterviewStatus");
+var submitScorecard = /* @__PURE__ */ __name(async (c) => {
+  try {
+    const companyId = c.get("companyId");
+    const actor = await getActor3(c);
+    const payload = await c.req.json();
+    const service = new AtsService(c.env.DB);
+    const created = await service.submitScorecard(companyId, actor, c.req.param("id"), payload);
+    return c.json({ data: created }, 201);
+  } catch (error) {
+    return c.json({ error: error.message }, error.message?.includes("not found") ? 404 : 500);
+  }
+}, "submitScorecard");
+var listOffers = /* @__PURE__ */ __name(async (c) => {
+  try {
+    const companyId = c.get("companyId");
+    const service = new AtsService(c.env.DB);
+    return c.json({ data: await service.listOffers(companyId) });
+  } catch (error) {
+    return c.json({ error: error.message }, 500);
+  }
+}, "listOffers");
+var createOffer = /* @__PURE__ */ __name(async (c) => {
+  try {
+    const companyId = c.get("companyId");
+    const actor = await getActor3(c);
+    const payload = await c.req.json();
+    const service = new AtsService(c.env.DB);
+    const created = await service.createOffer(companyId, actor, payload);
+    return c.json({ data: created }, 201);
+  } catch (error) {
+    return c.json({ error: error.message }, error.message?.includes("required") || error.message?.includes("not found") ? 400 : 500);
+  }
+}, "createOffer");
+var sendOffer = /* @__PURE__ */ __name(async (c) => {
+  try {
+    const companyId = c.get("companyId");
+    const actor = await getActor3(c);
+    const service = new AtsService(c.env.DB);
+    const updated = await service.sendOffer(companyId, actor, c.req.param("id"));
+    if (!updated) return c.json({ error: "Not found" }, 404);
+    return c.json({ data: updated });
+  } catch (error) {
+    return c.json({ error: error.message }, 400);
+  }
+}, "sendOffer");
+var respondToOffer = /* @__PURE__ */ __name(async (c) => {
+  try {
+    const companyId = c.get("companyId");
+    const actor = await getActor3(c);
+    const { decision } = await c.req.json();
+    if (!["accepted", "declined"].includes(decision)) return c.json({ error: 'decision must be "accepted" or "declined"' }, 400);
+    const service = new AtsService(c.env.DB);
+    const updated = await service.respondToOffer(companyId, actor, c.req.param("id"), decision);
+    if (!updated) return c.json({ error: "Not found" }, 404);
+    return c.json({ data: updated });
+  } catch (error) {
+    return c.json({ error: error.message }, 400);
+  }
+}, "respondToOffer");
+var rescindOffer = /* @__PURE__ */ __name(async (c) => {
+  try {
+    const companyId = c.get("companyId");
+    const actor = await getActor3(c);
+    const service = new AtsService(c.env.DB);
+    const updated = await service.rescindOffer(companyId, actor, c.req.param("id"));
+    if (!updated) return c.json({ error: "Not found" }, 404);
+    return c.json({ data: updated });
+  } catch (error) {
+    return c.json({ error: error.message }, 500);
+  }
+}, "rescindOffer");
+
+// src/routes/ats.routes.ts
+var atsRoutes = new Hono2();
+var viewers2 = requireRole("SUPER_ADMIN", "HR_ADMIN", "MANAGER", "RECRUITER");
+var mutators = requireRole("SUPER_ADMIN", "HR_ADMIN", "RECRUITER");
+var approvers2 = requireRole("SUPER_ADMIN", "HR_ADMIN");
+atsRoutes.get("/candidates", viewers2, listCandidates);
+atsRoutes.get("/candidates/:id", viewers2, getCandidate);
+atsRoutes.get("/candidates/:id/resume", viewers2, getCandidateResume);
+atsRoutes.post("/candidates", mutators, createCandidate);
+atsRoutes.patch("/candidates/:id/status", mutators, updateCandidateStatus);
+atsRoutes.patch("/candidates/:id/rating", mutators, rateCandidate);
+atsRoutes.get("/interviews", viewers2, listInterviews);
+atsRoutes.post("/interviews", mutators, scheduleInterview);
+atsRoutes.patch("/interviews/:id/status", mutators, updateInterviewStatus);
+atsRoutes.post("/interviews/:id/scorecard", viewers2, submitScorecard);
+atsRoutes.get("/offers", viewers2, listOffers);
+atsRoutes.post("/offers", mutators, createOffer);
+atsRoutes.post("/offers/:id/send", approvers2, sendOffer);
+atsRoutes.post("/offers/:id/respond", mutators, respondToOffer);
+atsRoutes.post("/offers/:id/rescind", approvers2, rescindOffer);
+var ats_routes_default = atsRoutes;
+
 // src/controllers/admin/attendance.controller.ts
 var getAllAttendance = /* @__PURE__ */ __name(async (c) => {
   const companyId = c.get("companyId");
@@ -15535,7 +16230,7 @@ attendanceAdminRoutes.delete("/:id", adminOnly3, edit, deleteAttendanceRecord);
 var attendance_admin_routes_default = attendanceAdminRoutes;
 
 // src/controllers/admin/benefits.controller.ts
-var getActor3 = /* @__PURE__ */ __name(async (c) => {
+var getActor4 = /* @__PURE__ */ __name(async (c) => {
   const employeeId = c.get("employeeId");
   if (!employeeId) return { id: "system", name: "System" };
   const db = drizzle(c.env.DB, { schema: schema_exports });
@@ -15721,7 +16416,7 @@ var reviewClaim = /* @__PURE__ */ __name(async (c) => {
     const claimId = c.req.param("id");
     const { status, notes } = await c.req.json();
     if (!["approved", "rejected"].includes(status)) return c.json({ error: 'status must be "approved" or "rejected"' }, 400);
-    const reviewer = await getActor3(c);
+    const reviewer = await getActor4(c);
     const service = new BenefitsService(c.env.DB);
     const updated = await service.reviewClaim(companyId, claimId, status, reviewer, notes);
     if (!updated) return c.json({ error: "Claim not found" }, 404);
@@ -16149,7 +16844,7 @@ var DashboardService = class {
 };
 
 // src/services/controlCenter.service.ts
-var genId3 = /* @__PURE__ */ __name((prefix) => `${prefix}_${Math.random().toString(36).substring(2, 9)}`, "genId");
+var genId4 = /* @__PURE__ */ __name((prefix) => `${prefix}_${Math.random().toString(36).substring(2, 9)}`, "genId");
 var HolidayService = class {
   static {
     __name(this, "HolidayService");
@@ -16162,7 +16857,7 @@ var HolidayService = class {
     return this.db.select().from(publicHolidays).where(eq(publicHolidays.companyId, companyId)).orderBy(publicHolidays.date).all();
   }
   async create(companyId, data) {
-    return this.db.insert(publicHolidays).values({ id: genId3("hol"), companyId, name: data.name, date: data.date, createdAt: (/* @__PURE__ */ new Date()).toISOString() }).returning().get();
+    return this.db.insert(publicHolidays).values({ id: genId4("hol"), companyId, name: data.name, date: data.date, createdAt: (/* @__PURE__ */ new Date()).toISOString() }).returning().get();
   }
   async delete(companyId, id) {
     return this.db.delete(publicHolidays).where(and(eq(publicHolidays.id, id), eq(publicHolidays.companyId, companyId))).returning().get();
@@ -16213,7 +16908,7 @@ var EmailTemplateService = class {
     if (existing.length > 0) return existing;
     const now = (/* @__PURE__ */ new Date()).toISOString();
     const seeded = DEFAULT_EMAIL_TEMPLATES.map((t) => ({
-      id: genId3("tmpl"),
+      id: genId4("tmpl"),
       companyId,
       key: t.key,
       name: t.name,
@@ -16251,7 +16946,7 @@ var IntegrationService = class {
     if (existing.length > 0) return existing;
     const now = (/* @__PURE__ */ new Date()).toISOString();
     const seeded = DEFAULT_INTEGRATIONS.map((i) => ({
-      id: genId3("intg"),
+      id: genId4("intg"),
       companyId,
       key: i.key,
       name: i.name,
@@ -16336,7 +17031,7 @@ var WorkflowService = class {
     if (existing.length > 0) return existing;
     const now = (/* @__PURE__ */ new Date()).toISOString();
     const seeded = DEFAULT_WORKFLOWS.map((w) => ({
-      id: genId3("wf"),
+      id: genId4("wf"),
       companyId,
       key: w.key,
       name: w.name,
@@ -16664,6 +17359,7 @@ adminRoutes.post("/training/employee/:id", adminOnly5, create("performance"), ad
 adminRoutes.route("/payroll", payroll_routes_default);
 adminRoutes.route("/leaves", leave_admin_routes_default);
 adminRoutes.route("/job-requisitions", requisition_routes_default);
+adminRoutes.route("/ats", ats_routes_default);
 adminRoutes.route("/attendance", attendance_admin_routes_default);
 adminRoutes.route("/benefits", benefits_admin_routes_default);
 adminRoutes.get("/dashboard/stats", adminOnly5, async (c) => {
@@ -17034,8 +17730,121 @@ adminRoutes.get("/audit-logs/export", adminOnly5, view3("settings"), async (c) =
 });
 var admin_routes_default = adminRoutes;
 
+// src/controllers/public.controller.ts
+var resolveCompany = /* @__PURE__ */ __name(async (c, identifier) => {
+  const db = drizzle(c.env.DB, { schema: schema_exports });
+  return db.query.companies.findFirst({
+    where: or(eq(companies.subdomain, identifier), eq(companies.id, identifier))
+  });
+}, "resolveCompany");
+var listOpenPositions = /* @__PURE__ */ __name(async (c) => {
+  try {
+    const company = await resolveCompany(c, c.req.param("companyIdentifier"));
+    if (!company) return c.json({ error: "Company not found" }, 404);
+    const db = drizzle(c.env.DB, { schema: schema_exports });
+    const rows = await db.query.jobRequisitions.findMany({
+      where: and(
+        eq(jobRequisitions.companyId, company.id),
+        eq(jobRequisitions.status, "Open"),
+        eq(jobRequisitions.isPubliclyListed, true)
+      ),
+      orderBy: /* @__PURE__ */ __name((jobRequisitions2, { desc: desc4 }) => [desc4(jobRequisitions2.dateOpened)], "orderBy")
+    });
+    return c.json({
+      data: {
+        company: { id: company.id, name: company.name, logoUrl: company.logoUrl },
+        positions: rows
+      }
+    });
+  } catch (error) {
+    return c.json({ error: error.message }, 500);
+  }
+}, "listOpenPositions");
+var getOpenPosition = /* @__PURE__ */ __name(async (c) => {
+  try {
+    const company = await resolveCompany(c, c.req.param("companyIdentifier"));
+    if (!company) return c.json({ error: "Company not found" }, 404);
+    const db = drizzle(c.env.DB, { schema: schema_exports });
+    const posting = await db.query.jobRequisitions.findFirst({
+      where: and(
+        eq(jobRequisitions.id, c.req.param("requisitionId")),
+        eq(jobRequisitions.companyId, company.id),
+        eq(jobRequisitions.status, "Open"),
+        eq(jobRequisitions.isPubliclyListed, true)
+      )
+    });
+    if (!posting) return c.json({ error: "Position not found or no longer open" }, 404);
+    return c.json({ data: { company: { id: company.id, name: company.name, logoUrl: company.logoUrl }, position: posting } });
+  } catch (error) {
+    return c.json({ error: error.message }, 500);
+  }
+}, "getOpenPosition");
+var applyToPosition = /* @__PURE__ */ __name(async (c) => {
+  try {
+    const company = await resolveCompany(c, c.req.param("companyIdentifier"));
+    if (!company) return c.json({ error: "Company not found" }, 404);
+    const requisitionId = c.req.param("requisitionId");
+    const db = drizzle(c.env.DB, { schema: schema_exports });
+    const posting = await db.query.jobRequisitions.findFirst({
+      where: and(
+        eq(jobRequisitions.id, requisitionId),
+        eq(jobRequisitions.companyId, company.id),
+        eq(jobRequisitions.status, "Open"),
+        eq(jobRequisitions.isPubliclyListed, true)
+      )
+    });
+    if (!posting) return c.json({ error: "Position not found or no longer open" }, 404);
+    const contentType = c.req.header("content-type") || "";
+    if (!contentType.includes("multipart/form-data")) {
+      return c.json({ error: "Application must be submitted as multipart/form-data" }, 400);
+    }
+    const formData = await c.req.parseBody();
+    const file = formData.resume;
+    if (!formData.name || !formData.email) {
+      return c.json({ error: "name and email are required" }, 400);
+    }
+    if (file && file.size > 10 * 1024 * 1024) {
+      return c.json({ error: "Resume must be under 10MB" }, 400);
+    }
+    let resumeFileKey = null;
+    if (file && file.size > 0) {
+      if (!c.env.BUCKET) return c.json({ error: "File uploads are temporarily unavailable" }, 503);
+      const storage = new StorageService(c.env.BUCKET);
+      resumeFileKey = await storage.uploadFile(`companies/${company.id}/candidates/resumes`, file);
+    }
+    const ats = new AtsService(c.env.DB);
+    const created = await ats.createCandidate(
+      company.id,
+      void 0,
+      {
+        requisitionId,
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        location: formData.location,
+        currentTitle: formData.currentTitle,
+        currentEmployer: formData.currentEmployer,
+        experienceYears: formData.experienceYears,
+        education: formData.education,
+        linkedinUrl: formData.linkedinUrl,
+        githubUrl: formData.githubUrl,
+        portfolioUrl: formData.portfolioUrl,
+        coverLetter: formData.coverLetter,
+        source: "Career Page"
+      },
+      resumeFileKey
+    );
+    return c.json({ data: { id: created.id, status: created.status } }, 201);
+  } catch (error) {
+    return c.json({ error: error.message }, 500);
+  }
+}, "applyToPosition");
+
 // src/routes/public.routes.ts
 var publicRoutes = new Hono2();
+publicRoutes.get("/careers/:companyIdentifier", listOpenPositions);
+publicRoutes.get("/careers/:companyIdentifier/:requisitionId", getOpenPosition);
+publicRoutes.post("/careers/:companyIdentifier/:requisitionId/apply", applyToPosition);
 var public_routes_default = publicRoutes;
 
 // src/controllers/auth.controller.ts
@@ -17288,7 +18097,7 @@ var jsonError = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx)
 }, "jsonError");
 var middleware_miniflare3_json_error_default = jsonError;
 
-// .wrangler/tmp/bundle-l1eDsL/middleware-insertion-facade.js
+// .wrangler/tmp/bundle-MRdSYo/middleware-insertion-facade.js
 var __INTERNAL_WRANGLER_MIDDLEWARE__ = [
   middleware_ensure_req_body_drained_default,
   middleware_miniflare3_json_error_default
@@ -17320,7 +18129,7 @@ function __facade_invoke__(request, env, ctx, dispatch, finalMiddleware) {
 }
 __name(__facade_invoke__, "__facade_invoke__");
 
-// .wrangler/tmp/bundle-l1eDsL/middleware-loader.entry.ts
+// .wrangler/tmp/bundle-MRdSYo/middleware-loader.entry.ts
 var __Facade_ScheduledController__ = class ___Facade_ScheduledController__ {
   constructor(scheduledTime, cron, noRetry) {
     this.scheduledTime = scheduledTime;

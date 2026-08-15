@@ -31,6 +31,12 @@ export const jobRequisitions = sqliteTable('job_requisitions', {
   daysOpen: integer('days_open').notNull(),
   justification: text('justification'),
   budgetRange: text('budget_range'),
+  // Public careers page fields — nullable so existing requisitions (created
+  // before the careers page existed) don't need backfilling to keep working
+  // internally; they just won't have public copy until an admin adds it.
+  description: text('description'),
+  requirements: text('requirements'),
+  isPubliclyListed: integer('is_publicly_listed', { mode: 'boolean' }).notNull().default(true),
   // Who requested this requisition (audit trail for the approval workflow)
   requestedById: text('requested_by_id'),
   requestedByName: text('requested_by_name'),

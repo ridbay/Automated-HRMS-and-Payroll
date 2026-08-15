@@ -10,7 +10,14 @@ database_name = "zenhr-prod-db"
 database_id = "181fd234-a5d0-4c0a-a226-387ba3625bc9"
 migrations_dir = "drizzle"
 
-# R2 Configuration commented out because it requires activation in the Cloudflare Dashboard
-# [[r2_buckets]]
-# binding = "BUCKET"
-# bucket_name = "zenhr-storage"
+# Needed for employee document uploads (already-existing code path) and
+# candidate resumes. Requires the "zenhr-storage" bucket to exist — create it
+# with `wrangler r2 bucket create zenhr-storage` (or via the dashboard) once
+# R2 is activated on this Cloudflare account; `wrangler dev`/`deploy` will
+# fail on the binding until that bucket exists.
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "zenhr-storage"
+
+[ai]
+binding = "AI"
