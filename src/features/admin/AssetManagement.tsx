@@ -15,14 +15,23 @@ import {
   CheckCircle2,
   Clock,
   RefreshCw,
+  Trash2,
 } from "lucide-react";
-import { MOCK_ASSETS, MOCK_EMPLOYEES } from "../../data/mocks";
+import { MOCK_EMPLOYEES } from "../../data/mocks";
+import { useAdminAssets, useDeleteAsset } from "../../api/asset.client";
+import { useQueryClient } from "@tanstack/react-query";
+import { AssetModal } from "./AssetModal";
 
 const AssetManagement: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterCategory, setFilterCategory] = useState<string>("All");
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  
+  const { data: serverAssets, isLoading } = useAdminAssets();
+  const deleteAsset = useDeleteAsset();
+  const allAssets = serverAssets || [];
 
-  const assets = MOCK_ASSETS.filter((asset) => {
+  const assets = allAssets.filter((asset: any) => {
     const matchesSearch = asset.name
       .toLowerCase()
       .includes(searchTerm.toLowerCase());
@@ -34,28 +43,28 @@ const AssetManagement: React.FC = () => {
   const stats = [
     {
       label: "Total Assets",
-      value: MOCK_ASSETS.length,
+      value: allAssets.length,
       sub: "Active Inventory",
       icon: <Box className="text-indigo-600" />,
       bg: "bg-indigo-50",
     },
     {
       label: "Total Value",
-      value: `₦${(MOCK_ASSETS.reduce((acc, curr) => acc + curr.value, 0) / 1000000).toFixed(1)}M`,
+      value: `₦${(allAssets.reduce((acc: any, curr: any) => acc + (curr.value || 0), 0) / 1000000).toFixed(1)}M`,
       sub: "Depreciating Value",
       icon: <Clock className="text-emerald-600" />,
       bg: "bg-emerald-50",
     },
     {
       label: "Assigned",
-      value: `${Math.round((MOCK_ASSETS.filter((a) => a.status === "Assigned").length / MOCK_ASSETS.length) * 100)}%`,
+      value: `${allAssets.length > 0 ? Math.round((allAssets.filter((a: any) => a.status === "Assigned").length / allAssets.length) * 100) : 0}%`,
       sub: "Utilization Rate",
       icon: <CheckCircle2 className="text-blue-600" />,
       bg: "bg-blue-50",
     },
     {
       label: "Maintenance",
-      value: MOCK_ASSETS.filter((a) => a.status === "Maintenance").length,
+      value: allAssets.filter((a: any) => a.status === "Maintenance").length,
       sub: "Needs Attention",
       icon: <AlertTriangle className="text-amber-600" />,
       bg: "bg-amber-50",
@@ -104,7 +113,10 @@ const AssetManagement: React.FC = () => {
             Manage company hardware, licenses, and vehicles.
           </p>
         </div>
-        <button className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-100 hover:scale-105 transition-all flex items-center gap-2">
+        <button 
+          onClick={() => setIsModalOpen(true)}
+          className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-100 hover:scale-105 transition-all flex items-center gap-2"
+        >
           <Plus size={18} /> Add New Asset
         </button>
       </div>
@@ -262,8 +274,15 @@ const AssetManagement: React.FC = () => {
                   <button className="p-2 bg-white border border-slate-200 rounded-xl hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 transition-all">
                     <RefreshCw size={16} />
                   </button>
-                  <button className="p-2 bg-white border border-slate-200 rounded-xl hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 transition-all">
-                    <MoreHorizontal size={16} />
+                  <button 
+                    onClick={() => {
+                      if (window.confirm('Are you sure you want to delete this asset?')) {
+                        deleteAsset.mutate(asset.id);
+                      }
+                    }}
+                    className="p-2 bg-white border border-slate-200 rounded-xl hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-all text-slate-400"
+                  >
+                    <Trash2 size={16} />
                   </button>
                 </div>
               </div>
@@ -271,6 +290,11 @@ const AssetManagement: React.FC = () => {
           })}
         </div>
       </div>
+      <AssetModal 
+        isOpen={isModalOpen} 
+        onClose={() => setIsModalOpen(false)} 
+        employees={MOCK_EMPLOYEES} 
+      />
     </div>
   );
 };

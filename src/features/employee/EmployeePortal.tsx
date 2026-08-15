@@ -22,6 +22,8 @@ import {
   FileCheck,
   Grid,
   ThumbsUp,
+  Laptop,
+  MessageSquare,
 } from "lucide-react";
 import Celebration from "../../components/Celebration";
 import { useNavigation } from "../../context/NavigationContext";
@@ -35,6 +37,9 @@ import {
   useClockIn,
   useClockOut,
 } from "../../api/client";
+import { useMyAssets } from "../../api/asset.client";
+import { useActiveSurveys } from "../../api/survey.client";
+import { TakeSurveyModal } from "./TakeSurveyModal";
 
 const QuickActionBtn = ({
   icon: Icon,
@@ -93,6 +98,11 @@ const EmployeePortal: React.FC = () => {
   const { data: perfSummary, isLoading: perfLoading } = useMyPerformanceSummary();
   const { data: payslips = [], isLoading: payslipsLoading } = useMyPayslips();
   const { data: shoutouts = [] } = useShoutouts();
+  const { data: myAssets = [], isLoading: assetsLoading } = useMyAssets();
+  const { data: activeSurveys = [], isLoading: surveysLoading } = useActiveSurveys();
+  
+  const [selectedSurveyId, setSelectedSurveyId] = useState<string | null>(null);
+
   const clockIn = useClockIn();
   const clockOut = useClockOut();
 
@@ -600,8 +610,100 @@ const EmployeePortal: React.FC = () => {
               </div>
             )}
           </section>
+
+          {/* Assigned Assets */}
+          <section className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm">
+            <div className="flex items-center gap-6 mb-8 border-b border-slate-100 pb-4 overflow-x-auto">
+              <span className="text-xs font-black text-indigo-600 uppercase tracking-widest pb-2 border-b-2 border-indigo-600 whitespace-nowrap">
+                Assigned Assets
+              </span>
+            </div>
+
+            {assetsLoading ? (
+              <div className="py-8 flex justify-center">
+                <Loader2 className="animate-spin text-indigo-400" size={24} />
+              </div>
+            ) : myAssets.length === 0 ? (
+              <div className="py-8 text-center text-slate-400">
+                <Laptop size={28} className="mx-auto mb-2 opacity-40" />
+                <p className="text-xs font-bold">No assets assigned to you.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {myAssets.map((asset: any) => (
+                  <div
+                    key={asset.id}
+                    className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-indigo-400 shadow-sm">
+                        <Laptop size={18} />
+                      </div>
+                      <div>
+                        <p className="text-sm font-black text-slate-800">{asset.name}</p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase">
+                          {asset.category} • {asset.condition} Condition
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+          
+          {/* Active Surveys */}
+          <section className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm mt-8">
+            <div className="flex items-center gap-6 mb-8 border-b border-slate-100 pb-4 overflow-x-auto">
+              <span className="text-xs font-black text-indigo-600 uppercase tracking-widest pb-2 border-b-2 border-indigo-600 whitespace-nowrap">
+                Active Surveys
+              </span>
+            </div>
+
+            {surveysLoading ? (
+              <div className="py-8 flex justify-center">
+                <Loader2 className="animate-spin text-indigo-400" size={24} />
+              </div>
+            ) : activeSurveys.length === 0 ? (
+              <div className="py-8 text-center text-slate-400">
+                <MessageSquare size={28} className="mx-auto mb-2 opacity-40" />
+                <p className="text-xs font-bold">No pending surveys.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {activeSurveys.map((survey: any) => (
+                  <div
+                    key={survey.id}
+                    onClick={() => setSelectedSurveyId(survey.id)}
+                    className="flex items-center justify-between p-4 bg-indigo-50 rounded-2xl border border-indigo-100 cursor-pointer hover:bg-indigo-100 transition-colors group"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-indigo-600 shadow-sm group-hover:scale-110 transition-transform">
+                        <MessageSquare size={18} />
+                      </div>
+                      <div>
+                        <p className="text-sm font-black text-indigo-900">{survey.title}</p>
+                        <p className="text-[10px] font-bold text-indigo-400 uppercase">
+                          {survey.type === 'eNPS' ? 'eNPS Survey' : 'Pulse Check'} • Takes 2 mins
+                        </p>
+                      </div>
+                    </div>
+                    <button className="text-xs font-black text-indigo-600 uppercase tracking-widest bg-white px-3 py-1.5 rounded-lg shadow-sm">
+                      Start
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
         </div>
       </div>
+      
+      <TakeSurveyModal 
+        isOpen={!!selectedSurveyId}
+        onClose={() => setSelectedSurveyId(null)}
+        surveyId={selectedSurveyId}
+      />
     </div>
   );
 };

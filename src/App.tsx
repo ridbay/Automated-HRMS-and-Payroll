@@ -29,6 +29,7 @@ import Directory from "./features/core/Directory";
 import AdminLeaveRequests from "./features/admin/AdminLeaveRequests";
 import AttendanceManagement from "./features/admin/AttendanceManagement";
 import BenefitsAdmin from "./features/admin/BenefitsAdmin";
+import SurveysAdmin from "./features/admin/SurveysAdmin";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { NavigationProvider, useNavigation } from "./context/NavigationContext";
 
@@ -113,6 +114,11 @@ const AppContent: React.FC = () => {
           return <BenefitsAdmin />;
         }
         return <Benefits />;
+      case "surveys":
+        if (user.role === "HR_ADMIN" || user.role === "SUPER_ADMIN") {
+          return <SurveysAdmin />;
+        }
+        return <Dashboard />;
       case "leave-approvals":
         return <AdminLeaveRequests />;
       case "leave":

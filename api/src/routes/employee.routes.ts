@@ -10,6 +10,8 @@ import {
   getDirectory,
   getMyDirectReports
 } from '../controllers/employee/profile.controller';
+import { EmployeeAssetController } from '../controllers/employee/asset.controller';
+import { EmployeeSurveyController } from '../controllers/employee/survey.controller';
 import { getMyLeaveData, applyForLeave, getTeamLeaves, getMyTeamPendingLeaves, updateTeamLeaveStatus } from '../controllers/employee/leave.controller';
 import {
   getAttendanceData,
@@ -58,6 +60,14 @@ employeeRoutes.use('*', authMiddleware);
 
 // Directory
 employeeRoutes.get('/directory', getDirectory);
+
+// Assets
+employeeRoutes.get('/my-assets', EmployeeAssetController.getMyAssets);
+
+// --- Surveys ---
+employeeRoutes.get('/surveys', EmployeeSurveyController.getActiveSurveys);
+employeeRoutes.get('/surveys/:id', EmployeeSurveyController.getSurveyDetails);
+employeeRoutes.post('/surveys/:id/responses', EmployeeSurveyController.submitSurveyResponse);
 
 // Manager-scoped: the caller's own direct reports (id/name/avatar/role/dept
 // only) — used by team goal & review UIs. Naturally self-scoped by

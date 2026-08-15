@@ -16,6 +16,8 @@ import {
   addAsset,
   deleteAsset
 } from "../controllers/admin/employee.controller";
+import { AdminAssetController } from "../controllers/admin/asset.controller";
+import { AdminSurveyController } from "../controllers/admin/survey.controller";
 import {
   getTransitions,
   getTransition,
@@ -189,6 +191,20 @@ adminRoutes.delete("/employees/:id/documents/:documentId", adminOnly, edit("work
 adminRoutes.get("/employees/:id/assets", adminOnly, view("workforce"), getAssets);
 adminRoutes.post("/employees/:id/assets", adminOnly, edit("workforce"), addAsset);
 adminRoutes.delete("/employees/:id/assets/:assetId", adminOnly, edit("workforce"), deleteAsset);
+
+// Global Company Assets
+adminRoutes.get("/assets", adminOnly, view("workforce"), AdminAssetController.getAllAssets);
+adminRoutes.post("/assets", adminOnly, edit("workforce"), AdminAssetController.createAsset);
+adminRoutes.get("/assets/:id", adminOnly, view("workforce"), AdminAssetController.getAssetById);
+adminRoutes.put("/assets/:id", adminOnly, edit("workforce"), AdminAssetController.updateAsset);
+adminRoutes.delete("/assets/:id", adminOnly, edit("workforce"), AdminAssetController.deleteAsset);
+
+// --- Surveys ---
+adminRoutes.get("/surveys", adminOnly, view("company"), AdminSurveyController.getAllSurveys);
+adminRoutes.post("/surveys", adminOnly, edit("company"), AdminSurveyController.createSurvey);
+adminRoutes.get("/surveys/:id", adminOnly, view("company"), AdminSurveyController.getSurveyById);
+adminRoutes.get("/surveys/:id/results", adminOnly, view("company"), AdminSurveyController.getSurveyResults);
+adminRoutes.delete("/surveys/:id", adminOnly, edit("company"), AdminSurveyController.deleteSurvey);
 
 // Transitions (Onboarding / Offboarding journeys) — lives under the same
 // "workforce" permission module as Employees/Assets since it's the same

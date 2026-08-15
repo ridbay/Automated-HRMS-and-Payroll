@@ -25,3 +25,5 @@ export * from '../models/transition.model';
 export * from '../models/support.model';
 export * from '../models/controlCenter.model';
 export * from '../models/ats.model';
+export * from '../models/survey.model';
+export * from '../models/learning.model';
