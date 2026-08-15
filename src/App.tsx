@@ -27,6 +27,7 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 import { NavigationProvider, useNavigation } from "./context/NavigationContext";
 
 import Support from "./features/support/Support";
+import EmployeeOnboarding from "./features/employee/EmployeeOnboarding";
 
 const AppContent: React.FC = () => {
   const { user, isAuthenticated, login, logout } = useAuth();
@@ -123,6 +124,10 @@ const AppContent: React.FC = () => {
 
   // Ensure user is not null here for Header and Sidebar
   if (!user) return null;
+
+  if (user.status === "onboarding") {
+    return <EmployeeOnboarding />;
+  }
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden">

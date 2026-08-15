@@ -83,6 +83,7 @@ const Workforce: React.FC = () => {
   const [viewMode, setViewMode] = useState<"grid" | "list" | "org">("grid");
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [wizardStep, setWizardStep] = useState(1);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (sessionStorage.getItem("triggerOnboardingWizard") === "true") {
@@ -161,10 +162,14 @@ const Workforce: React.FC = () => {
                   <input
                     type="text"
                     value={formData.name || ""}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    onChange={(e) => {
+                      setFormData({ ...formData, name: e.target.value });
+                      if (errors.name) setErrors({ ...errors, name: "" });
+                    }}
                     placeholder="John"
-                    className="w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-bold"
+                    className={`w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-bold ${errors.name ? 'ring-2 ring-red-500 bg-red-50 text-red-600' : ''}`}
                   />
+                  {errors.name && <p className="text-red-500 text-xs font-bold mt-1">{errors.name}</p>}
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
@@ -206,10 +211,14 @@ const Workforce: React.FC = () => {
                   <input
                     type="email"
                     value={formData.email || ""}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    onChange={(e) => {
+                      setFormData({ ...formData, email: e.target.value });
+                      if (errors.email) setErrors({ ...errors, email: "" });
+                    }}
                     placeholder="john.doe@gmail.com"
-                    className="w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-bold"
+                    className={`w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-bold ${errors.email ? 'ring-2 ring-red-500 bg-red-50 text-red-600' : ''}`}
                   />
+                  {errors.email && <p className="text-red-500 text-xs font-bold mt-1">{errors.email}</p>}
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
@@ -325,14 +334,16 @@ const Workforce: React.FC = () => {
                       departmentId: e.target.value || undefined,
                       department: dept ? dept.name : formData.department,
                     });
+                    if (errors.department) setErrors({ ...errors, department: "" });
                   }}
-                  className="w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-bold appearance-none"
+                  className={`w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-bold appearance-none ${errors.department ? 'ring-2 ring-red-500 bg-red-50 text-red-600' : ''}`}
                 >
                   <option value="">Select department...</option>
                   {departments.map((d: any) => (
                     <option key={d.id} value={d.id}>{d.name}</option>
                   ))}
                 </select>
+                {errors.department && <p className="text-red-500 text-xs font-bold mt-1">{errors.department}</p>}
               </div>
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
@@ -356,10 +367,14 @@ const Workforce: React.FC = () => {
                 <input
                   type="text"
                   value={formData.role || ""}
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                  onChange={(e) => {
+                    setFormData({ ...formData, role: e.target.value });
+                    if (errors.role) setErrors({ ...errors, role: "" });
+                  }}
                   placeholder="e.g. Senior Backend Dev"
-                  className="w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-bold"
+                  className={`w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-bold ${errors.role ? 'ring-2 ring-red-500 bg-red-50 text-red-600' : ''}`}
                 />
+                {errors.role && <p className="text-red-500 text-xs font-bold mt-1">{errors.role}</p>}
               </div>
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
@@ -462,10 +477,14 @@ const Workforce: React.FC = () => {
                     <input
                       type="number"
                       value={formData.salary || ""}
-                      onChange={(e) => setFormData({ ...formData, salary: Number(e.target.value) })}
+                      onChange={(e) => {
+                        setFormData({ ...formData, salary: Number(e.target.value) });
+                        if (errors.salary) setErrors({ ...errors, salary: "" });
+                      }}
                       placeholder="0.00"
-                      className="w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-black text-indigo-600"
+                      className={`w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-black text-indigo-600 ${errors.salary ? 'ring-2 ring-red-500 bg-red-50' : ''}`}
                     />
+                    {errors.salary && <p className="text-red-500 text-xs font-bold mt-1">{errors.salary}</p>}
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
@@ -506,347 +525,6 @@ const Workforce: React.FC = () => {
           </div>
         );
       case 4:
-        return (
-          <div className="space-y-8">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
-                <Receipt size={20} />
-              </div>
-              <h3 className="text-xl font-black text-slate-800">
-                4. Tax & Statutory
-              </h3>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                  Tax ID Number (TIN)
-                </label>
-                <input
-                  type="text"
-                  value={formData.tin || ""}
-                  onChange={(e) => setFormData({ ...formData, tin: e.target.value })}
-                  placeholder="TIN-XXXXXX"
-                  className="w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-bold"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                  Pension Fund Admin (PFA)
-                </label>
-                <select 
-                  value={formData.pfa || "Select PFA..."}
-                  onChange={(e) => setFormData({ ...formData, pfa: e.target.value })}
-                  className="w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-bold"
-                >
-                  <option>Select PFA...</option>
-                  <option>Stanbic IBTC Pension</option>
-                  <option>ARM Pension</option>
-                  <option>Leadway Pensure</option>
-                </select>
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                  Pension ID (RSA PIN)
-                </label>
-                <input
-                  type="text"
-                  value={formData.pensionId || ""}
-                  onChange={(e) => setFormData({ ...formData, pensionId: e.target.value })}
-                  placeholder="PEN-XXXXXX"
-                  className="w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-bold tracking-[0.2em]"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                  Health Insurance Plan
-                </label>
-                <select className="w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-bold">
-                  <option>Premium Plus (Standard)</option>
-                  <option>Executive Gold</option>
-                  <option>Basic Essential</option>
-                </select>
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                  National Insurance No.
-                </label>
-                <input
-                  type="text"
-                  placeholder="NI-XXXXXXXX"
-                  className="w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-bold"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                  Tax Exemptions / Reliefs
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Dependent Relief"
-                  className="w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-bold"
-                />
-              </div>
-            </div>
-          </div>
-        );
-      case 5:
-        return (
-          <div className="space-y-8">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
-                <Landmark size={20} />
-              </div>
-              <h3 className="text-xl font-black text-slate-800">
-                5. Bank Details
-              </h3>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div className="space-y-6">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                    Bank Name
-                  </label>
-                  <select 
-                    value={formData.bankName || "Select Bank..."}
-                    onChange={(e) => setFormData({ ...formData, bankName: e.target.value })}
-                    className="w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-bold"
-                  >
-                    <option>Select Bank...</option>
-                    <option>Standard Chartered</option>
-                    <option>Chase Bank</option>
-                    <option>Zenith Bank</option>
-                    <option>HSBC</option>
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                    Account Number
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.accountNumber || ""}
-                    onChange={(e) => setFormData({ ...formData, accountNumber: e.target.value })}
-                    placeholder="10 digits"
-                    className="w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-bold tracking-[0.2em]"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                    Account Name
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.accountName || ""}
-                    onChange={(e) => setFormData({ ...formData, accountName: e.target.value })}
-                    placeholder="Full name on account"
-                    className="w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-bold"
-                  />
-                </div>
-              </div>
-              <div className="p-10 bg-slate-900 rounded-[3rem] text-white shadow-2xl relative overflow-hidden flex flex-col justify-center">
-                <div className="absolute top-0 right-0 p-10 opacity-5">
-                  <CreditCard size={150} />
-                </div>
-                <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] mb-8">
-                  Payout Method Selection
-                </p>
-                <div className="space-y-4">
-                  {[
-                    "Bank Transfer (Standard)",
-                    "Automated Wallet (Instant)",
-                    "Cash / Cheque",
-                  ].map((method, i) => (
-                    <button
-                      key={i}
-                      onClick={() => setFormData({ ...formData, payoutMethod: method })}
-                      className={`w-full p-6 rounded-2xl border-2 flex items-center justify-between transition-all ${formData.payoutMethod === method ? "border-indigo-500 bg-indigo-500/10" : "border-white/5 bg-white/5 hover:border-white/20"}`}
-                    >
-                      <span className="text-sm font-bold">{method}</span>
-                      {formData.payoutMethod === method && (
-                        <CheckCircle2 size={20} className="text-indigo-400" />
-                      )}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-      case 6:
-        return (
-          <div className="space-y-8">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
-                <FileText size={20} />
-              </div>
-              <h3 className="text-xl font-black text-slate-800">
-                6. Document Upload
-              </h3>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {[
-                { l: "Resume / CV", req: true },
-                { l: "National ID / Passport", req: true },
-                { l: "Educational Certificates", req: false },
-                { l: "Offer Letter", req: false },
-              ].map((doc, i) => (
-                <div
-                  key={i}
-                  className="p-8 bg-slate-50 rounded-[2.5rem] border border-slate-100 group hover:border-indigo-400 transition-all flex items-center justify-between cursor-pointer"
-                >
-                  <div className="flex items-center gap-5">
-                    <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-slate-300 group-hover:text-indigo-600 transition-colors shadow-sm">
-                      <Paperclip size={24} />
-                    </div>
-                    <div>
-                      <p className="text-sm font-black text-slate-800">
-                        {doc.l}
-                      </p>
-                      <p className="text-[9px] font-bold text-slate-400 uppercase">
-                        {doc.req ? "Required • Missing" : "Optional"}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="text-right">
-                      <p className="text-[8px] font-black text-slate-300 uppercase tracking-widest mb-1">
-                        Set Expiry
-                      </p>
-                      <input
-                        type="date"
-                        className="bg-transparent text-[10px] font-bold text-slate-500 outline-none"
-                      />
-                    </div>
-                    <button className="p-3 bg-white border border-slate-200 rounded-xl shadow-sm">
-                      <Upload size={16} className="text-slate-400" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-              <button className="col-span-1 md:col-span-2 py-8 border-4 border-dashed border-slate-100 rounded-[2.5rem] text-slate-300 font-black uppercase tracking-widest flex items-center justify-center gap-3 hover:border-indigo-200 hover:text-indigo-400 transition-all">
-                <Plus size={24} /> Add More Supporting Documents
-              </button>
-            </div>
-          </div>
-        );
-      case 7:
-        return (
-          <div className="space-y-8">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
-                  <Users2 size={20} />
-                </div>
-                <h3 className="text-xl font-black text-slate-800">
-                  7. Emergency Contacts
-                </h3>
-              </div>
-              <button className="px-6 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase shadow-lg">
-                + Add Contact
-              </button>
-            </div>
-            <div className="space-y-6">
-              {[1].map((n) => (
-                <div
-                  key={n}
-                  className="bg-white p-10 rounded-[3rem] border border-slate-200 shadow-sm relative overflow-hidden group"
-                >
-                  <div className="absolute top-0 right-0 w-2 h-full bg-indigo-600" />
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                        Full Name
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.emergencyContacts?.[0]?.name || ""}
-                        onChange={(e) => {
-                          const ec = [...(formData.emergencyContacts || [{}])];
-                          ec[0] = { ...ec[0], name: e.target.value };
-                          setFormData({ ...formData, emergencyContacts: ec });
-                        }}
-                        placeholder="Contact Name"
-                        className="w-full px-5 py-3 bg-slate-50 border-none rounded-xl outline-none font-bold"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                        Relationship
-                      </label>
-                      <select 
-                        value={formData.emergencyContacts?.[0]?.relationship || "Spouse"}
-                        onChange={(e) => {
-                          const ec = [...(formData.emergencyContacts || [{}])];
-                          ec[0] = { ...ec[0], relationship: e.target.value };
-                          setFormData({ ...formData, emergencyContacts: ec });
-                        }}
-                        className="w-full px-5 py-3 bg-slate-50 border-none rounded-xl outline-none font-bold"
-                      >
-                        <option>Spouse</option>
-                        <option>Parent</option>
-                        <option>Sibling</option>
-                        <option>Friend</option>
-                      </select>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                        Phone Number
-                      </label>
-                      <input
-                        type="tel"
-                        value={formData.emergencyContacts?.[0]?.phone || ""}
-                        onChange={(e) => {
-                          const ec = [...(formData.emergencyContacts || [{}])];
-                          ec[0] = { ...ec[0], phone: e.target.value };
-                          setFormData({ ...formData, emergencyContacts: ec });
-                        }}
-                        className="w-full px-5 py-3 bg-slate-50 border-none rounded-xl outline-none font-bold"
-                      />
-                    </div>
-                    <div className="flex items-end gap-3 pb-1">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <div className="w-6 h-6 rounded-lg bg-indigo-600 flex items-center justify-center text-white">
-                          <Check size={14} strokeWidth={4} />
-                        </div>
-                        <span className="text-[10px] font-black uppercase text-indigo-600">
-                          Primary Contact
-                        </span>
-                      </label>
-                      <button className="p-3 text-slate-300 hover:text-rose-500 ml-auto transition-colors">
-                        <Trash2 size={18} />
-                      </button>
-                    </div>
-                    <div className="space-y-2 col-span-1 md:col-span-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                        Email Address
-                      </label>
-                      <input
-                        type="email"
-                        value={formData.emergencyContacts?.[0]?.email || ""}
-                        onChange={(e) => {
-                          const ec = [...(formData.emergencyContacts || [{}])];
-                          ec[0] = { ...ec[0], email: e.target.value };
-                          setFormData({ ...formData, emergencyContacts: ec });
-                        }}
-                        className="w-full px-5 py-3 bg-slate-50 border-none rounded-xl outline-none font-bold"
-                      />
-                    </div>
-                    <div className="space-y-2 col-span-1 md:col-span-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                        Residential Address
-                      </label>
-                      <input
-                        type="text"
-                        className="w-full px-5 py-3 bg-slate-50 border-none rounded-xl outline-none font-bold"
-                      />
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-      case 8:
         return (
           <div className="space-y-10">
             <div className="flex items-center gap-4 border-b border-slate-100 pb-10">
@@ -1185,12 +863,21 @@ const Workforce: React.FC = () => {
                   <p className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.2em] mb-4">
                     {emp.role}
                   </p>
-                  <div className="flex justify-center gap-1.5">
+                  <div className="flex justify-center gap-1.5 mb-2">
                     <span className="px-3 py-1 bg-slate-50 text-slate-400 text-[8px] font-black uppercase tracking-widest rounded-lg border border-slate-100">
                       ID: {emp.id}
                     </span>
                     <span className="px-3 py-1 bg-slate-50 text-slate-400 text-[8px] font-black uppercase tracking-widest rounded-lg border border-slate-100">
                       {emp.department}
+                    </span>
+                  </div>
+                  <div className="flex justify-center">
+                    <span className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest ${
+                      emp.status === "active" ? "bg-emerald-50 text-emerald-600" :
+                      emp.status === "onboarding" ? "bg-indigo-50 text-indigo-600 border border-indigo-100" :
+                      "bg-amber-50 text-amber-600"
+                    }`}>
+                      {emp.status}
                     </span>
                   </div>
                 </div>
@@ -1297,9 +984,9 @@ const Workforce: React.FC = () => {
                     <td className="px-6 py-5">
                       <span
                         className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${
-                          emp.status === "active"
-                            ? "bg-emerald-50 text-emerald-600"
-                            : "bg-amber-50 text-amber-600"
+                          emp.status === "active" ? "bg-emerald-50 text-emerald-600" :
+                          emp.status === "onboarding" ? "bg-indigo-50 text-indigo-600 border border-indigo-100" :
+                          "bg-amber-50 text-amber-600"
                         }`}
                       >
                         {emp.status}
@@ -1605,12 +1292,12 @@ const Workforce: React.FC = () => {
                       Onboard New Talent
                     </h2>
                     <p className="text-slate-400 text-sm font-medium mt-1 uppercase tracking-widest">
-                      Step {wizardStep} of 8 • Employee Lifecycle Configuration
+                      Step {wizardStep} of 4 • Employee Lifecycle Configuration
                     </p>
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  {[1, 2, 3, 4, 5, 6, 7, 8].map((s) => (
+                  {[1, 2, 3, 4].map((s) => (
                     <div
                       key={s}
                       className={`h-1.5 transition-all duration-500 rounded-full ${wizardStep >= s ? "w-10 bg-indigo-500" : "w-2 bg-slate-700"}`}
@@ -1633,12 +1320,8 @@ const Workforce: React.FC = () => {
                     label: "Compensation",
                     icon: <DollarSign size={14} />,
                   },
-                  { id: 4, label: "Statutory", icon: <Receipt size={14} /> },
-                  { id: 5, label: "Banking", icon: <Landmark size={14} /> },
-                  { id: 6, label: "Documents", icon: <FileCheck size={14} /> },
-                  { id: 7, label: "Emergency", icon: <Users2 size={14} /> },
                   {
-                    id: 8,
+                    id: 4,
                     label: "Finalize",
                     icon: <CheckCircle2 size={14} />,
                   },
@@ -1666,29 +1349,109 @@ const Workforce: React.FC = () => {
               </div>
 
               <div className="p-12 bg-slate-50 border-t border-slate-100 flex justify-between items-center shrink-0">
-                <button
-                  onClick={() => setWizardStep((prev) => Math.max(1, prev - 1))}
-                  className={`px-8 py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl font-black text-xs uppercase tracking-widest transition-all ${wizardStep === 1 ? "opacity-30 pointer-events-none" : "hover:bg-slate-50"}`}
-                >
-                  Go Back
-                </button>
                 <div className="flex gap-4">
                   <button
                     onClick={() => {
                       setIsWizardOpen(false);
                       setWizardStep(1);
+                      setFormData({
+                        role: "Software Engineer",
+                        department: "Engineering",
+                        employmentType: "Full-time",
+                        status: "active",
+                        salary: 120000,
+                        emergencyContacts: [{ name: "", relationship: "Spouse", phone: "", email: "", isPrimary: true }],
+                      });
                     }}
-                    className="px-8 py-4 bg-white border border-slate-200 text-slate-400 rounded-2xl font-black text-xs uppercase tracking-widest"
+                    className="px-8 py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl font-black text-xs uppercase tracking-widest transition-all hover:bg-slate-100"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => setWizardStep((prev) => Math.max(1, prev - 1))}
+                    className={`px-8 py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl font-black text-xs uppercase tracking-widest transition-all ${wizardStep === 1 ? "opacity-30 pointer-events-none" : "hover:bg-slate-100"}`}
+                  >
+                    Go Back
+                  </button>
+                </div>
+                <div className="flex gap-4">
+                  <button
+                    onClick={() => {
+                      if (!formData.name || !formData.lastName || !formData.email) {
+                        popupAlert("Please fill in Name, Last Name, and Email to save a draft.");
+                        return;
+                      }
+                      const payload = {
+                        ...formData,
+                        hireDate: formData.hireDate || new Date().toISOString().split("T")[0],
+                        status: "draft",
+                      };
+                      const handleSuccess = (data: any) => {
+                        setIsWizardOpen(false);
+                        setWizardStep(1);
+                        popupAlert("Draft saved successfully.");
+                        setFormData({
+                          role: "Software Engineer",
+                          department: "Engineering",
+                          employmentType: "Full-time",
+                          status: "active",
+                          salary: 120000,
+                          emergencyContacts: [{ name: "", relationship: "Spouse", phone: "", email: "", isPrimary: true }],
+                        });
+                      };
+                      const handleError = (error: any) => {
+                        popupAlert(error.message || "An error occurred");
+                      };
+
+                      if (formData.id) {
+                        updateEmployeeMutation.mutate({ id: formData.id, data: payload }, { onSuccess: handleSuccess, onError: handleError });
+                      } else {
+                        createEmployeeMutation.mutate(payload, { onSuccess: handleSuccess, onError: handleError });
+                      }
+                    }}
+                    className="px-8 py-4 bg-white border border-slate-200 text-slate-400 rounded-2xl font-black text-xs uppercase tracking-widest hover:text-indigo-600 hover:border-indigo-200 transition-all"
                   >
                     Save Draft
                   </button>
                   <button
                     onClick={() => {
-                      if (wizardStep < 8) setWizardStep((prev) => prev + 1);
+                      if (wizardStep === 1) {
+                        const newErrors: Record<string, string> = {};
+                        if (!formData.name) newErrors.name = "First Name is required";
+                        if (!formData.email) newErrors.email = "Personal Email is required";
+                        if (Object.keys(newErrors).length > 0) {
+                          setErrors(newErrors);
+                          popupAlert("Please provide Name and Email to continue.");
+                          return;
+                        }
+                      }
+                      if (wizardStep === 2) {
+                        const newErrors: Record<string, string> = {};
+                        if (!formData.role) newErrors.role = "Job Title is required";
+                        if (!formData.department) newErrors.department = "Department is required";
+                        if (Object.keys(newErrors).length > 0) {
+                          setErrors(newErrors);
+                          popupAlert("Please provide Role and Department to continue.");
+                          return;
+                        }
+                      }
+                      if (wizardStep === 3) {
+                        const newErrors: Record<string, string> = {};
+                        if (!formData.salary) newErrors.salary = "Basic Salary is required";
+                        if (Object.keys(newErrors).length > 0) {
+                          setErrors(newErrors);
+                          popupAlert("Please provide Basic Salary to continue.");
+                          return;
+                        }
+                      }
+
+                      setErrors({});
+                      if (wizardStep < 4) setWizardStep((prev) => prev + 1);
                       else {
                         const payload = {
                           ...formData,
                           hireDate: formData.hireDate || new Date().toISOString().split("T")[0],
+                          status: "onboarding",
                         };
                         const handleSuccess = (data: any) => {
                           setIsWizardOpen(false);
@@ -1723,10 +1486,10 @@ const Workforce: React.FC = () => {
                     }}
                     className="px-12 py-4 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-100 hover:scale-105 active:scale-95 transition-all flex items-center gap-3"
                   >
-                    {wizardStep === 8
+                    {wizardStep === 4
                       ? (formData.id ? "Confirm & Update Employee" : "Confirm & Create Employee")
                       : "Next: " +
-                        (wizardStep === 7 ? "Finalize" : "Continue")}{" "}
+                        (wizardStep === 3 ? "Finalize" : "Continue")}{" "}
                     <ArrowRight size={18} />
                   </button>
                 </div>
