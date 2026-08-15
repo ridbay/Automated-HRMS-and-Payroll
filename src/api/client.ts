@@ -131,6 +131,80 @@ export const fetchMyJobRequisitions = async (): Promise<JobRequisition[]> => {
   return data.map(withEmptyPipeline);
 };
 
+export const useSupportTickets = () => {
+  return useQuery({
+    queryKey: ['supportTickets'],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/support/tickets`);
+      if (!res.ok) throw new Error('Failed to fetch support tickets');
+      return res.json();
+    },
+  });
+};
+
+export const useCreateSupportTicket = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: any) => {
+      const res = await fetchWithTenant(`${API_URL}/support/tickets`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('Failed to create ticket');
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['supportTickets'] }),
+  });
+};
+
+export const useUpdateSupportTicket = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+      const res = await fetchWithTenant(`${API_URL}/support/tickets/${id}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) throw new Error('Failed to update ticket status');
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['supportTickets'] }),
+  });
+};
+
+export const useTicketMessages = (ticketId: string) => {
+  return useQuery({
+    queryKey: ['ticketMessages', ticketId],
+    queryFn: async () => {
+      if (!ticketId) return [];
+      const res = await fetchWithTenant(`${API_URL}/support/tickets/${ticketId}/messages`);
+      if (!res.ok) throw new Error('Failed to fetch messages');
+      return res.json();
+    },
+    enabled: !!ticketId,
+  });
+};
+
+export const useAddTicketMessage = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ ticketId, message }: { ticketId: string; message: string }) => {
+      const res = await fetchWithTenant(`${API_URL}/support/tickets/${ticketId}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message }),
+      });
+      if (!res.ok) throw new Error('Failed to add message');
+      return res.json();
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['ticketMessages', variables.ticketId] });
+    },
+  });
+};
+
 export const fetchLeaveRequests = async (): Promise<LeaveRequest[]> => {
   const res = await fetchWithTenant(`${API_URL}/employee/leave-requests`);
   if (!res.ok) throw new Error('Failed to fetch leave requests');
@@ -1262,6 +1336,23 @@ export const useUpdateMyProfile = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['myProfile'] });
+    },
+  });
+};
+
+export const useChangePassword = () => {
+  return useMutation({
+    mutationFn: async (data: any) => {
+      const res = await fetchWithTenant(`${API_URL}/auth/change-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Password change failed');
+      }
+      return res.json();
     },
   });
 };

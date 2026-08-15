@@ -33,14 +33,17 @@ export const getDirectory = async (c: Context<AppEnv>) => {
 export const updateMyProfile = async (c: Context<AppEnv>) => {
   const companyId = c.get('companyId');
   const employeeId = c.get('employeeId');
+  const role = c.get('role');
 
   if (!employeeId) {
     return c.json({ error: 'Unauthorized: No employee ID found' }, 401);
   }
 
+  const isAdmin = role === 'SUPER_ADMIN' || role === 'HR_ADMIN';
+
   const service = new EmployeeService(c.env.DB);
   const data = await c.req.json();
-  const profile = await service.updateEmployeeProfile(companyId, employeeId, data);
+  const profile = await service.updateEmployeeProfile(companyId, employeeId, data, isAdmin);
 
   if (!profile) {
     return c.json({ error: 'Employee not found' }, 404);

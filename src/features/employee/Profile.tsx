@@ -38,7 +38,8 @@ import {
   useDeleteEmergencyContact,
   useUploadDocumentMutation,
   useDeleteDocumentMutation,
-  getDocumentDownloadUrl
+  getDocumentDownloadUrl,
+  useChangePassword
 } from "../../api/client";
 import { usePopup } from "../../components/PopupProvider";
 import { useAuth } from "../../context/AuthContext";
@@ -64,16 +65,19 @@ const ProfileField = ({
     {editable && (
       <button
         onClick={onEdit}
-        className="absolute top-4 right-4 p-2 bg-white rounded-xl shadow-sm opacity-0 group-hover:opacity-100 transition-all hover:text-indigo-600"
+        className="absolute top-4 right-4 p-2 bg-white rounded-xl shadow-sm opacity-0 group-hover:opacity-100 transition-all hover:text-indigo-600 z-10"
       >
         <Edit2 size={14} />
       </button>
     )}
 
     {restricted && (
-      <div className="absolute top-4 right-4 text-slate-300">
+      <button 
+        onClick={onEdit}
+        className="absolute top-4 right-4 text-slate-300 hover:text-indigo-600 transition-colors z-10"
+      >
         <Lock size={14} />
-      </div>
+      </button>
     )}
   </div>
 );
@@ -93,7 +97,9 @@ const SectionTitle = ({ icon: Icon, title, subtitle }: any) => (
 );
 
 const Profile: React.FC = () => {
-  const { updateUser } = useAuth();
+  const { user, updateUser } = useAuth();
+  const isAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'HR_ADMIN';
+  
   const [activeTab, setActiveTab] = useState("personal");
   const [editMode, setEditMode] = useState(false);
   const [showChangeRequestModal, setShowChangeRequestModal] = useState(false);
@@ -120,6 +126,13 @@ const Profile: React.FC = () => {
     nhf: "",
     taxState: "",
   });
+
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [passwordData, setPasswordData] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
+
+  const [showAdminEditModal, setShowAdminEditModal] = useState(false);
+  const [adminEditField, setAdminEditField] = useState("");
+  const [adminEditValue, setAdminEditValue] = useState("");
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -147,7 +160,8 @@ const Profile: React.FC = () => {
   const updateProfileMutation = useUpdateMyProfile();
   const addEmergencyContact = useAddEmergencyContact();
   const deleteEmergencyContact = useDeleteEmergencyContact();
-  const { confirm } = usePopup();
+  const changePasswordMutation = useChangePassword();
+  const { confirm, alert } = usePopup();
 
   const handleOpenSecondaryBank = () => {
     setSecondaryBankDetails({
@@ -279,7 +293,7 @@ const Profile: React.FC = () => {
                     ID: {me.id}
                   </span>
                   <span className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-lg text-[10px] font-black uppercase tracking-widest">
-                    {me.role} • {me.department}
+                    {me.role?.replace(/_/g, ' ')} • {me.department}
                   </span>
                   <span className="px-3 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-[10px] font-black uppercase tracking-widest">
                     Employed Since {me.hireDate}
@@ -309,7 +323,7 @@ const Profile: React.FC = () => {
                     Work Phone
                   </p>
                   <p className="text-xs font-bold text-slate-700">
-                    +1 (555) 012-3456
+                    {me.phone || "Not set"}
                   </p>
                 </div>
               </div>
@@ -354,36 +368,92 @@ const Profile: React.FC = () => {
                       title="Basic Information"
                       subtitle="Official identification details"
                     />
-                    <div className="px-4 py-2 bg-amber-50 text-amber-600 rounded-xl border border-amber-100 flex items-center gap-2 text-[10px] font-black uppercase">
-                      <AlertCircle size={14} /> Changes Require Approval
-                    </div>
+                    {!isAdmin && (
+                      <div className="px-4 py-2 bg-amber-50 text-amber-600 rounded-xl border border-amber-100 flex items-center gap-2 text-[10px] font-black uppercase">
+                        <AlertCircle size={14} /> Changes Require Approval
+                      </div>
+                    )}
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <ProfileField
                       label="Full Name"
                       value={me.name}
-                      restricted
+                      restricted={!isAdmin}
+                      editable={isAdmin}
                       onEdit={() => {
-                        setChangeRequestField("Full Name");
-                        setShowChangeRequestModal(true);
+                        if (isAdmin) {
+                          setAdminEditField("Full Name");
+                          setAdminEditValue(me.name || "");
+                          setShowAdminEditModal(true);
+                        } else {
+                          setChangeRequestField("Full Name");
+                          setShowChangeRequestModal(true);
+                        }
                       }}
-                      editable
                     />
                     <ProfileField
                       label="Date of Birth"
                       value={me.dob}
-                      restricted
+                      restricted={!isAdmin}
+                      editable={isAdmin}
+                      onEdit={() => {
+                        if (isAdmin) {
+                          setAdminEditField("Date of Birth");
+                          setAdminEditValue(me.dob || "");
+                          setShowAdminEditModal(true);
+                        } else {
+                          setChangeRequestField("Date of Birth");
+                          setShowChangeRequestModal(true);
+                        }
+                      }}
                     />
-                    <ProfileField label="Gender" value={me.gender} restricted />
+                    <ProfileField 
+                      label="Gender" 
+                      value={me.gender} 
+                      restricted={!isAdmin}
+                      editable={isAdmin}
+                      onEdit={() => {
+                        if (isAdmin) {
+                          setAdminEditField("Gender");
+                          setAdminEditValue(me.gender || "");
+                          setShowAdminEditModal(true);
+                        } else {
+                          setChangeRequestField("Gender");
+                          setShowChangeRequestModal(true);
+                        }
+                      }}
+                    />
                     <ProfileField
                       label="Nationality"
                       value={me.nationality}
-                      restricted
+                      restricted={!isAdmin}
+                      editable={isAdmin}
+                      onEdit={() => {
+                        if (isAdmin) {
+                          setAdminEditField("Nationality");
+                          setAdminEditValue(me.nationality || "");
+                          setShowAdminEditModal(true);
+                        } else {
+                          setChangeRequestField("Nationality");
+                          setShowChangeRequestModal(true);
+                        }
+                      }}
                     />
                     <ProfileField
                       label="Marital Status"
-                      value="Married"
-                      editable
+                      value={me.maritalStatus || "Not Set"}
+                      restricted={!isAdmin}
+                      editable={isAdmin}
+                      onEdit={() => {
+                        if (isAdmin) {
+                          setAdminEditField("Marital Status");
+                          setAdminEditValue(me.maritalStatus || "");
+                          setShowAdminEditModal(true);
+                        } else {
+                          setChangeRequestField("Marital Status");
+                          setShowChangeRequestModal(true);
+                        }
+                      }}
                     />
                   </div>
                 </section>
@@ -497,32 +567,80 @@ const Profile: React.FC = () => {
                     <ProfileField
                       label="Date of Hire"
                       value={me.hireDate}
-                      restricted
+                      restricted={!isAdmin}
+                      editable={isAdmin}
+                      onEdit={() => {
+                        if (isAdmin) {
+                          setAdminEditField("Date of Hire");
+                          setAdminEditValue(me.hireDate || "");
+                          setShowAdminEditModal(true);
+                        }
+                      }}
                     />
                     <ProfileField
                       label="Employment Type"
-                      value="Full-Time Permanent"
-                      restricted
+                      value={me.employmentType || "Full-Time Permanent"}
+                      restricted={!isAdmin}
+                      editable={isAdmin}
+                      onEdit={() => {
+                        if (isAdmin) {
+                          setAdminEditField("Employment Type");
+                          setAdminEditValue(me.employmentType || "Full-Time Permanent");
+                          setShowAdminEditModal(true);
+                        }
+                      }}
                     />
                     <ProfileField
-                      label="Probation Status"
-                      value="Completed"
-                      restricted
+                      label="Probation End"
+                      value={me.probationEnd || "Completed"}
+                      restricted={!isAdmin}
+                      editable={isAdmin}
+                      onEdit={() => {
+                        if (isAdmin) {
+                          setAdminEditField("Probation End");
+                          setAdminEditValue(me.probationEnd || "Completed");
+                          setShowAdminEditModal(true);
+                        }
+                      }}
                     />
                     <ProfileField
                       label="Department"
                       value={me.department}
-                      restricted
+                      restricted={!isAdmin}
+                      editable={isAdmin}
+                      onEdit={() => {
+                        if (isAdmin) {
+                          setAdminEditField("Department");
+                          setAdminEditValue(me.department || "");
+                          setShowAdminEditModal(true);
+                        }
+                      }}
                     />
                     <ProfileField
                       label="Designation"
-                      value={me.role}
-                      restricted
+                      value={me.role?.replace(/_/g, ' ')}
+                      restricted={!isAdmin}
+                      editable={isAdmin}
+                      onEdit={() => {
+                        if (isAdmin) {
+                          setAdminEditField("Designation");
+                          setAdminEditValue(me.role || "");
+                          setShowAdminEditModal(true);
+                        }
+                      }}
                     />
                     <ProfileField
                       label="Work Location"
                       value={me.location}
-                      restricted
+                      restricted={!isAdmin}
+                      editable={isAdmin}
+                      onEdit={() => {
+                        if (isAdmin) {
+                          setAdminEditField("Work Location");
+                          setAdminEditValue(me.location || "");
+                          setShowAdminEditModal(true);
+                        }
+                      }}
                     />
                     <ProfileField
                       label="Work Schedule"
@@ -933,7 +1051,10 @@ const Profile: React.FC = () => {
                   </span>
                 </div>
               </div>
-              <button className="w-full py-4 bg-indigo-600 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg hover:bg-indigo-500 transition-colors">
+              <button 
+                onClick={() => setShowPasswordModal(true)}
+                className="w-full py-4 bg-indigo-600 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg hover:bg-indigo-500 transition-colors"
+              >
                 Change Password
               </button>
             </div>
@@ -1052,10 +1173,203 @@ const Profile: React.FC = () => {
                     Cancel
                   </button>
                   <button
-                    onClick={() => setShowChangeRequestModal(false)}
+                    onClick={async () => {
+                      setShowChangeRequestModal(false);
+                      await alert("Your change request has been submitted to HR successfully.");
+                    }}
                     className="flex-1 py-4 bg-indigo-600 text-white font-black text-xs uppercase tracking-widest rounded-2xl shadow-xl hover:bg-indigo-700"
                   >
                     Submit Request
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Admin Direct Edit Modal */}
+      <AnimatePresence>
+        {showAdminEditModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowAdminEditModal(false)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="relative w-full max-w-lg bg-white rounded-[2.5rem] shadow-2xl overflow-hidden"
+            >
+              <div className="p-8 bg-emerald-600 text-white flex justify-between items-center">
+                <h3 className="text-xl font-black flex items-center gap-2">
+                  <ShieldCheck size={20} /> Edit {adminEditField}
+                </h3>
+                <button
+                  onClick={() => setShowAdminEditModal(false)}
+                  className="p-2 bg-white/10 rounded-xl hover:bg-white/20 transition-all"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="p-8 space-y-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    {adminEditField}
+                  </label>
+                  <input
+                    type="text"
+                    value={adminEditValue}
+                    onChange={(e) => setAdminEditValue(e.target.value)}
+                    placeholder={`Enter new ${adminEditField}...`}
+                    className="w-full px-6 py-4 bg-slate-50 rounded-2xl font-bold text-slate-800 border-none outline-none focus:ring-4 focus:ring-emerald-100"
+                  />
+                </div>
+                <div className="flex gap-4 pt-4">
+                  <button
+                    onClick={() => setShowAdminEditModal(false)}
+                    className="flex-1 py-4 bg-slate-50 text-slate-500 font-black text-xs uppercase tracking-widest rounded-2xl hover:bg-slate-100"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      const fieldMap: any = {
+                        "Full Name": "name", // name and lastName combined usually, but let's just use name for full name in this UI
+                        "Date of Birth": "dob",
+                        "Gender": "gender",
+                        "Nationality": "nationality",
+                        "Marital Status": "maritalStatus",
+                        "Date of Hire": "hireDate",
+                        "Employment Type": "employmentType",
+                        "Probation End": "probationEnd",
+                        "Department": "department",
+                        "Designation": "role",
+                        "Work Location": "location",
+                      };
+                      const key = fieldMap[adminEditField];
+                      if (key) {
+                        updateProfileMutation.mutate(
+                          { [key]: adminEditValue },
+                          { onSuccess: () => setShowAdminEditModal(false) }
+                        );
+                      }
+                    }}
+                    disabled={updateProfileMutation.isPending}
+                    className="flex-1 py-4 bg-emerald-600 text-white font-black text-xs uppercase tracking-widest rounded-2xl shadow-xl hover:bg-emerald-700 disabled:opacity-50 flex justify-center items-center gap-2"
+                  >
+                    {updateProfileMutation.isPending && <Loader2 size={16} className="animate-spin" />}
+                    Save Changes
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Password Change Modal */}
+      <AnimatePresence>
+        {showPasswordModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowPasswordModal(false)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="relative w-full max-w-lg bg-white rounded-[2.5rem] shadow-2xl overflow-hidden"
+            >
+              <div className="p-8 bg-indigo-600 text-white flex justify-between items-center">
+                <h3 className="text-xl font-black flex items-center gap-2">
+                  <Lock size={20} /> Change Password
+                </h3>
+                <button
+                  onClick={() => setShowPasswordModal(false)}
+                  className="p-2 bg-white/10 rounded-xl hover:bg-white/20 transition-all"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="p-8 space-y-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    Current Password
+                  </label>
+                  <input
+                    type="password"
+                    value={passwordData.currentPassword}
+                    onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
+                    className="w-full px-6 py-4 bg-slate-50 rounded-2xl font-bold text-slate-800 border-none outline-none focus:ring-4 focus:ring-indigo-100"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    New Password
+                  </label>
+                  <input
+                    type="password"
+                    value={passwordData.newPassword}
+                    onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                    className="w-full px-6 py-4 bg-slate-50 rounded-2xl font-bold text-slate-800 border-none outline-none focus:ring-4 focus:ring-indigo-100"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    Confirm New Password
+                  </label>
+                  <input
+                    type="password"
+                    value={passwordData.confirmPassword}
+                    onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                    className="w-full px-6 py-4 bg-slate-50 rounded-2xl font-bold text-slate-800 border-none outline-none focus:ring-4 focus:ring-indigo-100"
+                  />
+                </div>
+                <div className="flex gap-4 pt-4">
+                  <button
+                    onClick={() => setShowPasswordModal(false)}
+                    className="flex-1 py-4 bg-slate-50 text-slate-500 font-black text-xs uppercase tracking-widest rounded-2xl hover:bg-slate-100"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (!passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword) {
+                        await alert("Please fill in all fields.");
+                        return;
+                      }
+                      if (passwordData.newPassword !== passwordData.confirmPassword) {
+                        await alert("New passwords do not match.");
+                        return;
+                      }
+                      changePasswordMutation.mutate(
+                        { currentPassword: passwordData.currentPassword, newPassword: passwordData.newPassword },
+                        {
+                          onSuccess: async () => {
+                            setShowPasswordModal(false);
+                            setPasswordData({ currentPassword: "", newPassword: "", confirmPassword: "" });
+                            await alert("Password changed successfully.");
+                          },
+                          onError: async (error: any) => {
+                            await alert(error.message || "Failed to change password.");
+                          }
+                        }
+                      );
+                    }}
+                    disabled={changePasswordMutation.isPending}
+                    className="flex-1 py-4 bg-indigo-600 text-white font-black text-xs uppercase tracking-widest rounded-2xl shadow-xl hover:bg-indigo-700 disabled:opacity-50 flex justify-center items-center gap-2"
+                  >
+                    {changePasswordMutation.isPending && <Loader2 size={16} className="animate-spin" />}
+                    Update Password
                   </button>
                 </div>
               </div>

@@ -26,6 +26,8 @@ import AttendanceManagement from "./features/admin/AttendanceManagement";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { NavigationProvider, useNavigation } from "./context/NavigationContext";
 
+import Support from "./features/support/Support";
+
 const AppContent: React.FC = () => {
   const { user, isAuthenticated, login, logout } = useAuth();
   const { activeTab, setActiveTab, isSidebarOpen, toggleSidebar } =
@@ -94,6 +96,8 @@ const AppContent: React.FC = () => {
         return <EmployeePortal />;
       case "profile":
         return <Profile />;
+      case "help":
+        return <Support />;
       case "settings":
         return <Settings />;
       default:

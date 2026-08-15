@@ -12,7 +12,7 @@ import { useAuth } from "../context/AuthContext";
 import { motion, AnimatePresence } from "framer-motion";
 
 const Header: React.FC = () => {
-  const { activeTab } = useNavigation();
+  const { activeTab, setActiveTab } = useNavigation();
   const { user, logout } = useAuth();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const formattedTitle = activeTab
@@ -114,10 +114,16 @@ const Header: React.FC = () => {
                       {user.email}
                     </p>
                   </div>
-                  <button className="w-full flex items-center gap-3 px-4 py-2.5 text-xs font-black text-slate-600 uppercase tracking-widest hover:bg-slate-50 hover:text-indigo-600 transition-colors">
+                  <button 
+                    onClick={() => { setActiveTab("profile"); setShowProfileMenu(false); }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-xs font-black text-slate-600 uppercase tracking-widest hover:bg-slate-50 hover:text-indigo-600 transition-colors"
+                  >
                     <User size={16} /> My Account
                   </button>
-                  <button className="w-full flex items-center gap-3 px-4 py-2.5 text-xs font-black text-slate-600 uppercase tracking-widest hover:bg-slate-50 hover:text-indigo-600 transition-colors">
+                  <button 
+                    onClick={() => { setActiveTab("settings"); setShowProfileMenu(false); }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-xs font-black text-slate-600 uppercase tracking-widest hover:bg-slate-50 hover:text-indigo-600 transition-colors"
+                  >
                     <Settings size={16} /> Preferences
                   </button>
                   <div className="h-[1px] bg-slate-50 my-2"></div>

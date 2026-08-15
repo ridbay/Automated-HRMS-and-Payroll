@@ -151,9 +151,9 @@ export class EmployeeService {
     return safeEmployee;
   }
 
-  async updateEmployeeProfile(companyId: string, employeeId: string, data: Partial<typeof schema.employees.$inferInsert>) {
-    // Only allow specific self-service fields to be updated
-    const allowedUpdates = {
+  async updateEmployeeProfile(companyId: string, employeeId: string, data: Partial<typeof schema.employees.$inferInsert>, isAdmin: boolean = false) {
+    // Only allow specific self-service fields to be updated if not admin
+    let allowedUpdates: any = {
       phone: data.phone,
       email: data.email,
       location: data.location,
@@ -172,6 +172,12 @@ export class EmployeeService {
       maritalStatus: data.maritalStatus,
       avatar: data.avatar,
     };
+
+    if (isAdmin) {
+      // Admins editing their own profile can edit everything except critical ids
+      const { id, companyId: cid, passwordHash, passwordSalt, ...rest } = data as any;
+      allowedUpdates = { ...allowedUpdates, ...rest };
+    }
 
     // Remove undefined values
     const updateData = Object.fromEntries(
