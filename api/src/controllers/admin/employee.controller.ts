@@ -78,6 +78,25 @@ export const updateEmployee = async (c: Context<AppEnv>) => {
   return c.json(result);
 };
 
+export const resetTemporaryPassword = async (c: Context<AppEnv>) => {
+  const companyId = c.get('companyId');
+  const employeeId = c.req.param('id') as string;
+  const service = new EmployeeService(c.env.DB);
+
+  const result = await service.resetTemporaryPassword(companyId, employeeId);
+  if (!result) return c.json({ error: 'Employee not found' }, 404);
+
+  await new AuditService(c.env.DB).log(companyId, {
+    actorId: c.get('employeeId'),
+    subjectId: employeeId,
+    action: `Reset temporary password for ${result.name} ${result.lastName}`.trim(),
+    module: 'workforce',
+    severity: 'warning',
+    ip: c.req.header('cf-connecting-ip'),
+  });
+  return c.json(result);
+};
+
 export const deleteEmployee = async (c: Context<AppEnv>) => {
   const companyId = c.get('companyId');
   const employeeId = c.req.param('id') as string;

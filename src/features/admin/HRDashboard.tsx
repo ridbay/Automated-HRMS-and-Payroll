@@ -59,13 +59,33 @@ import {
   Legend,
 } from "recharts";
 import { useAuth } from "../../context/AuthContext";
-import { useDashboardStats } from "../../api/client";
+import { useNavigation } from "../../context/NavigationContext";
+import { useDashboardStats, downloadReportCsv } from "../../api/client";
 import { Loader2 } from "lucide-react";
 
 const HRDashboard: React.FC = () => {
   const { user } = useAuth();
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  const { setActiveTab } = useNavigation();
+  const [isExporting, setIsExporting] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const { data: dashboardData, isLoading } = useDashboardStats();
+
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      await downloadReportCsv("employees");
+    } catch (err) {
+      // Swallow — the export helper already surfaces network errors via the
+      // fetch call itself; nothing more actionable to show here.
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setActiveTab("directory");
+  };
 
   if (isLoading) {
     return (
@@ -99,6 +119,7 @@ const HRDashboard: React.FC = () => {
       icon: <Users className="text-indigo-600" />,
       bg: "bg-indigo-50",
       action: "View All",
+      path: "workforce",
     },
     {
       label: "New Hires",
@@ -109,6 +130,7 @@ const HRDashboard: React.FC = () => {
       icon: <UserPlus className="text-emerald-600" />,
       bg: "bg-emerald-50",
       action: "Onboarding",
+      path: "onboarding",
     },
     {
       label: "Attrition Rate",
@@ -119,6 +141,7 @@ const HRDashboard: React.FC = () => {
       icon: <TrendingUp className="text-rose-600" />,
       bg: "bg-rose-50",
       action: "Analysis",
+      path: "reports",
     },
     {
       label: "Open Positions",
@@ -129,6 +152,7 @@ const HRDashboard: React.FC = () => {
       icon: <Briefcase className="text-amber-600" />,
       bg: "bg-amber-50",
       action: "Recruitment",
+      path: "recruitment",
     },
     {
       label: "Payroll (Current)",
@@ -139,6 +163,7 @@ const HRDashboard: React.FC = () => {
       icon: <Wallet className="text-violet-600" />,
       bg: "bg-violet-50",
       action: "Reports",
+      path: "reports",
     },
     {
       label: "Pending Actions",
@@ -149,6 +174,7 @@ const HRDashboard: React.FC = () => {
       icon: <AlertTriangle className={alerts.length > 0 ? "text-orange-600" : "text-emerald-600"} />,
       bg: alerts.length > 0 ? "bg-orange-50" : "bg-emerald-50",
       action: "Tasks",
+      path: "leave-approvals",
     },
   ];
 
@@ -188,21 +214,32 @@ const HRDashboard: React.FC = () => {
           </p>
         </div>
         <div className="flex gap-3">
-          <div className="relative">
+          <form onSubmit={handleSearchSubmit} className="relative">
             <input
               type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search employee, policy..."
+              title="Press Enter to search the directory"
               className="pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-bold w-64 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
             />
             <Search
               className="absolute left-3 top-3 text-slate-400"
               size={16}
             />
-          </div>
-          <button className="px-6 py-3 bg-white border border-slate-200 text-slate-600 rounded-2xl font-black text-xs uppercase tracking-widest shadow-sm hover:bg-slate-50 transition-all flex items-center gap-2">
-            <Download size={16} /> Report
+          </form>
+          <button
+            onClick={handleExport}
+            disabled={isExporting}
+            className="px-6 py-3 bg-white border border-slate-200 text-slate-600 rounded-2xl font-black text-xs uppercase tracking-widest shadow-sm hover:bg-slate-50 transition-all flex items-center gap-2 disabled:opacity-50"
+          >
+            {isExporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+            {isExporting ? "Exporting…" : "Report"}
           </button>
-          <button className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-100 hover:scale-105 transition-all">
+          <button
+            onClick={() => setActiveTab("workforce")}
+            className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-100 hover:scale-105 transition-all"
+          >
             + New Action
           </button>
         </div>
@@ -236,7 +273,10 @@ const HRDashboard: React.FC = () => {
               <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest truncate max-w-[80px]">
                 {s.breakdown}
               </p>
-              <button className="text-[9px] font-black text-indigo-600 uppercase hover:underline">
+              <button
+                onClick={() => setActiveTab(s.path)}
+                className="text-[9px] font-black text-indigo-600 uppercase hover:underline"
+              >
                 {s.action}
               </button>
             </div>
@@ -262,46 +302,51 @@ const HRDashboard: React.FC = () => {
                 {
                   label: "Workforce",
                   actions: [
-                    "Add Employee",
-                    "Bulk Import",
-                    "Generate Roster",
-                    "Exits",
+                    { label: "Add Employee", path: "workforce" },
+                    { label: "Bulk Import", path: "workforce" },
+                    { label: "Generate Roster", path: "reports" },
+                    { label: "Exits", path: "onboarding" },
                   ],
                   icon: <Users className="text-indigo-500" />,
                 },
                 {
                   label: "Recruitment",
                   actions: [
-                    "Post Job",
-                    "Offers",
-                    "Interview Board",
-                    "Pipeline",
+                    { label: "Post Job", path: "recruitment" },
+                    { label: "Offers", path: "recruitment" },
+                    { label: "Interview Board", path: "recruitment" },
+                    { label: "Pipeline", path: "recruitment" },
                   ],
                   icon: <Briefcase className="text-amber-500" />,
                 },
                 {
                   label: "Payroll",
                   actions: [
-                    "Process Run",
-                    "Tax Filing",
-                    "Wallet Fund",
-                    "Payslips",
+                    { label: "Process Run", path: "payroll" },
+                    { label: "Tax Filing", path: "payroll" },
+                    { label: "Wallet Fund", path: "payroll" },
+                    { label: "Payslips", path: "payroll" },
                   ],
                   icon: <Wallet className="text-emerald-500" />,
                 },
                 {
                   label: "Performance",
                   actions: [
-                    "New Cycle",
-                    "Calibration",
-                    "Appraisals",
-                    "Reports",
+                    { label: "New Cycle", path: "performance" },
+                    { label: "Calibration", path: "performance" },
+                    { label: "Appraisals", path: "performance" },
+                    { label: "Reports", path: "reports" },
                   ],
                   icon: <Target className="text-rose-500" />,
                 },
                 {
                   label: "Benefits",
-                  actions: ["Enrollment", "Claims", "Renewals", "Vendors"],
+                  actions: [
+                    { label: "Enrollment", path: "benefits" },
+                    { label: "Claims", path: "benefits" },
+                    { label: "Renewals", path: "benefits" },
+                    { label: "Vendors", path: "benefits" },
+                  ],
                   icon: <Heart className="text-pink-500" />,
                 },
               ].map((group, i) => (
@@ -318,10 +363,11 @@ const HRDashboard: React.FC = () => {
                   <div className="space-y-3">
                     {group.actions.map((a) => (
                       <button
-                        key={a}
+                        key={a.label}
+                        onClick={() => setActiveTab(a.path)}
                         className="w-full text-left p-3 bg-white rounded-xl text-[10px] font-bold text-slate-600 hover:text-indigo-600 hover:shadow-sm transition-all flex items-center justify-between group/btn"
                       >
-                        {a}{" "}
+                        {a.label}{" "}
                         <ChevronRight
                           size={10}
                           className="opacity-0 group-hover/btn:opacity-100 transition-opacity"
@@ -418,7 +464,10 @@ const HRDashboard: React.FC = () => {
                   <span className="text-slate-800"></span>
                 </div>
               </div>
-              <button className="w-full mt-6 py-3 bg-slate-50 text-slate-500 rounded-xl text-[10px] font-black uppercase tracking-widest hover:text-rose-600">
+              <button
+                onClick={() => setActiveTab("reports")}
+                className="w-full mt-6 py-3 bg-slate-50 text-slate-500 rounded-xl text-[10px] font-black uppercase tracking-widest hover:text-rose-600"
+              >
                 Full Exit Report
               </button>
             </section>
@@ -512,11 +561,6 @@ const HRDashboard: React.FC = () => {
                 <p className="text-xs font-bold">All clear!</p>
                 <p className="text-[10px]">No pending items.</p>
               </div>
-            )}
-            {alerts.length > 0 && (
-              <button className="w-full mt-6 py-4 bg-slate-50 text-slate-500 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-50 hover:text-indigo-600 transition-all">
-                View All Alerts
-              </button>
             )}
           </section>
 

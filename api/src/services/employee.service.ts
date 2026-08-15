@@ -125,6 +125,34 @@ export class EmployeeService {
 
     return safeEmployee;
   }
+
+  // Issues a fresh temporary password for an employee whose original one was
+  // lost before it could be shared, or who needs a forced credential reset.
+  // Invalidates whatever password (temporary or self-chosen) they had before
+  // and flips isPasswordChanged back to false, mirroring the first-login flow.
+  async resetTemporaryPassword(companyId: string, employeeId: string) {
+    const employee = await this.db.query.employees.findFirst({
+      where: and(eq(schema.employees.id, employeeId), eq(schema.employees.companyId, companyId)),
+    });
+    if (!employee) return null;
+
+    const temporaryPassword = `ZenHR-${crypto.randomUUID().split('-')[0]}`;
+    const salt = generateSalt();
+    const hashedPassword = await hashPassword(temporaryPassword, salt);
+
+    await this.db
+      .update(schema.employees)
+      .set({
+        passwordHash: hashedPassword,
+        passwordSalt: salt,
+        isPasswordChanged: false,
+        updatedAt: new Date().toISOString(),
+      })
+      .where(and(eq(schema.employees.id, employeeId), eq(schema.employees.companyId, companyId)));
+
+    return { id: employee.id, name: employee.name, lastName: employee.lastName, temporaryPassword };
+  }
+
   async getFirstEmployeeId(companyId: string): Promise<string | null> {
     const result = await this.db
       .select({ id: schema.employees.id })

@@ -5,7 +5,7 @@ var __export = (target, all) => {
     __defProp(target, name, { get: all[name], enumerable: true });
 };
 
-// .wrangler/tmp/bundle-NmhlHk/checked-fetch.js
+// .wrangler/tmp/bundle-l1eDsL/checked-fetch.js
 var urls = /* @__PURE__ */ new Set();
 function checkURL(request, init) {
   const url = request instanceof URL ? request : new URL(
@@ -10016,6 +10016,26 @@ var EmployeeService = class {
     }
     return safeEmployee;
   }
+  // Issues a fresh temporary password for an employee whose original one was
+  // lost before it could be shared, or who needs a forced credential reset.
+  // Invalidates whatever password (temporary or self-chosen) they had before
+  // and flips isPasswordChanged back to false, mirroring the first-login flow.
+  async resetTemporaryPassword(companyId, employeeId) {
+    const employee = await this.db.query.employees.findFirst({
+      where: and(eq(employees.id, employeeId), eq(employees.companyId, companyId))
+    });
+    if (!employee) return null;
+    const temporaryPassword = `ZenHR-${crypto.randomUUID().split("-")[0]}`;
+    const salt = generateSalt();
+    const hashedPassword = await hashPassword(temporaryPassword, salt);
+    await this.db.update(employees).set({
+      passwordHash: hashedPassword,
+      passwordSalt: salt,
+      isPasswordChanged: false,
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    }).where(and(eq(employees.id, employeeId), eq(employees.companyId, companyId)));
+    return { id: employee.id, name: employee.name, lastName: employee.lastName, temporaryPassword };
+  }
   async getFirstEmployeeId(companyId) {
     const result = await this.db.select({ id: employees.id }).from(employees).where(eq(employees.companyId, companyId)).limit(1);
     return result[0]?.id || null;
@@ -13729,6 +13749,22 @@ var updateEmployee = /* @__PURE__ */ __name(async (c) => {
   });
   return c.json(result);
 }, "updateEmployee");
+var resetTemporaryPassword = /* @__PURE__ */ __name(async (c) => {
+  const companyId = c.get("companyId");
+  const employeeId = c.req.param("id");
+  const service = new EmployeeService(c.env.DB);
+  const result = await service.resetTemporaryPassword(companyId, employeeId);
+  if (!result) return c.json({ error: "Employee not found" }, 404);
+  await new AuditService(c.env.DB).log(companyId, {
+    actorId: c.get("employeeId"),
+    subjectId: employeeId,
+    action: `Reset temporary password for ${result.name} ${result.lastName}`.trim(),
+    module: "workforce",
+    severity: "warning",
+    ip: c.req.header("cf-connecting-ip")
+  });
+  return c.json(result);
+}, "resetTemporaryPassword");
 var deleteEmployee = /* @__PURE__ */ __name(async (c) => {
   const companyId = c.get("companyId");
   const employeeId = c.req.param("id");
@@ -16594,6 +16630,7 @@ adminRoutes.get("/employees/:id/audit-logs", adminOnly5, view3("workforce"), get
 adminRoutes.post("/employees", adminOnly5, create("workforce"), createEmployee);
 adminRoutes.put("/employees/:id", adminOnly5, edit2("workforce"), updateEmployee);
 adminRoutes.delete("/employees/:id", adminOnly5, del("workforce"), deleteEmployee);
+adminRoutes.post("/employees/:id/reset-temporary-password", adminOnly5, edit2("workforce"), resetTemporaryPassword);
 adminRoutes.post("/employees/:id/emergency-contacts", adminOnly5, edit2("workforce"), addEmergencyContact2);
 adminRoutes.delete("/employees/:id/emergency-contacts/:contactId", adminOnly5, edit2("workforce"), deleteEmergencyContact2);
 adminRoutes.post("/employees/:id/documents", adminOnly5, edit2("workforce"), addDocument);
@@ -17251,7 +17288,7 @@ var jsonError = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx)
 }, "jsonError");
 var middleware_miniflare3_json_error_default = jsonError;
 
-// .wrangler/tmp/bundle-NmhlHk/middleware-insertion-facade.js
+// .wrangler/tmp/bundle-l1eDsL/middleware-insertion-facade.js
 var __INTERNAL_WRANGLER_MIDDLEWARE__ = [
   middleware_ensure_req_body_drained_default,
   middleware_miniflare3_json_error_default
@@ -17283,7 +17320,7 @@ function __facade_invoke__(request, env, ctx, dispatch, finalMiddleware) {
 }
 __name(__facade_invoke__, "__facade_invoke__");
 
-// .wrangler/tmp/bundle-NmhlHk/middleware-loader.entry.ts
+// .wrangler/tmp/bundle-l1eDsL/middleware-loader.entry.ts
 var __Facade_ScheduledController__ = class ___Facade_ScheduledController__ {
   constructor(scheduledTime, cron, noRetry) {
     this.scheduledTime = scheduledTime;

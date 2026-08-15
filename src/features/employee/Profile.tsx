@@ -96,11 +96,15 @@ const SectionTitle = ({ icon: Icon, title, subtitle }: any) => (
   </div>
 );
 
-const Profile: React.FC = () => {
+interface ProfileProps {
+  initialTab?: string;
+}
+
+const Profile: React.FC<ProfileProps> = ({ initialTab }) => {
   const { user, updateUser } = useAuth();
   const isAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'HR_ADMIN';
-  
-  const [activeTab, setActiveTab] = useState("personal");
+
+  const [activeTab, setActiveTab] = useState(initialTab || "personal");
   const [editMode, setEditMode] = useState(false);
   const [showChangeRequestModal, setShowChangeRequestModal] = useState(false);
   const [changeRequestField, setChangeRequestField] = useState("");

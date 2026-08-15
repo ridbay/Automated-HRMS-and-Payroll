@@ -6,6 +6,7 @@ import {
   createEmployee,
   updateEmployee,
   deleteEmployee,
+  resetTemporaryPassword,
   addEmergencyContact,
   deleteEmergencyContact,
   addDocument,
@@ -163,6 +164,7 @@ adminRoutes.get("/employees/:id/audit-logs", adminOnly, view("workforce"), getAu
 adminRoutes.post("/employees", adminOnly, create("workforce"), createEmployee);
 adminRoutes.put("/employees/:id", adminOnly, edit("workforce"), updateEmployee);
 adminRoutes.delete("/employees/:id", adminOnly, del("workforce"), deleteEmployee);
+adminRoutes.post("/employees/:id/reset-temporary-password", adminOnly, edit("workforce"), resetTemporaryPassword);
 
 adminRoutes.post("/employees/:id/emergency-contacts", adminOnly, edit("workforce"), addEmergencyContact);
 adminRoutes.delete("/employees/:id/emergency-contacts/:contactId", adminOnly, edit("workforce"), deleteEmergencyContact);

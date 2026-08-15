@@ -131,6 +131,7 @@ export interface Employee {
   salaryHistory?: SalaryHistoryRecord[];
   performanceRating?: number;
   bankDetails?: BankDetails;
+  isPasswordChanged?: boolean;
 }
 
 export interface DepartmentMember {

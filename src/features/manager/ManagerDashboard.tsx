@@ -8,7 +8,6 @@ import {
   Briefcase,
   ChevronRight,
   Calendar,
-  MessageSquare,
   Plus,
   AlertCircle,
   Zap,
@@ -54,7 +53,6 @@ import {
   FileCheck,
   Umbrella,
   Save,
-  UserPlus,
 } from "lucide-react";
 import {
   BarChart,
@@ -70,12 +68,8 @@ import {
   AreaChart,
   Area,
 } from "recharts";
-import {
-  MOCK_EMPLOYEES,
-  MOCK_GOALS,
-  MOCK_LEAVE_BALANCES,
-} from "../../data/mocks";
 import { useNavigation } from "../../context/NavigationContext";
+import { useAuth } from "../../context/AuthContext";
 import {
   useTeamPendingLeaves,
   useUpdateTeamLeaveStatus,
@@ -84,6 +78,7 @@ import {
   useDepartments,
   useLocations,
   useMyDirectReports,
+  useMyTeamAttendanceToday,
   useTeamGoals,
   useAssignTeamGoal,
   useTeamPendingAssessments,
@@ -103,6 +98,7 @@ const ManagerDashboard: React.FC = () => {
   // STATE & DATA
   // -------------------------------------------------------------------------
   const { activeTab } = useNavigation();
+  const { user } = useAuth();
   const [activeSection, setActiveSection] = useState<
     "dashboard" | "team" | "approvals" | "performance" | "meetings"
   >("dashboard");
@@ -120,14 +116,16 @@ const ManagerDashboard: React.FC = () => {
   }, [activeTab]);
   const [viewingEmployee, setViewingEmployee] = useState<any>(null);
 
-  const teamMembers = MOCK_EMPLOYEES;
+  // Real direct reports — replaces the old hardcoded mock roster everywhere
+  // in this dashboard (team grid, presence widget, approval avatars, etc).
+  const { data: teamMembers = [] } = useMyDirectReports();
+  const { data: teamAttendanceToday = [] } = useMyTeamAttendanceToday();
 
   const { data: teamPendingLeaves = [] } = useTeamPendingLeaves();
   const updateLeaveStatus = useUpdateTeamLeaveStatus();
 
-  // Performance & Growth: direct reports, their goals, pending self-assessment
+  // Performance & Growth: direct reports' goals, pending self-assessment
   // reviews, and this manager's team rating distribution.
-  const { data: directReports = [] } = useMyDirectReports();
   const { data: teamGoals = [] } = useTeamGoals();
   const assignGoal = useAssignTeamGoal();
   const { data: teamPendingData } = useTeamPendingAssessments();
@@ -224,15 +222,12 @@ const ManagerDashboard: React.FC = () => {
     );
   };
 
-  const formatCurrency = (val: number) =>
-    new Intl.NumberFormat("en-NG", {
-      style: "currency",
-      currency: "NGN",
-    }).format(val);
-
+  // Real, manager-scoped pending leave requests (see LeaveService.getPendingTeamLeaveRequests).
+  // `impact` has no backing data yet — the card falls back gracefully.
+  // Expense/time-correction/requisition approval queues aren't backed by any
+  // schema in this app yet, so they're intentionally left out here rather
+  // than shown with fabricated, non-functional data.
   const approvalsData = {
-    // Real, manager-scoped pending leave requests (see LeaveService.getPendingTeamLeaveRequests).
-    // `balance`/`impact` have no backing data yet — the cards already fall back gracefully.
     leave: (teamPendingLeaves || []).map((r: any) => ({
       id: r.id,
       name: `${r.name} ${r.lastName || ""}`.trim(),
@@ -242,52 +237,25 @@ const ManagerDashboard: React.FC = () => {
       reason: r.reason,
       avatar: r.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(r.name || "Employee")}&background=random`,
     })),
-    expenses: [
-      {
-        id: "e1",
-        name: "Sarah Johnson",
-        cat: "Software",
-        amount: 150000.0,
-        date: "May 22",
-        desc: "Enterprise Cloud License",
-        budget: "Within Budget",
-        receipt: true,
-        avatar: teamMembers[0].avatar,
-      },
-    ],
-    time: [
-      {
-        id: "t1",
-        name: "James Wilson",
-        date: "May 20",
-        current: "Absent",
-        requested: "Worked from Home",
-        reason: "Internet outage at HQ",
-        avatar: teamMembers[3].avatar,
-      },
-    ],
-    requisition: [
-      {
-        id: "r1",
-        title: "Senior Product Designer",
-        dept: "Design",
-        budget: "₦1.2M - ₦1.8M",
-        urgency: "High",
-        justification: "To lead the ZenHR 3.0 mobile redesign.",
-        avatar: "https://i.pravatar.cc/150?u=hire",
-      },
-    ],
   };
 
-  const meetings = [
-    { id: 1, with: "Sarah Johnson", date: "Today, 2:00 PM", type: "1-on-1" },
-    {
-      id: 2,
-      with: "Design Team",
-      date: "Tomorrow, 10:00 AM",
-      type: "Weekly Sync",
-    },
-  ];
+  // No meeting-scheduling feature exists in the backend yet — the tab shows
+  // an honest empty state rather than fabricated 1-on-1s.
+  const meetings: { id: string; with: string; date: string; type: string }[] = [];
+
+  const pendingApprovalsCount =
+    teamPendingLeaves.length + pendingReviews.length + pendingPeerApprovals.length;
+
+  const presentTodayCount = teamAttendanceToday.filter((t: any) =>
+    ["present", "late", "clocked-out"].includes(t.status),
+  ).length;
+  const lateTodayCount = teamAttendanceToday.filter((t: any) => t.status === "late").length;
+  const presencePct = teamMembers.length > 0 ? Math.round((presentTodayCount / teamMembers.length) * 100) : null;
+
+  const openRequisitionsCount = myRequisitions.filter((r: any) => r.status === "Open" || r.status === "Pending Approval").length;
+
+  const currentHour = new Date().getHours();
+  const currentGreeting = currentHour < 12 ? "morning" : currentHour < 18 ? "afternoon" : "evening";
 
   // -------------------------------------------------------------------------
   // RENDER LARGGETS SECTIONS
@@ -302,9 +270,15 @@ const ManagerDashboard: React.FC = () => {
             Managerial Hub
           </h1>
           <p className="text-slate-500 font-medium">
-            Good morning, Marcus. You have{" "}
-            <b className="text-indigo-600">4 actions</b> requiring attention
-            today.
+            {`Good ${currentGreeting}, ${(user?.name || "there").split(" ")[0]}. `}
+            {pendingApprovalsCount > 0 ? (
+              <>
+                You have <b className="text-indigo-600">{pendingApprovalsCount}</b>{" "}
+                {pendingApprovalsCount === 1 ? "action" : "actions"} requiring attention today.
+              </>
+            ) : (
+              "You're all caught up — no pending actions today."
+            )}
           </p>
         </div>
         <div className="flex gap-2">
@@ -312,8 +286,10 @@ const ManagerDashboard: React.FC = () => {
             onClick={() => setActiveSection("approvals")}
             className="px-6 py-3 bg-rose-50 text-rose-600 rounded-2xl font-black text-xs uppercase tracking-widest border border-rose-100 flex items-center gap-2 relative"
           >
-            <ListChecks size={16} /> 3 Approvals
-            <span className="absolute -top-1 -right-1 w-3 h-3 bg-rose-500 rounded-full animate-ping" />
+            <ListChecks size={16} /> {pendingApprovalsCount} Approvals
+            {pendingApprovalsCount > 0 && (
+              <span className="absolute -top-1 -right-1 w-3 h-3 bg-rose-500 rounded-full animate-ping" />
+            )}
           </button>
           <button
             onClick={() => setActiveSection("meetings")}
@@ -330,35 +306,35 @@ const ManagerDashboard: React.FC = () => {
           {
             label: "Team Size",
             val: teamMembers.length,
-            sub: "4 Active, 2 Remote",
+            sub: `${presentTodayCount} present today`,
             icon: <Users className="text-indigo-600" />,
             bg: "bg-indigo-50",
           },
           {
             label: "Pending",
-            val: "4",
+            val: pendingApprovalsCount,
             sub: "Approvals Needed",
             icon: <CheckCircle2 className="text-emerald-600" />,
             bg: "bg-emerald-50",
           },
           {
             label: "Presence",
-            val: "94%",
-            sub: "2 Late Arrivals",
+            val: presencePct === null ? "—" : `${presencePct}%`,
+            sub: lateTodayCount > 0 ? `${lateTodayCount} Late Arrivals` : "No late arrivals",
             icon: <Clock className="text-amber-600" />,
             bg: "bg-amber-50",
           },
           {
             label: "Avg Rating",
-            val: "4.2",
-            sub: "Sarah J. (Top)",
+            val: teamAnalytics?.avgRating ?? "—",
+            sub: teamAnalytics?.avgRating ? "This cycle" : "No ratings yet",
             icon: <Trophy className="text-violet-600" />,
             bg: "bg-violet-50",
           },
           {
             label: "Hiring",
-            val: "1",
-            sub: "3 Candidates",
+            val: openRequisitionsCount,
+            sub: `${myRequisitions.length} total requests`,
             icon: <Briefcase className="text-rose-600" />,
             bg: "bg-rose-50",
           },
@@ -451,36 +427,61 @@ const ManagerDashboard: React.FC = () => {
             <h3 className="text-xl font-black text-slate-800 tracking-tight mb-8">
               Team Presence Today
             </h3>
-            <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
-              {teamMembers.map((m) => (
-                <div
-                  key={m.id}
-                  className="min-w-[80px] flex flex-col items-center"
-                >
-                  <div className="relative">
-                    <img
-                      src={m.avatar}
-                      className="w-16 h-16 rounded-2xl object-cover mb-2"
-                    />
+            {teamAttendanceToday.length === 0 ? (
+              <div className="py-8 text-center text-slate-400">
+                <Users size={28} className="mx-auto mb-2 opacity-40" />
+                <p className="text-xs font-bold">No direct reports yet.</p>
+              </div>
+            ) : (
+              <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
+                {teamAttendanceToday.map((m: any) => {
+                  const statusMeta: Record<string, { dot: string; label: string }> = {
+                    present: { dot: "bg-emerald-500", label: "Present" },
+                    late: { dot: "bg-amber-500", label: "Late" },
+                    "clocked-out": { dot: "bg-slate-400", label: "Done" },
+                    absent: { dot: "bg-rose-400", label: "Absent" },
+                  };
+                  const meta = statusMeta[m.status] || statusMeta.absent;
+                  return (
                     <div
-                      className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white ${m.status === "active" ? "bg-emerald-500" : "bg-amber-500"}`}
-                    />
-                  </div>
-                  <p className="text-xs font-bold text-slate-700 text-center leading-tight">
-                    {m.name.split(" ")[0]}
-                  </p>
-                  <p className="text-[9px] font-bold text-slate-400 uppercase">
-                    {m.status === "active" ? "Office" : "Remote"}
-                  </p>
-                </div>
-              ))}
-              <button className="min-w-[80px] h-[100px] rounded-2xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400 hover:text-indigo-600 hover:border-indigo-200 transition-colors">
-                <CalendarDays size={24} />
-                <span className="text-[9px] font-black uppercase mt-2">
-                  View Schedule
-                </span>
-              </button>
-            </div>
+                      key={m.employeeId}
+                      className="min-w-[80px] flex flex-col items-center"
+                    >
+                      <div className="relative">
+                        {m.avatar ? (
+                          <img
+                            src={m.avatar}
+                            className="w-16 h-16 rounded-2xl object-cover mb-2"
+                          />
+                        ) : (
+                          <div className="w-16 h-16 rounded-2xl mb-2 bg-indigo-100 text-indigo-600 flex items-center justify-center font-black text-lg">
+                            {m.name?.[0]?.toUpperCase()}
+                          </div>
+                        )}
+                        <div
+                          className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white ${meta.dot}`}
+                        />
+                      </div>
+                      <p className="text-xs font-bold text-slate-700 text-center leading-tight">
+                        {m.name?.split(" ")[0]}
+                      </p>
+                      <p className="text-[9px] font-bold text-slate-400 uppercase">
+                        {meta.label}
+                      </p>
+                    </div>
+                  );
+                })}
+                <button
+                  onClick={() => setActiveSection("team")}
+                  className="min-w-[80px] h-[100px] rounded-2xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400 hover:text-indigo-600 hover:border-indigo-200 transition-colors"
+                >
+                  <CalendarDays size={24} />
+                  <span className="text-[9px] font-black uppercase mt-2">
+                    View Team
+                  </span>
+                </button>
+              </div>
+            )}
           </section>
         </div>
 
@@ -546,25 +547,41 @@ const ManagerDashboard: React.FC = () => {
           {/* Performance Snapshot */}
           <section className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm">
             <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-6 flex items-center gap-2">
-              <Trophy size={18} className="text-indigo-600" /> Top Performer
+              <Trophy size={18} className="text-indigo-600" /> Team Pulse
             </h3>
-            <div className="flex items-center gap-4">
-              <img
-                src={teamMembers[0].avatar}
-                className="w-16 h-16 rounded-2xl object-cover"
-              />
-              <div>
-                <p className="text-lg font-black text-slate-800">
-                  Sarah Johnson
-                </p>
-                <p className="text-xs text-slate-500 font-bold">
-                  Exceeded Q3 Goals
-                </p>
+            {teamAnalytics?.avgRating ? (
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                  <Trophy size={28} />
+                </div>
+                <div>
+                  <p className="text-lg font-black text-slate-800">
+                    {teamAnalytics.avgRating} / 5.0
+                  </p>
+                  <p className="text-xs text-slate-500 font-bold">
+                    Team average rating this cycle
+                  </p>
+                </div>
+                <button
+                  onClick={() => setActiveSection("performance")}
+                  className="ml-auto text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:underline"
+                >
+                  Details
+                </button>
               </div>
-              <div className="ml-auto">
-                <span className="text-2xl font-black text-indigo-600">4.8</span>
+            ) : (
+              <div className="text-center py-4">
+                <p className="text-xs text-slate-400 font-bold">
+                  No rated reviews yet this cycle.
+                </p>
+                <button
+                  onClick={() => setActiveSection("performance")}
+                  className="mt-3 text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:underline"
+                >
+                  Go to Performance
+                </button>
               </div>
-            </div>
+            )}
           </section>
         </div>
       </div>
@@ -582,65 +599,91 @@ const ManagerDashboard: React.FC = () => {
             Managing performance and growth for {teamMembers.length} members.
           </p>
         </div>
-        <button className="px-8 py-3.5 bg-indigo-600 text-white rounded-[1.5rem] font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-100 flex items-center gap-2">
-          <UserPlus size={18} /> Add Team Member
-        </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
-        {teamMembers.map((emp) => (
-          <motion.div
-            key={emp.id}
-            whileHover={{ y: -8 }}
-            onClick={() => setViewingEmployee(emp)}
-            className="bg-white p-8 rounded-[3.5rem] border border-slate-200 shadow-sm hover:shadow-xl transition-all cursor-pointer relative group overflow-hidden"
-          >
-            <div
-              className={`absolute top-0 left-0 w-full h-24 ${emp.status === "active" ? "bg-emerald-50" : "bg-amber-50"} transition-transform group-hover:scale-x-110`}
-            />
-            <div className="relative mb-6 pt-4">
-              <div className="relative mx-auto w-24 h-24">
-                <img
-                  src={emp.avatar}
-                  className="w-full h-full rounded-[2rem] object-cover border-4 border-white shadow-lg"
-                />
+      {teamMembers.length === 0 ? (
+        <div className="p-16 text-center bg-slate-50 rounded-[3rem] border border-dashed border-slate-200">
+          <Users className="mx-auto w-16 h-16 text-slate-300 mb-4" />
+          <h4 className="text-slate-400 font-bold uppercase tracking-widest">
+            No direct reports yet
+          </h4>
+          <p className="text-xs text-slate-400 mt-2">
+            Employees assigned to you as their manager will show up here.
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+          {teamMembers.map((emp: any) => {
+            const attendance = teamAttendanceToday.find((t: any) => t.employeeId === emp.id);
+            const isPresent = attendance ? ["present", "late", "clocked-out"].includes(attendance.status) : false;
+            const empGoals = teamGoals.filter((g: any) => g.employeeId === emp.id);
+            const avgProgress = empGoals.length
+              ? Math.round(empGoals.reduce((sum: number, g: any) => sum + (g.progress || 0), 0) / empGoals.length)
+              : null;
+            return (
+              <motion.div
+                key={emp.id}
+                whileHover={{ y: -8 }}
+                onClick={() => setViewingEmployee(emp)}
+                className="bg-white p-8 rounded-[3.5rem] border border-slate-200 shadow-sm hover:shadow-xl transition-all cursor-pointer relative group overflow-hidden"
+              >
                 <div
-                  className={`absolute -bottom-1 -right-1 w-6 h-6 border-2 border-white rounded-lg flex items-center justify-center shadow-md ${emp.status === "active" ? "bg-emerald-500" : "bg-amber-500"}`}
-                >
-                  <ShieldCheck size={12} className="text-white" />
+                  className={`absolute top-0 left-0 w-full h-24 ${isPresent ? "bg-emerald-50" : "bg-amber-50"} transition-transform group-hover:scale-x-110`}
+                />
+                <div className="relative mb-6 pt-4">
+                  <div className="relative mx-auto w-24 h-24">
+                    {emp.avatar ? (
+                      <img
+                        src={emp.avatar}
+                        className="w-full h-full rounded-[2rem] object-cover border-4 border-white shadow-lg"
+                      />
+                    ) : (
+                      <div className="w-full h-full rounded-[2rem] border-4 border-white shadow-lg bg-indigo-100 text-indigo-600 flex items-center justify-center font-black text-2xl">
+                        {emp.name?.[0]?.toUpperCase()}
+                      </div>
+                    )}
+                    <div
+                      className={`absolute -bottom-1 -right-1 w-6 h-6 border-2 border-white rounded-lg flex items-center justify-center shadow-md ${isPresent ? "bg-emerald-500" : "bg-amber-500"}`}
+                    >
+                      <ShieldCheck size={12} className="text-white" />
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-            <div className="text-center">
-              <h3 className="text-lg font-black text-slate-800 tracking-tight leading-none mb-1">
-                {emp.name}
-              </h3>
-              <p className="text-[9px] font-black text-indigo-600 uppercase tracking-widest mb-6">
-                {emp.role}
-              </p>
+                <div className="text-center">
+                  <h3 className="text-lg font-black text-slate-800 tracking-tight leading-none mb-1">
+                    {emp.name} {emp.lastName}
+                  </h3>
+                  <p className="text-[9px] font-black text-indigo-600 uppercase tracking-widest mb-6">
+                    {emp.role}
+                  </p>
 
-              <div className="space-y-3 mb-8">
-                <div className="flex justify-between items-center text-[10px] font-bold text-slate-400 uppercase">
-                  <span>Performance</span>
-                  <span className="text-slate-800 font-black">4.8/5.0</span>
-                </div>
-                <div className="w-full h-1.5 bg-slate-50 rounded-full overflow-hidden">
-                  <div className="h-full bg-emerald-500 w-[92%]" />
-                </div>
-              </div>
+                  <div className="space-y-3 mb-8">
+                    <div className="flex justify-between items-center text-[10px] font-bold text-slate-400 uppercase">
+                      <span>Goal Progress</span>
+                      <span className="text-slate-800 font-black">
+                        {avgProgress === null ? "No goals" : `${avgProgress}%`}
+                      </span>
+                    </div>
+                    <div className="w-full h-1.5 bg-slate-50 rounded-full overflow-hidden">
+                      <div className="h-full bg-emerald-500" style={{ width: `${avgProgress ?? 0}%` }} />
+                    </div>
+                  </div>
 
-              <div className="flex gap-2">
-                <button className="flex-1 py-2.5 bg-slate-50 text-slate-500 hover:text-indigo-600 rounded-xl text-[9px] font-black uppercase tracking-widest transition-colors">
-                  Review
-                </button>
-                <button className="p-2.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white rounded-xl transition-all shadow-sm">
-                  <MessageSquare size={14} />
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        ))}
-      </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setViewingEmployee(emp);
+                    }}
+                    className="w-full py-2.5 bg-slate-50 text-slate-500 hover:text-indigo-600 rounded-xl text-[9px] font-black uppercase tracking-widest transition-colors"
+                  >
+                    View Details
+                  </button>
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 
@@ -829,11 +872,19 @@ const ManagerDashboard: React.FC = () => {
             Manage syncs and performance discussions.
           </p>
         </div>
-        <button className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl">
-          + New Meeting
-        </button>
       </div>
 
+      {meetings.length === 0 ? (
+        <div className="p-16 text-center bg-slate-50 rounded-[3rem] border border-dashed border-slate-200">
+          <Video className="mx-auto w-16 h-16 text-slate-300 mb-4" />
+          <h4 className="text-slate-400 font-bold uppercase tracking-widest">
+            No meetings scheduled
+          </h4>
+          <p className="text-xs text-slate-400 mt-2">
+            Sync scheduling isn't wired up yet — check back soon.
+          </p>
+        </div>
+      ) : (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         {meetings.map((m) => (
           <div
@@ -869,6 +920,7 @@ const ManagerDashboard: React.FC = () => {
           </div>
         ))}
       </div>
+      )}
     </div>
   );
 
@@ -921,7 +973,6 @@ const ManagerDashboard: React.FC = () => {
           {activeSection === "approvals" && (
             <ApprovalCenter
               approvals={approvalsData}
-              formatCurrency={formatCurrency}
               onLeaveAction={(id, status) => updateLeaveStatus.mutate({ id, status })}
               isLeaveActionPending={updateLeaveStatus.isPending}
             />
@@ -937,6 +988,8 @@ const ManagerDashboard: React.FC = () => {
           <EmployeeDetailModal
             employee={viewingEmployee}
             onClose={() => setViewingEmployee(null)}
+            goals={teamGoals.filter((g: any) => g.employeeId === viewingEmployee.id)}
+            attendanceToday={teamAttendanceToday.find((t: any) => t.employeeId === viewingEmployee.id)}
           />
         )}
       </AnimatePresence>
@@ -1142,7 +1195,7 @@ const ManagerDashboard: React.FC = () => {
                     className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-800"
                   >
                     <option value="">Select a direct report…</option>
-                    {directReports.map((r: any) => (
+                    {teamMembers.map((r: any) => (
                       <option key={r.id} value={r.id}>{r.name} {r.lastName}</option>
                     ))}
                   </select>

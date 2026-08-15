@@ -275,6 +275,29 @@ export const useDeleteAdminEmployee = () => {
   });
 };
 
+// Issues a brand-new temporary password for an employee (e.g. the admin lost
+// the one shown at creation, or the employee is locked out) and invalidates
+// the old one. Response shape mirrors createEmployee's: { temporaryPassword, ... }.
+export const useResetTemporaryPassword = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (employeeId: string) => {
+      const res = await fetchWithTenant(`${API_URL}/admin/employees/${employeeId}/reset-temporary-password`, {
+        method: 'POST',
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to reset temporary password');
+      }
+      return res.json();
+    },
+    onSuccess: (_data, employeeId) => {
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+      queryClient.invalidateQueries({ queryKey: ['employee', employeeId] });
+    },
+  });
+};
+
 export const useEmployeeProfile = (id: string) => {
   return useQuery({
     queryKey: ['employee', id],

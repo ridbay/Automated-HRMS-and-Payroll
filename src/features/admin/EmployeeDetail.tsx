@@ -41,8 +41,9 @@ import {
   Save,
   X,
   XCircle,
+  KeyRound,
 } from "lucide-react";
-import { getDocumentDownloadUrl, useEmployeeLeaveBalances, useUpdateLeaveBalances, useEmployeeProfile, useEmployeeDirectReports, useAddAdminEmergencyContact, useDeleteAdminEmergencyContact, useUploadEmployeeDocument, useDeleteEmployeeDocument, useUpdateAdminEmployee, useEmployeeAssessments, useCreateAssessment, useEmployeePayslips, useEmployeeBenefits, useUpdateEmployeeBenefits, useEmployeeTrainings, useAddEmployeeTraining, useEmployeeLeaveRequests, useEmployeeAuditLogs, useEmployeeAssets, useAddEmployeeAsset, useDeleteEmployeeAsset, useReviewCycles } from "../../api/client";
+import { getDocumentDownloadUrl, useEmployeeLeaveBalances, useUpdateLeaveBalances, useEmployeeProfile, useEmployeeDirectReports, useAddAdminEmergencyContact, useDeleteAdminEmergencyContact, useUploadEmployeeDocument, useDeleteEmployeeDocument, useUpdateAdminEmployee, useEmployeeAssessments, useCreateAssessment, useEmployeePayslips, useEmployeeBenefits, useUpdateEmployeeBenefits, useEmployeeTrainings, useAddEmployeeTraining, useEmployeeLeaveRequests, useEmployeeAuditLogs, useEmployeeAssets, useAddEmployeeAsset, useDeleteEmployeeAsset, useReviewCycles, useResetTemporaryPassword } from "../../api/client";
 import { usePopup } from "../../components/PopupProvider";
 import { Employee } from "../../types/index";
 import { MOCK_ASSETS } from "../../data/mocks";
@@ -67,6 +68,8 @@ const EmployeeDetail: React.FC<Props> = ({ employee: initialEmployee, onBack }) 
   const uploadDocMutation = useUploadEmployeeDocument();
   const deleteDocMutation = useDeleteEmployeeDocument();
   const updateEmployeeMutation = useUpdateAdminEmployee();
+  const resetTemporaryPasswordMutation = useResetTemporaryPassword();
+  const [resetPassword, setResetPassword] = useState<string | null>(null);
   
   const { data: leaveBalancesData } = useEmployeeLeaveBalances(initialEmployee.id);
   const updateLeaveBalancesMutation = useUpdateLeaveBalances();
@@ -145,6 +148,22 @@ const EmployeeDetail: React.FC<Props> = ({ employee: initialEmployee, onBack }) 
 
     return { percent, nextStep };
   }, [employee]);
+
+  const handleResetTemporaryPassword = async () => {
+    const confirmed = await confirm(
+      employee.isPasswordChanged
+        ? `${employee.name} already has an active password. Resetting will invalidate it and force them to sign in with a new temporary one — continue?`
+        : `Generate a new temporary password for ${employee.name}? The old one (if not yet used) will stop working.`
+    );
+    if (!confirmed) return;
+
+    try {
+      const result = await resetTemporaryPasswordMutation.mutateAsync(employee.id);
+      setResetPassword(result.temporaryPassword);
+    } catch (err: any) {
+      await alert(err.message || "Failed to reset temporary password.");
+    }
+  };
 
   const tabs = [
     { id: "personal", label: "Personal", icon: <User size={16} /> },
@@ -246,6 +265,14 @@ const EmployeeDetail: React.FC<Props> = ({ employee: initialEmployee, onBack }) 
               <div className="flex gap-3">
                 <button className="px-8 py-4 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-100 hover:scale-105 transition-all">
                   Manage Employee
+                </button>
+                <button
+                  onClick={handleResetTemporaryPassword}
+                  disabled={resetTemporaryPasswordMutation.isPending}
+                  title="Reset Temporary Password"
+                  className="p-4 bg-slate-50 border border-slate-100 text-slate-400 rounded-2xl hover:text-indigo-600 transition-all disabled:opacity-50"
+                >
+                  <KeyRound size={20} />
                 </button>
                 <button className="p-4 bg-slate-50 border border-slate-100 text-slate-400 rounded-2xl hover:text-indigo-600 transition-all">
                   <MoreHorizontal size={20} />
@@ -1284,6 +1311,50 @@ const EmployeeDetail: React.FC<Props> = ({ employee: initialEmployee, onBack }) 
             </>
           )}
         </motion.div>
+      </AnimatePresence>
+
+      {/* Reset Temporary Password Modal */}
+      <AnimatePresence>
+        {resetPassword && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="bg-white rounded-[3rem] p-10 max-w-lg w-full shadow-2xl"
+            >
+              <div className="w-20 h-20 bg-indigo-50 text-indigo-500 rounded-full flex items-center justify-center mb-6 mx-auto">
+                <KeyRound size={40} />
+              </div>
+              <h3 className="text-2xl font-black text-center mb-2 text-slate-800 tracking-tight">Password Reset</h3>
+              <p className="text-sm font-medium text-slate-500 text-center mb-8">
+                A new temporary password has been generated for {employee.name}. Their previous password no longer works.
+              </p>
+
+              <div className="bg-slate-50 border border-slate-100 rounded-2xl p-6 mb-8 text-center space-y-4">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Temporary Password</p>
+                <p className="text-3xl font-mono font-black text-indigo-600 select-all tracking-tight">
+                  {resetPassword}
+                </p>
+                <p className="text-xs font-bold text-amber-600 bg-amber-50 py-2 rounded-lg">
+                  Please securely share this with the employee. They will be forced to change it on their next login.
+                </p>
+              </div>
+
+              <button
+                onClick={() => setResetPassword(null)}
+                className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-slate-800 transition-colors"
+              >
+                Done
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
       </AnimatePresence>
     </div>
   );

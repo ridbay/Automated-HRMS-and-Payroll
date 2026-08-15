@@ -6,8 +6,8 @@ account_id = "3f509287c54b566a4a6fba51ec5bc842"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "zenhr-d1"
-database_id = "869a6a84-f113-4772-8502-7560e4b6d764"
+database_name = "zenhr-prod-db"
+database_id = "181fd234-a5d0-4c0a-a226-387ba3625bc9"
 migrations_dir = "drizzle"
 
 # R2 Configuration commented out because it requires activation in the Cloudflare Dashboard

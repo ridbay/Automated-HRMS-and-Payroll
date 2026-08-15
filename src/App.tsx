@@ -6,7 +6,9 @@ import Dashboard from "./features/core/Dashboard";
 import HRDashboard from "./features/admin/HRDashboard";
 import Workforce from "./features/admin/Workforce";
 import Payroll from "./features/payroll/Payroll";
+import PayrollDashboard from "./features/payroll/PayrollDashboard";
 import Recruitment from "./features/recruitment/Recruitment";
+import RecruiterDashboard from "./features/recruitment/RecruiterDashboard";
 import RecruitmentAnalytics from "./features/recruitment/RecruitmentAnalytics";
 import Attendance from "./features/employee/Attendance";
 import Performance from "./features/employee/Performance";
@@ -44,7 +46,11 @@ const AppContent: React.FC = () => {
         setActiveTab("portal");
       } else if (user.role === "MANAGER") {
         setActiveTab("manager-dashboard");
+      } else if (user.role === "RECRUITER") {
+        setActiveTab("recruiter-dashboard");
       } else {
+        // HR_ADMIN, SUPER_ADMIN, PAYROLL_OFFICER all land on "dashboard" —
+        // renderContent below picks the right dashboard component per role.
         setActiveTab("dashboard");
       }
     }
@@ -58,9 +64,14 @@ const AppContent: React.FC = () => {
         if (user.role === "HR_ADMIN" || user.role === "SUPER_ADMIN") {
           return <HRDashboard />;
         }
+        if (user.role === "PAYROLL_OFFICER") {
+          return <PayrollDashboard />;
+        }
         return <Dashboard />;
       case "manager-dashboard":
         return <ManagerDashboard />;
+      case "recruiter-dashboard":
+        return <RecruiterDashboard />;
       case "workforce":
         if (user.role === "MANAGER") return <ManagerDashboard />;
         return <Workforce />;
@@ -71,6 +82,14 @@ const AppContent: React.FC = () => {
       case "payroll":
         return <Payroll />;
       case "recruitment":
+      case "requisitions":
+      case "pipeline":
+      case "candidates":
+      case "pool":
+      case "interviews":
+      case "offers":
+        // These all live inside the Recruitment hiring tool, which has its
+        // own internal sub-navigation.
         return <Recruitment />;
       case "analytics":
         return <RecruitmentAnalytics />;
@@ -107,6 +126,8 @@ const AppContent: React.FC = () => {
         return <EmployeePortal />;
       case "profile":
         return <Profile />;
+      case "documents":
+        return <Profile initialTab="documents" />;
       case "help":
         return <Support />;
       case "settings":

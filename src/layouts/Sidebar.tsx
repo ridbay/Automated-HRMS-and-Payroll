@@ -90,6 +90,11 @@ const Sidebar: React.FC = () => {
     {
       name: "Hiring Dashboard",
       icon: <LayoutGrid size={20} />,
+      path: "recruiter-dashboard",
+    },
+    {
+      name: "Hiring Tool",
+      icon: <Briefcase size={20} />,
       path: "recruitment",
     },
     {
