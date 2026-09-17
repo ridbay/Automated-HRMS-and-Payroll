@@ -1,3 +1,8 @@
+/* Tailwind CSS — compiled at build time via PostCSS (replaces the Play CDN) */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 /* Global styles */
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap");
 
@@ -6,3 +11,4 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+

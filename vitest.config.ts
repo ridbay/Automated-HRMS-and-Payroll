@@ -10,5 +10,8 @@ export default defineConfig({
     css: false,
     include: ['src/**/*.test.{ts,tsx}'],
     exclude: ['api/**', '.kilo/**', 'node_modules/**'],
+    typecheck: {
+      tsconfig: './src/test/tsconfig.json',
+    },
   },
 });
