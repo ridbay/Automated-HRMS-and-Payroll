@@ -17,13 +17,13 @@ export const updateLeaveStatus = async (c: Context<AppEnv>) => {
   const companyId = c.get('companyId') as string;
   const requestId = c.req.param('id') as string;
   const payload = await c.req.json();
-  const managerId = c.req.header('x-employee-id') as string; // Admin who is approving
-  
+  const managerId = c.get('employeeId') as string; // Admin who is approving — from the verified JWT, never a client header
+
   const leaveService = new LeaveService(c.env.DB);
-  
+
   const updated = await leaveService.updateLeaveRequestStatus(
-    companyId, 
-    requestId, 
+    companyId,
+    requestId,
     {
       status: payload.status,
       days: payload.days,
@@ -31,6 +31,10 @@ export const updateLeaveStatus = async (c: Context<AppEnv>) => {
       managerId
     }
   );
+
+  if (!updated) {
+    return c.json({ error: 'Leave request not found, or it has already been decided' }, 409);
+  }
 
   if (updated && (payload.status === 'approved' || payload.status === 'rejected')) {
     new EmployeeService(c.env.DB)

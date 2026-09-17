@@ -1,24 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8787';
-const MOCK_COMPANY_ID = 'comp-1234'; // Simulated logged-in tenant
-
-const fetchWithTenant = async (url: string, options: RequestInit = {}) => {
-  const token = localStorage.getItem('zenhr_token');
-  const headers: Record<string, string> = {
-    ...((options.headers as Record<string, string>) || {}),
-    'x-company-id': MOCK_COMPANY_ID,
-  };
-
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-
-  return fetch(url, {
-    ...options,
-    headers,
-  });
-};
+import { API_URL, fetchWithTenant } from './http';
 
 // ---------------- Admin Survey Fetchers ----------------
 

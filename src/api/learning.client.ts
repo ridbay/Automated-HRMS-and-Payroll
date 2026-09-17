@@ -1,21 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8787';
-const MOCK_COMPANY_ID = 'comp-1234';
-
-const fetchWithTenant = async (url: string, options: RequestInit = {}) => {
-  const token = localStorage.getItem('zenhr_token');
-  const headers: Record<string, string> = {
-    ...((options.headers as Record<string, string>) || {}),
-    'x-company-id': MOCK_COMPANY_ID,
-  };
-
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-
-  return fetch(url, { ...options, headers });
-};
+import { API_URL, fetchWithTenant } from './http';
 
 // ---------------- Admin LMS Fetchers ----------------
 
@@ -44,6 +28,31 @@ export const deleteCourse = async (courseId: string) => {
   if (!res.ok) throw new Error('Failed to delete course');
   const body = await res.json();
   return body;
+};
+
+export const assignCourse = async ({ courseId, employeeIds }: { courseId: string; employeeIds: string[] }) => {
+  const res = await fetchWithTenant(`${API_URL}/admin/courses/${courseId}/assign`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ employeeIds }),
+  });
+  if (!res.ok) {
+    let message = 'Failed to assign course';
+    try {
+      const body = await res.json();
+      if (body?.error) message = body.error;
+    } catch { /* non-JSON error body */ }
+    throw new Error(message);
+  }
+  const body = await res.json();
+  return body.data;
+};
+
+export const fetchCourseEnrollments = async (courseId: string) => {
+  const res = await fetchWithTenant(`${API_URL}/admin/courses/${courseId}/enrollments`);
+  if (!res.ok) throw new Error('Failed to fetch course enrollments');
+  const body = await res.json();
+  return body.data;
 };
 
 // ---------------- Employee LMS Fetchers ----------------
@@ -92,6 +101,24 @@ export const useDeleteCourse = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-courses'] });
     },
+  });
+};
+
+export const useAssignCourse = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: assignCourse,
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['course-enrollments', variables.courseId] });
+    },
+  });
+};
+
+export const useCourseEnrollments = (courseId: string | null) => {
+  return useQuery({
+    queryKey: ['course-enrollments', courseId],
+    queryFn: () => fetchCourseEnrollments(courseId as string),
+    enabled: !!courseId,
   });
 };
 

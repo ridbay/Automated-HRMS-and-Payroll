@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { Briefcase, MapPin, ArrowRight, ArrowLeft, Loader2 } from "lucide-react";
-import { usePublicCareers, usePublicPosition } from "../../api/client";
+import { usePublicCareers, usePublicPosition, resolveCompanyLogoUrl } from "../../api/client";
 import JobApplicationForm from "./JobApplicationForm";
 
 interface Props {
@@ -41,13 +41,14 @@ const CareersPage: React.FC<Props> = ({ companyIdentifier, initialRequisitionId 
   }
 
   const { company, positions } = listData;
+  const logoUrl = resolveCompanyLogoUrl(company.id, company.logoUrl);
 
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="bg-white border-b border-slate-100">
         <div className="max-w-5xl mx-auto px-6 py-10 flex items-center gap-5">
-          {company.logoUrl ? (
-            <img src={company.logoUrl} alt={company.name} className="w-14 h-14 rounded-2xl object-cover shadow-sm" />
+          {logoUrl ? (
+            <img src={logoUrl} alt={company.name} className="w-14 h-14 rounded-2xl object-cover shadow-sm" />
           ) : (
             <div className="w-14 h-14 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-sm">
               <Briefcase size={24} />

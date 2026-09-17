@@ -11,7 +11,7 @@
  */
 
 // Shared HTTP primitives
-export { API_URL, fetchWithTenant } from './http';
+export { API_URL, fetchWithTenant, resolveCompanyLogoUrl } from './http';
 
 // Auth
 export {
@@ -111,7 +111,6 @@ export {
 
 // Leave
 export {
-  useLeaveRequests,
   useMyLeave,
   useApplyLeave,
   useTeamLeaves,
@@ -283,6 +282,7 @@ export {
   useDeleteApiKey,
   useCompany,
   useUpdateCompany,
+  useUploadCompanyLogo,
   useDepartments,
   useCreateDepartment,
   useDeleteDepartment,
@@ -307,6 +307,9 @@ export {
   useConnectSlack,
   useDisconnectSlack,
   useTestSlack,
+  useConnectMailgun,
+  useDisconnectMailgun,
+  useTestMailgun,
   useIntegrationEvents,
   useWorkflows,
   useUpdateWorkflow,

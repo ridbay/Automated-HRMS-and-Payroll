@@ -16,6 +16,9 @@ describe('Payroll Service', () => {
       update: vi.fn().mockReturnThis(),
       set: vi.fn().mockReturnThis(),
       delete: vi.fn().mockReturnThis(),
+      // Default: the compare-and-swap UPDATE...WHERE status=X...RETURNING always
+      // "wins" the race unless a test overrides it with .mockResolvedValueOnce([]).
+      returning: vi.fn().mockResolvedValue([{ id: 'RUN-1' }]),
       batch: vi.fn().mockResolvedValue([]),
       then: function(resolve: any) { resolve([]); },
       query: {
@@ -77,6 +80,64 @@ describe('Payroll Service', () => {
       const runPaid = await service.markRunPaid('comp-1', 'RUN-1');
       expect(mockDb.update).toHaveBeenCalled();
       expect(mockDb.set).toHaveBeenCalledWith(expect.objectContaining({ status: 'paid' }));
+    });
+
+    it('markRunPaid refuses to double-process when it loses the compare-and-swap race', async () => {
+      mockDb.query.payrollRuns.findFirst.mockResolvedValueOnce({ id: 'RUN-1', status: 'approved', payslips: [] });
+      // Simulate a concurrent mark-paid call having already flipped the status:
+      // the CAS UPDATE...WHERE status='approved'...RETURNING affects 0 rows.
+      mockDb.returning.mockResolvedValueOnce([]);
+
+      await expect(service.markRunPaid('comp-1', 'RUN-1')).rejects.toThrow(
+        'Run is already being processed or has already been paid'
+      );
+    });
+
+    it('approveRun refuses to apply when it loses the compare-and-swap race', async () => {
+      mockDb.query.payrollRuns.findFirst.mockResolvedValueOnce({ id: 'RUN-1', status: 'pending_approval' });
+      mockDb.returning.mockResolvedValueOnce([]);
+
+      await expect(service.approveRun('comp-1', 'RUN-1', 'hr-1')).rejects.toThrow(
+        'Run status changed before this approval could be applied'
+      );
+    });
+  });
+
+  describe('submitRun guards', () => {
+    it('rejects submission when a non-rejected run already exists for the period', async () => {
+      mockDb.query.payrollRuns.findFirst.mockResolvedValueOnce({ id: 'RUN-OLD', status: 'pending_approval' });
+
+      await expect(
+        service.submitRun('comp-1', 'hr-1', { periodMonth: 10, periodYear: 2023 })
+      ).rejects.toThrow(/already exists/);
+    });
+
+    it('allows re-submission for a period whose only prior run was rejected', async () => {
+      mockDb.query.payrollRuns.findFirst
+        .mockResolvedValueOnce({ id: 'RUN-OLD', status: 'rejected' }) // duplicate-period check
+        .mockResolvedValueOnce({ id: 'RUN-NEW', periodMonth: 10, periodYear: 2023, payslips: [] }); // getRun() after insert
+      mockDb.query.employees.findMany.mockResolvedValueOnce([
+        { id: 'emp-1', name: 'John', lastName: 'Doe', status: 'active', salary: 1200000, bankName: 'GTB', accountNumber: '123', pfa: 'PFA', tin: 'TIN' },
+      ]);
+      mockDb.query.payrollSettings.findFirst.mockResolvedValueOnce({ companyId: 'comp-1', prorationEnabled: false, paymentDay: 25 });
+
+      const result = await service.submitRun('comp-1', 'hr-1', { periodMonth: 10, periodYear: 2023 });
+      expect(result).toBeDefined();
+      expect(mockDb.insert).toHaveBeenCalled();
+    });
+
+    it('rejects submission when a red-severity exception exists (e.g. missing bank details)', async () => {
+      mockDb.query.payrollRuns.findFirst.mockResolvedValueOnce(null); // no existing run
+      mockDb.query.employees.findMany.mockResolvedValueOnce([
+        { id: 'emp-1', name: 'John', lastName: 'Doe', status: 'active' }, // no salary, no bank -> red exceptions
+      ]);
+      mockDb.query.payrollSettings.findFirst.mockResolvedValueOnce({ companyId: 'comp-1', prorationEnabled: false });
+
+      await expect(
+        service.submitRun('comp-1', 'hr-1', { periodMonth: 10, periodYear: 2023 })
+      ).rejects.toThrow(/Cannot submit: blocking exceptions/);
+      // A payroll run row must never be created when submission is blocked.
+      expect(mockDb.values).not.toHaveBeenCalledWith(expect.objectContaining({ id: expect.stringMatching(/^RUN-/) }));
     });
   });
 

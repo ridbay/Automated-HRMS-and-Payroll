@@ -446,7 +446,36 @@ export class PayrollService {
   // ---------------- Run lifecycle ----------------
   async submitRun(companyId: string, submittedBy: string | undefined, payload: any) {
     const { periodMonth, periodYear, overrides, notes } = payload;
+
+    // A run for this period is already in flight (or done) — the UI treats any
+    // non-rejected run as "locked" for the period; enforce the same rule
+    // server-side so a second submission can't create a duplicate run.
+    const existingRun = await this.db.query.payrollRuns.findFirst({
+      where: and(
+        eq(schema.payrollRuns.companyId, companyId),
+        eq(schema.payrollRuns.periodMonth, periodMonth),
+        eq(schema.payrollRuns.periodYear, periodYear),
+      ),
+    });
+    if (existingRun && existingRun.status !== 'rejected') {
+      throw new Error(
+        `A payroll run for ${String(periodMonth).padStart(2, '0')}/${periodYear} already exists (status: ${existingRun.status}). Reject it before submitting a new one.`
+      );
+    }
+
     const preview = await this.previewRun(companyId, periodMonth, periodYear, overrides || {});
+
+    // Red-severity exceptions (missing bank details, unconfigured salary, below
+    // statutory minimum wage) would produce a broken or non-compliant payslip —
+    // block submission until they're resolved. Orange (missing statutory IDs)
+    // stays advisory since it doesn't prevent computing or paying the employee.
+    const blocking = (preview.exceptions || []).filter((ex: any) => ex.severity === 'red');
+    if (blocking.length > 0) {
+      const names = [...new Set(blocking.map((ex: any) => ex.employeeName))];
+      throw new Error(
+        `Cannot submit: blocking exceptions for ${names.join(', ')}. Resolve missing bank details, unconfigured salary, or minimum-wage issues first.`
+      );
+    }
 
     const settings = await this.getSettings(companyId);
     const runId = genId('RUN');
@@ -540,10 +569,12 @@ export class PayrollService {
     if (!run) return null;
     if (run.status !== 'pending_approval') throw new Error(`Cannot approve a run in "${run.status}" status`);
 
-    await this.db
+    const [claimed] = await this.db
       .update(schema.payrollRuns)
       .set({ status: 'approved', approvedBy: approvedBy || null, approvedAt: new Date().toISOString() })
-      .where(eq(schema.payrollRuns.id, runId));
+      .where(and(eq(schema.payrollRuns.id, runId), eq(schema.payrollRuns.status, 'pending_approval')))
+      .returning({ id: schema.payrollRuns.id });
+    if (!claimed) throw new Error('Run status changed before this approval could be applied');
     return this.getRun(companyId, runId);
   }
 
@@ -552,10 +583,12 @@ export class PayrollService {
     if (!run) return null;
     if (run.status !== 'pending_approval') throw new Error(`Cannot reject a run in "${run.status}" status`);
 
-    await this.db
+    const [claimed] = await this.db
       .update(schema.payrollRuns)
       .set({ status: 'rejected', rejectedReason: reason || null })
-      .where(eq(schema.payrollRuns.id, runId));
+      .where(and(eq(schema.payrollRuns.id, runId), eq(schema.payrollRuns.status, 'pending_approval')))
+      .returning({ id: schema.payrollRuns.id });
+    if (!claimed) throw new Error('Run status changed before this rejection could be applied');
     return this.getRun(companyId, runId);
   }
 
@@ -565,14 +598,30 @@ export class PayrollService {
     if (run.status !== 'approved') throw new Error(`Cannot mark a run in "${run.status}" status as paid`);
 
     const paidAt = new Date().toISOString();
-    await this.db.update(schema.payrollRuns).set({ status: 'paid', paidAt }).where(eq(schema.payrollRuns.id, runId));
+
+    // Compare-and-swap on status: D1 has no interactive multi-statement
+    // transaction to wrap the status flip + loan/compliance side effects below,
+    // so a plain read-then-write here would let two concurrent (or retried)
+    // mark-paid calls both pass the status check above and double-decrement
+    // loan balances / duplicate compliance tasks. Scoping the UPDATE's WHERE to
+    // status = 'approved' makes the flip itself atomic: only one concurrent
+    // caller can ever move a given run out of 'approved', so only that caller
+    // proceeds to apply the side effects.
+    const [claimed] = await this.db
+      .update(schema.payrollRuns)
+      .set({ status: 'paid', paidAt })
+      .where(and(eq(schema.payrollRuns.id, runId), eq(schema.payrollRuns.status, 'approved')))
+      .returning({ id: schema.payrollRuns.id });
+
+    if (!claimed) {
+      throw new Error('Run is already being processed or has already been paid');
+    }
 
     // Apply loan repayments for this run's employees.
     for (const ps of run.payslips) {
       if (!ps.loanDeductions) continue;
-      const loan = await this.db.query.loans.findFirst({ where: eq(schema.loans.employeeId, ps.employeeId) });
-      // Re-fetch by the actual active loan (there may be multiple historical loans; only the active one accrues).
-      const activeLoan = loan && loan.status === 'active' ? loan : await this.db.query.loans.findFirst({
+      // There may be multiple historical loans per employee; only the active one accrues.
+      const activeLoan = await this.db.query.loans.findFirst({
         where: and(eq(schema.loans.companyId, companyId), eq(schema.loans.employeeId, ps.employeeId), eq(schema.loans.status, 'active')),
       });
       if (!activeLoan) continue;

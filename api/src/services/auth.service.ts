@@ -81,6 +81,8 @@ export class AuthService {
         role: employee.role,
         avatar: employee.avatar,
         isPasswordChanged: employee.isPasswordChanged,
+        companyId: employee.companyId,
+        status: employee.status,
       }
     };
   }
@@ -94,11 +96,16 @@ export class AuthService {
       throw new Error('Employee not found');
     }
 
-    if (employee.passwordHash && employee.passwordSalt) {
-      const hashedAttempt = await hashPassword(currentPasswordAttempt, employee.passwordSalt);
-      if (hashedAttempt !== employee.passwordHash) {
-        throw new Error('Invalid current password');
-      }
+    if (!employee.passwordHash || !employee.passwordSalt) {
+      // Every employee is issued a password (temporary or self-set) at creation time —
+      // this should be unreachable in practice. Refuse rather than silently accepting
+      // any "current password" when there is nothing to verify it against.
+      throw new Error('Account not fully set up. Contact HR.');
+    }
+
+    const hashedAttempt = await hashPassword(currentPasswordAttempt, employee.passwordSalt);
+    if (hashedAttempt !== employee.passwordHash) {
+      throw new Error('Invalid current password');
     }
 
     const newSalt = generateSalt();
@@ -177,6 +184,8 @@ export class AuthService {
         role: 'SUPER_ADMIN',
         avatar: null,
         isPasswordChanged: true,
+        companyId: companyId,
+        status: 'active',
       }
     };
   }

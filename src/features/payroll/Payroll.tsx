@@ -170,6 +170,10 @@ const Payroll: React.FC = () => {
   const wizardData = isRunLocked ? runDetail : livePreview || previewData;
   const payslips: any[] = wizardData?.payslips || [];
   const isWizardLoading = isRunLocked ? !runDetail : isPreviewLoading;
+  // Red-severity exceptions block submission server-side (missing bank details,
+  // unconfigured salary, below minimum wage) — surface that before the user hits
+  // Submit and gets a rejection, rather than only after.
+  const blockingExceptions: any[] = (wizardData?.exceptions || []).filter((ex: any) => ex.severity === "red");
 
   const employeeName = (id?: string) => {
     if (!id) return "—";
@@ -688,9 +692,23 @@ const Payroll: React.FC = () => {
                       {isViewOnly ? (
                         <p className="text-xs text-slate-400 font-bold text-center">Your role has read-only access to payroll processing.</p>
                       ) : !activeRunSummary ? (
-                        <button onClick={handleSubmitRun} disabled={submitMutation.isPending || payslips.length === 0} className="w-full px-12 py-5 bg-indigo-600 text-white rounded-[2rem] font-black text-sm uppercase tracking-widest shadow-2xl shadow-indigo-100 hover:scale-105 active:scale-95 transition-all disabled:opacity-40 flex items-center justify-center gap-2">
-                          {submitMutation.isPending ? <Loader2 className="animate-spin" size={18} /> : <Send size={18} />} Submit for Approval
-                        </button>
+                        <>
+                          {blockingExceptions.length > 0 && (
+                            <div className="mb-4 p-5 bg-rose-50 border border-rose-200 rounded-2xl">
+                              <p className="text-xs font-black text-rose-700 uppercase tracking-widest mb-2">
+                                {blockingExceptions.length} blocking exception{blockingExceptions.length > 1 ? "s" : ""} — resolve before submitting
+                              </p>
+                              <ul className="space-y-1">
+                                {blockingExceptions.slice(0, 5).map((ex: any, i: number) => (
+                                  <li key={i} className="text-[11px] text-rose-600 font-bold">{ex.employeeName}: {ex.issue}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          <button onClick={handleSubmitRun} disabled={submitMutation.isPending || payslips.length === 0 || blockingExceptions.length > 0} className="w-full px-12 py-5 bg-indigo-600 text-white rounded-[2rem] font-black text-sm uppercase tracking-widest shadow-2xl shadow-indigo-100 hover:scale-105 active:scale-95 transition-all disabled:opacity-40 flex items-center justify-center gap-2">
+                            {submitMutation.isPending ? <Loader2 className="animate-spin" size={18} /> : <Send size={18} />} Submit for Approval
+                          </button>
+                        </>
                       ) : activeRunSummary.status === "pending_approval" ? (
                         <div className="flex gap-4">
                           <button onClick={handleReject} disabled={rejectMutation.isPending} className="flex-1 px-8 py-5 bg-white border border-rose-200 text-rose-600 rounded-[2rem] font-black text-sm uppercase tracking-widest hover:bg-rose-50 transition-all">

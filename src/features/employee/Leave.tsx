@@ -20,6 +20,7 @@ import {
 import { useMyLeave, useApplyLeave, useDirectory, useMyProfile, useTeamLeaves } from "../../api/client";
 import { useNavigation } from "../../context/NavigationContext";
 import Celebration from "../../components/Celebration";
+import { usePopup } from "../../components/PopupProvider";
 
 const Leave: React.FC = () => {
   const { setActiveTab } = useNavigation();
@@ -28,6 +29,7 @@ const Leave: React.FC = () => {
   >("dashboard");
   const [showCelebration, setShowCelebration] = useState(false);
 
+  const { alert: popupAlert } = usePopup();
   const { data: leaveData, isLoading } = useMyLeave();
   const applyLeaveMutation = useApplyLeave();
   const { data: teamLeavesData, isLoading: teamLeavesLoading } = useTeamLeaves();
@@ -91,6 +93,9 @@ const Leave: React.FC = () => {
             setEndDate("");
             setReason("");
           }, 3000);
+        },
+        onError: (err: any) => {
+          popupAlert(err.message || "Failed to apply for leave.", "Error");
         },
       },
     );

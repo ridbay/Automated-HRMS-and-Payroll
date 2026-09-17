@@ -11,7 +11,10 @@ describe('Auth Middleware', () => {
     vi.clearAllMocks();
   });
 
-  it('should fallback to x-company-id header if no Authorization header exists', async () => {
+  it('does NOT fall back to x-company-id/x-employee-id headers when no Authorization header exists', async () => {
+    // Regression guard: authMiddleware must never accept client-supplied identity
+    // headers as a substitute for a verified JWT — that was a real vulnerability
+    // (see auth.controller.ts's changePassword, which used to trust x-employee-id).
     const mockContext = {
       req: {
         header: vi.fn((key: string) => {
@@ -22,15 +25,16 @@ describe('Auth Middleware', () => {
       },
       set: vi.fn(),
       env: { JWT_SECRET: 'secret' },
-      json: vi.fn(),
+      json: vi.fn().mockReturnValue('json-res'),
     };
     const mockNext = vi.fn();
 
-    await authMiddleware(mockContext as any, mockNext);
+    const res = await authMiddleware(mockContext as any, mockNext);
 
-    expect(mockContext.set).toHaveBeenCalledWith('companyId', 'comp-1');
-    expect(mockContext.set).toHaveBeenCalledWith('employeeId', 'emp-1');
-    expect(mockNext).toHaveBeenCalled();
+    expect(mockContext.set).not.toHaveBeenCalled();
+    expect(mockContext.json).toHaveBeenCalledWith({ error: 'Unauthorized: Missing or invalid token' }, 401);
+    expect(res).toBe('json-res');
+    expect(mockNext).not.toHaveBeenCalled();
   });
 
   it('should return 401 if neither token nor fallback headers exist', async () => {
@@ -91,7 +95,7 @@ describe('Auth Middleware', () => {
 
     const res = await authMiddleware(mockContext as any, mockNext);
 
-    expect(mockContext.json).toHaveBeenCalledWith({ error: 'Unauthorized: Invalid token' }, 401);
+    expect(mockContext.json).toHaveBeenCalledWith({ error: 'Unauthorized: Invalid or expired token' }, 401);
     expect(res).toBe('json-res');
     expect(mockNext).not.toHaveBeenCalled();
   });

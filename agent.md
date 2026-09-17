@@ -38,7 +38,7 @@ Role/permission enforcement lives in [api/src/middlewares/role.middleware.ts](ap
 | Settings / Control Center | `features/core/Settings.tsx` | wired directly in `routes/admin.routes.ts` via `SettingsService`/`CompanyService`/`controlCenter.service.ts` (no dedicated controller file — see §6) |
 | Manager tools | `features/manager/ManagerDashboard.tsx`, `TeamReports.tsx`, `components/ApprovalCenter.tsx` | manager-scoped methods inside the leave/attendance/goal services above |
 
-**Known stub:** `controlCenter.service.ts`'s `integrations` and `workflows` tables are seeded on/off catalogs the Settings UI reads — there's no real OAuth handshake or webhook delivery behind them yet. Don't assume "integration shows as connected" means it's live.
+**Known stub:** `controlCenter.service.ts`'s `integrations` and `workflows` tables are seeded on/off catalogs the Settings UI reads — there's no real OAuth handshake or webhook delivery behind them yet, with two exceptions: **Slack** (a real Incoming Webhook connection) and **Mailgun** (a real API-key-based email delivery connection, surfaced in Settings ▸ Integrations alongside Slack). Don't assume any other "integration shows as connected" means it's live.
 
 ## 2. Tech stack
 
@@ -46,7 +46,7 @@ Role/permission enforcement lives in [api/src/middlewares/role.middleware.ts](ap
 | -------- | ---- |
 | Frontend | React 19, Vite 6, TypeScript, React Context (`src/context`), TanStack Query, Framer Motion, Recharts, Lucide icons, vanilla CSS |
 | Backend  | Cloudflare Workers, Hono 4, Drizzle ORM, Cloudflare D1 (SQLite), `hono/jwt` for auth |
-| Storage  | Cloudflare R2 (planned — bucket binding currently commented out in [api/wrangler.toml](api/wrangler.toml)) |
+| Storage  | Cloudflare R2 (binding configured in [api/wrangler.toml](api/wrangler.toml), `storage.service.ts` implements upload/stream; company logo upload still stores a base64 data URI instead of using it — see `Settings.tsx`) |
 | Tooling  | Wrangler (local Worker + D1 emulation), Drizzle Kit (migrations), Vitest (backend tests) |
 
 ## 3. Repo layout
@@ -66,7 +66,7 @@ api/src/                  Cloudflare Worker API
   services/               Business logic — this is where DB access and rules live
   models/                 Drizzle table schemas, one file per domain (employee, leave, payroll, benefits, ...)
   db/schema.ts            Aggregates all models/*.ts into one schema for Drizzle (barrel re-export)
-  middlewares/            auth.middleware.ts (JWT), tenant.middleware.ts (x-company-id), role.middleware.ts
+  middlewares/            auth.middleware.ts (JWT — required, no fallback), role.middleware.ts, rateLimit.middleware.ts
   types/index.ts          AppEnv (Hono bindings/vars) and shared types
 
 api/drizzle/              Generated SQL migrations (drizzle-kit generate) — never hand-edit, never delete past migrations
@@ -97,7 +97,7 @@ npm run test             # vitest --watch
 npm run test:run         # vitest run (CI mode, single pass)
 ```
 
-Multi-tenancy in local/dev calls is via the `x-company-id` header (see `tenantMiddleware`); authenticated requests use a `Bearer` JWT instead (see `authMiddleware` in [api/src/middlewares/auth.middleware.ts](api/src/middlewares/auth.middleware.ts)).
+All requests — local/dev included — authenticate via a `Bearer` JWT; `authMiddleware` ([api/src/middlewares/auth.middleware.ts](api/src/middlewares/auth.middleware.ts)) derives `companyId`/`employeeId`/`role` from the verified token and refuses to run without a real `JWT_SECRET`. There is no `x-company-id`-header fallback anymore — it was a real RBAC bypass (an authenticated caller could spoof another tenant's `companyId`) and has been removed. Log in via `/auth/login` to get a token for local testing.
 
 ## 5. Testing — MANDATORY, not optional
 
@@ -106,7 +106,7 @@ Multi-tenancy in local/dev calls is via the `x-company-id` header (see `tenantMi
 - Run `cd api && npm run test:run` before calling any backend work complete. All tests must pass — currently 49 files / 213 tests green; keep it that way.
 - **Service unit tests** (`*.service.test.ts`, e.g. [api/src/services/leave.service.test.ts](api/src/services/leave.service.test.ts)): mock the Drizzle db as a chainable object — `vi.fn().mockReturnThis()` for query builder methods, `vi.fn().mockResolvedValue(...)` for terminal calls (`.all()`, `.returning()`, `.query.<table>.findFirst`, etc.) — then inject it via `(service as any).db = mockDb`. Assert both the returned value and that the right db methods were called, especially authorization short-circuits (e.g. a manager acting on someone else's report must return `null`/error without calling `update`).
 - **Controller unit tests** (`*.controller.test.ts`, e.g. [api/src/controllers/admin/attendance.controller.test.ts](api/src/controllers/admin/attendance.controller.test.ts)): `vi.mock` the service module, stub methods on `Service.prototype`, and call the controller function directly with a hand-built mock Hono `Context` (`req.query`/`req.param`/`req.json`, `env`, `get`, `json` as `vi.fn()`s). Assert the service was called with the right args and `c.json` was called with the right payload/status.
-- **Middleware unit tests** (`*.middleware.test.ts`, e.g. [api/src/middlewares/tenant.middleware.test.ts](api/src/middlewares/tenant.middleware.test.ts)): same mock-`Context` approach, asserting `next()` is/isn't called and the right error response shape.
+- **Middleware unit tests** (`*.middleware.test.ts`, e.g. [api/src/middlewares/auth.middleware.test.ts](api/src/middlewares/auth.middleware.test.ts)): same mock-`Context` approach, asserting `next()` is/isn't called and the right error response shape.
 - **Integration tests**: exercise the real Hono app end-to-end via `app.request()` — see [api/src/index.test.ts](api/src/index.test.ts) for the pattern (mocks `hono/jwt`'s `verify`, then asserts on routing/auth status codes through the full middleware chain). Add to this style of test for new routes, non-trivial multi-table operations, or auth/tenant edge cases. Treat [test-api.js](test-api.js) as a scratch/manual-check script only, never a substitute for a real test under `api/src/**/*.test.ts`.
 - New Drizzle models/queries: test against realistic data shapes, including empty results, not-found, and cross-tenant access attempts (a company must never see another company's rows — this is a multi-tenant system, so tenant-scoping bugs are security bugs).
 - Frontend currently has **no test harness configured** (no Vitest/RTL wired into the root `package.json`). If you touch frontend logic that has meaningful branching (hooks, wizards, calculations), either add one (Vitest + React Testing Library is the natural fit given Vite) or, at minimum, flag the gap explicitly in your summary — don't silently skip verification. Prefer testing shared logic pulled out of components over testing JSX rendering.
@@ -115,7 +115,7 @@ Multi-tenancy in local/dev calls is via the `x-company-id` header (see `tenantMi
 ## 6. Conventions & gotchas
 
 - **Multi-tenancy**: nearly every query must be scoped by `companyId`. When adding a service method, check sibling methods in the same file for the tenant-scoping pattern and follow it — an unscoped query is a data-leak bug.
-- **Auth fallback**: `authMiddleware` currently allows an `x-company-id` header as a fallback when no JWT is present (to support mock/admin flows mid-migration). Be deliberate about which routes should require a real JWT vs. still allow this fallback — don't widen the fallback without reason.
+- **Auth is JWT-only**: `authMiddleware` requires a verified `Bearer` JWT on every route it guards — never add a header-based identity fallback (`x-company-id`, `x-employee-id`, etc.). One existed previously and was removed after audit because it let an authenticated caller spoof another tenant's `companyId`, or (via `x-employee-id` on `/auth/change-password`) hijack another account's password entirely unauthenticated. Every route mounted under `/admin` and `/employee` gets `companyId`/`employeeId`/`role` from `c.get(...)`, never from a request header.
 - **Settings/Control Center is the one exception to routes → controllers → services**: those routes call `SettingsService`/`CompanyService`/`controlCenter.service.ts` directly from `admin.routes.ts` with no controller file in between. Match existing style if you extend it; don't silently "fix" it into a controller as a drive-by change.
 - **Migrations**: schema changes go in `api/src/models/*.model.ts`, then `npm run db:generate` inside `api/` to produce the migration under `api/drizzle/`. Never edit a migration file that's already been generated/committed; generate a new one instead.
 - **`api/src/db/schema.ts`** is just a barrel re-export of `models/*.ts` — add new models there when you create them (`export * from '../models/xyz.model'`), following the existing entries.

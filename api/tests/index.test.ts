@@ -11,7 +11,10 @@ vi.mock('hono/jwt', () => ({
 }));
 
 describe('App Integration & Route Registration', () => {
-  const env = { DB: {} };
+  // authMiddleware refuses to run without a real JWT_SECRET (by design — see
+  // auth.middleware.ts) — routes reachable past auth need one even though
+  // `verify` itself is mocked above.
+  const env = { DB: {}, JWT_SECRET: 'test-secret' };
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -54,7 +57,24 @@ describe('App Integration & Route Registration', () => {
         'x-tenant-id': 'comp-1',
       }
     }, env as any);
-    
+
+    expect([200, 500]).toContain(res.status);
+  });
+
+  // Regression: payroll.routes.ts used to layer tenantMiddleware on top of the
+  // already-authenticated /admin group, requiring an x-company-id header the real
+  // frontend never sends and overwriting the JWT-derived companyId when it was sent.
+  // A valid Bearer token alone must be enough to reach the controller.
+  it('GET /admin/payroll/dashboard with only a Bearer token passes tenant scoping (no x-company-id needed)', async () => {
+    const res = await app.request('/admin/payroll/dashboard', {
+      headers: {
+        'Authorization': 'Bearer fake-token',
+      }
+    }, env as any);
+
+    // Must not be rejected for "missing tenant identification" — should reach the
+    // controller and fail only on the unmocked DB (500), same as other admin routes.
+    expect(res.status).not.toBe(401);
     expect([200, 500]).toContain(res.status);
   });
 });

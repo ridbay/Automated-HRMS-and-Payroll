@@ -53,4 +53,27 @@ describe('Employee Leave Controller', () => {
     const res = await leaveController.applyForLeave(mockContext);
     expect(LeaveService.prototype.createLeaveRequest).toHaveBeenCalled();
   });
+
+  describe('getTeamLeaves', () => {
+    it('returns 401 when there is no authenticated employee', async () => {
+      mockContext.get.mockImplementation((k: string) => (k === 'companyId' ? 'comp-1' : undefined));
+
+      const res = await leaveController.getTeamLeaves(mockContext);
+
+      expect(res.status).toBe(401);
+      expect(LeaveService.prototype.getTeamLeaves).not.toHaveBeenCalled();
+    });
+
+    it('scopes the call to the caller\'s own companyId and employeeId', async () => {
+      mockContext.get.mockImplementation((k: string) => {
+        if (k === 'companyId') return 'comp-1';
+        if (k === 'employeeId') return 'emp-1';
+      });
+      (LeaveService.prototype.getTeamLeaves as any).mockResolvedValue([{ id: 'lr-1' }]);
+
+      await leaveController.getTeamLeaves(mockContext);
+
+      expect(LeaveService.prototype.getTeamLeaves).toHaveBeenCalledWith('comp-1', 'emp-1');
+    });
+  });
 });

@@ -18,3 +18,13 @@ export const fetchWithTenant = async (url: string, options: RequestInit = {}) =>
     headers,
   });
 };
+
+// `company.logoUrl` holds one of two shapes depending on how it was set:
+// a base64 data URI (legacy inline-storage path) or an R2 object key (the
+// real upload pipeline, POST /admin/company/logo). An R2 key isn't directly
+// servable — it must be fetched through the streaming route instead.
+export const resolveCompanyLogoUrl = (companyId: string, logoUrl?: string | null): string | null => {
+  if (!logoUrl) return null;
+  if (logoUrl.startsWith('data:') || logoUrl.startsWith('http')) return logoUrl;
+  return `${API_URL}/public/company/${companyId}/logo`;
+};

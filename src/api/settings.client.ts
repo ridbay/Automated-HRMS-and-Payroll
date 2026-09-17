@@ -124,6 +124,32 @@ export const useUpdateCompany = () => {
   });
 };
 
+// Real R2-backed upload (POST /admin/company/logo) — the frontend previously
+// base64-encoded the file and stored it inline via useUpdateCompany instead.
+// No Content-Type header here: the browser sets the multipart boundary itself.
+export const useUploadCompanyLogo = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (file: File) => {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await fetchWithTenant(`${API_URL}/admin/company/logo`, {
+        method: 'POST',
+        body: form,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to upload logo');
+      }
+      const body = await res.json();
+      return body.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['company'] });
+    },
+  });
+};
+
 // --- Org: Departments & Locations ---
 
 export const useDepartments = (enabled: boolean = true) => {
@@ -521,6 +547,64 @@ export const useIntegrationEvents = (key: string, enabled: boolean = true) => {
       return res.json();
     },
     enabled,
+  });
+};
+
+export interface MailgunConfig {
+  apiKey: string;
+  domain: string;
+  from?: string;
+  baseUrl?: string;
+}
+
+export const useConnectMailgun = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (config: MailgunConfig) => {
+      const res = await fetchWithTenant(`${API_URL}/admin/integrations/mailgun/connect`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to connect Mailgun');
+      }
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['integrations'] }),
+  });
+};
+
+export const useDisconnectMailgun = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await fetchWithTenant(
+        `${API_URL}/admin/integrations/mailgun/disconnect`,
+        { method: 'POST' }
+      );
+      if (!res.ok) throw new Error('Failed to disconnect Mailgun');
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['integrations'] }),
+  });
+};
+
+export const useTestMailgun = () => {
+  return useMutation({
+    mutationFn: async (to?: string) => {
+      const res = await fetchWithTenant(`${API_URL}/admin/integrations/mailgun/test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(to ? { to } : {}),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to send test email');
+      }
+      return res.json();
+    },
   });
 };
 

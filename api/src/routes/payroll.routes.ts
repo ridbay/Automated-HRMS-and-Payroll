@@ -35,13 +35,15 @@ import {
   validateBankAccount,
   getMonnifyBanks,
 } from '../controllers/admin/payroll.controller';
-import { tenantMiddleware } from '../middlewares/tenant.middleware';
 import { requireRole, requirePermission } from '../middlewares/role.middleware';
 
 const payrollRoutes = new Hono();
 
-// Apply tenant middleware for all payroll routes to ensure x-company-id is present
-payrollRoutes.use('*', tenantMiddleware);
+// companyId/employeeId/role are already set by authMiddleware, applied to the whole
+// /admin group upstream (admin.routes.ts). Do NOT layer tenantMiddleware here — it
+// would overwrite the JWT-derived companyId with a client-supplied x-company-id
+// header/query param, letting an authenticated user spoof another tenant's payroll
+// data (or simply 401 every request, since the real frontend never sends that header).
 
 // Preparers + payroll staff can configure and process payroll; managers get
 // read-only visibility into aggregate budget figures for their own oversight.

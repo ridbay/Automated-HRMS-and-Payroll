@@ -21,7 +21,7 @@ import { usePopup } from "../../components/PopupProvider";
 import Celebration from "../../components/Celebration";
 
 const EmployeeOnboarding: React.FC = () => {
-  const { user, logout, login } = useAuth();
+  const { user, logout, updateUser } = useAuth();
   const updateMutation = useUpdateAdminEmployee();
   const { alert: popupAlert } = usePopup();
 
@@ -56,7 +56,10 @@ const EmployeeOnboarding: React.FC = () => {
           setCelebrating(true);
           popupAlert("Welcome aboard! Your profile is complete.");
           setTimeout(() => {
-            login(updatedUser.token, updatedUser);
+            // This is a profile update on the existing session, not a new login —
+            // there's no fresh token to swap in. Patch the current user in place
+            // (status: 'active' is what flips App.tsx out of the onboarding view).
+            updateUser({ ...updatedUser, status: "active" });
           }, 3000);
         },
         onError: (err: any) => {

@@ -17,7 +17,7 @@ import {
   RefreshCw,
   Trash2,
 } from "lucide-react";
-import { MOCK_EMPLOYEES } from "../../data/mocks";
+import { useDirectory } from "../../api/client";
 import { useAdminAssets, useDeleteAsset } from "../../api/asset.client";
 import { useQueryClient } from "@tanstack/react-query";
 import { AssetModal } from "./AssetModal";
@@ -28,6 +28,8 @@ const AssetManagement: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   
   const { data: serverAssets, isLoading } = useAdminAssets();
+  const { data: directory } = useDirectory();
+  const employees = directory || [];
   const deleteAsset = useDeleteAsset();
   const allAssets = serverAssets || [];
 
@@ -191,8 +193,8 @@ const AssetManagement: React.FC = () => {
         {/* Assets List */}
         <div className="divide-y divide-slate-50">
           {assets.map((asset) => {
-            const assignee = MOCK_EMPLOYEES.find(
-              (e) => e.id === asset.assignedTo,
+            const assignee = employees.find(
+              (e: any) => e.id === asset.assignedTo,
             );
 
             return (
@@ -290,10 +292,10 @@ const AssetManagement: React.FC = () => {
           })}
         </div>
       </div>
-      <AssetModal 
-        isOpen={isModalOpen} 
-        onClose={() => setIsModalOpen(false)} 
-        employees={MOCK_EMPLOYEES} 
+      <AssetModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        employees={employees}
       />
     </div>
   );

@@ -81,7 +81,6 @@ import {
   AreaChart,
   Area,
 } from "recharts";
-import { MOCK_EMPLOYEES } from "../../data/mocks";
 import { Candidate, JobRequisition, Interview } from "../../types/index";
 import { useAuth } from "../../context/AuthContext";
 import {
@@ -101,6 +100,7 @@ import {
   useSendOffer,
   useRespondToOffer,
   candidateResumeUrl,
+  useDirectory,
 } from "../../api/client";
 import { RecruitmentAnalyticsBody } from "./RecruitmentAnalytics";
 
@@ -187,6 +187,7 @@ const Recruitment: React.FC = () => {
   const { data: requisitions = [], isLoading: requisitionsLoading } = useJobRequisitions();
   const { data: departments = [] } = useDepartments();
   const { data: locations = [] } = useLocations();
+  const { data: directory = [] } = useDirectory();
   const createRequisition = useCreateJobRequisition();
   const approveRequisition = useApproveJobRequisition();
   const rejectRequisition = useRejectJobRequisition();
@@ -299,7 +300,7 @@ const Recruitment: React.FC = () => {
     );
   };
 
-  const teamMembers = MOCK_EMPLOYEES.slice(0, 3);
+  const teamMembers = directory.slice(0, 3);
   const currentJob = requisitions.find((r) => r.id === activeJobId) || requisitions[0];
 
   const formatCurrency = (val: number | string) => {

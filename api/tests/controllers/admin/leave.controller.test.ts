@@ -37,16 +37,32 @@ describe('Admin Leave Controller', () => {
     expect(mockContext.json).toHaveBeenCalledWith([{ id: 'req-1' }]);
   });
 
-  it('updateLeaveStatus should update status', async () => {
-    mockContext.get.mockReturnValue('comp-1');
+  it('updateLeaveStatus should update status, sourcing the approver id from the verified JWT (not a header)', async () => {
+    mockContext.get.mockImplementation((k: string) => {
+      if (k === 'companyId') return 'comp-1';
+      if (k === 'employeeId') return 'mgr-1';
+    });
     mockContext.req.param.mockReturnValue('req-1');
-    mockContext.req.header.mockReturnValue('mgr-1');
     mockContext.req.json.mockResolvedValue({ status: 'approved', days: 2, managerComment: 'ok' });
-    
+    (LeaveService.prototype.updateLeaveRequestStatus as any).mockResolvedValue({ id: 'req-1', employeeId: 'emp-1', status: 'approved' });
+
     await leaveController.updateLeaveStatus(mockContext);
     expect(LeaveService.prototype.updateLeaveRequestStatus).toHaveBeenCalledWith(
       'comp-1', 'req-1', { status: 'approved', days: 2, managerComment: 'ok', managerId: 'mgr-1' }
     );
+  });
+
+  it('updateLeaveStatus returns 409 when the request could not be decided (already resolved, or not found)', async () => {
+    mockContext.get.mockImplementation((k: string) => {
+      if (k === 'companyId') return 'comp-1';
+      if (k === 'employeeId') return 'mgr-1';
+    });
+    mockContext.req.param.mockReturnValue('req-1');
+    mockContext.req.json.mockResolvedValue({ status: 'approved' });
+    (LeaveService.prototype.updateLeaveRequestStatus as any).mockResolvedValue(undefined);
+
+    const res = await leaveController.updateLeaveStatus(mockContext);
+    expect(res.status).toBe(409);
   });
 
   it('updateEmployeeLeaveBalances should update balances', async () => {

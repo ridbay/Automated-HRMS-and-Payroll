@@ -12,9 +12,11 @@ import {
 } from "lucide-react";
 import { useAdminCourses, useDeleteCourse } from "../../api/learning.client";
 import { CourseModal } from "./CourseModal";
+import { AssignCourseModal } from "./AssignCourseModal";
 
 const LMSAdmin: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [assigningCourse, setAssigningCourse] = useState<{ id: string; title: string } | null>(null);
   const { data: courses = [], isLoading } = useAdminCourses();
   const deleteCourse = useDeleteCourse();
 
@@ -92,7 +94,10 @@ const LMSAdmin: React.FC = () => {
                   )}
 
                   <div className="pt-4 mt-auto border-t border-slate-100">
-                    <button className="w-full py-2 bg-slate-50 text-slate-600 rounded-xl text-xs font-bold uppercase hover:bg-slate-100 transition-colors">
+                    <button
+                      onClick={() => setAssigningCourse({ id: course.id, title: course.title })}
+                      className="w-full py-2 bg-slate-50 text-slate-600 rounded-xl text-xs font-bold uppercase hover:bg-slate-100 transition-colors"
+                    >
                       Manage Assignments
                     </button>
                   </div>
@@ -103,9 +108,14 @@ const LMSAdmin: React.FC = () => {
         )}
       </div>
 
-      <CourseModal 
+      <CourseModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
+      />
+
+      <AssignCourseModal
+        course={assigningCourse}
+        onClose={() => setAssigningCourse(null)}
       />
     </div>
   );

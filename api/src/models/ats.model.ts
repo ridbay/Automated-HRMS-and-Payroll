@@ -2,6 +2,7 @@ import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core';
 import { relations, sql } from 'drizzle-orm';
 import { companies } from './company.model';
 import { jobRequisitions } from './misc.model';
+import { employees } from './employee.model';
 
 // A person who has applied (or been added) to a requisition's pipeline.
 // `skills` is a JSON array of strings; `timeline` lives in its own table
@@ -33,6 +34,9 @@ export const candidates = sqliteTable('candidates', {
   rating: real('rating'),
   // 'applied' | 'screening' | 'interview' | 'offer' | 'hired' | 'rejected'
   status: text('status').notNull().default('applied'),
+  // Set when an accepted offer creates the corresponding employee record —
+  // links the ATS pipeline through to onboarding instead of dead-ending at 'hired'.
+  hiredEmployeeId: text('hired_employee_id').references(() => employees.id),
   appliedDate: text('applied_date').notNull().default(sql`CURRENT_TIMESTAMP`),
   createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text('updated_at').$onUpdate(() => new Date().toISOString()),

@@ -7,6 +7,8 @@ export interface User {
   email: string;
   role: UserRole;
   avatar?: string;
+  companyId?: string;
+  status?: 'active' | 'onboarding' | 'on_leave' | 'terminated' | 'probation' | 'notice';
 }
 
 export interface JobRequisition {

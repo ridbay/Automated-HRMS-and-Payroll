@@ -42,7 +42,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
       .then(r => r.ok ? r.json() : null)
       .then(profile => {
         if (!profile) return;
-        const patched: User = { ...userData, avatar: profile.avatar ?? userData.avatar };
+        // Preserve fields that gate app-level routing (e.g. `status`, checked in
+        // App.tsx to route brand-new hires into the onboarding flow) — not just
+        // cosmetic fields like avatar.
+        const patched: User = {
+          ...userData,
+          avatar: profile.avatar ?? userData.avatar,
+          status: profile.status ?? userData.status,
+        };
         setUser(patched);
         localStorage.setItem('zenhr_user', JSON.stringify(patched));
       })

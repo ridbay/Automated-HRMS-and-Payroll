@@ -831,6 +831,53 @@ concrete roadmap for hardening the platform toward production readiness.
 
 ---
 
+## Addendum (2026-09-17): Post-Audit Remediation
+
+This report is a snapshot as of 2026-09-07 (see the Abstract). A follow-up audit and remediation
+pass on 2026-09-17 closed several of the gaps this report documented as open; the items below
+supersede the corresponding claims in Chapters 2, 5, 8, and 9 rather than being retrofitted into
+the original narrative.
+
+- **The `x-company-id` header-only authentication fallback has been removed.** It is referenced
+  throughout Chapters 2, 5, and 8 as a "deliberate, documented compromise" — it no longer exists.
+  `authMiddleware` now unconditionally requires and verifies a JWT; `tenant.middleware.ts` has been
+  deleted. This was worth removing promptly rather than deferring: it was a live cross-tenant RBAC
+  bypass (an authenticated caller could override their own `companyId` via the header) and, via a
+  second header (`x-employee-id`) trusted by `POST /auth/change-password`, an **unauthenticated
+  account-takeover path** — any caller who knew or guessed an employee ID could set that account's
+  password with no credentials, because the endpoint had no auth middleware and the underlying
+  service skipped the current-password check whenever an account had no password hash set yet.
+  Both are fixed: `/auth/change-password` now requires a verified JWT and always verifies the
+  current password (with rate limiting added via the previously-unused `rateLimit.middleware.ts`).
+- **The Payroll module's tenant-scoping bug is fixed.** `payroll.routes.ts` layered the (now-removed)
+  `tenantMiddleware` on top of the already-JWT-authenticated `/admin` group, which overwrote the
+  verified `companyId` with the `x-company-id` fallback above — in practice this meant every
+  `/admin/payroll/*` request 401'd for the real frontend (which never sent that header), i.e. the
+  payroll module — the platform's headline feature — was unreachable through the UI. This is now
+  fixed by simply not re-deriving tenant scope for that route group.
+- **Mailgun is a second real (non-stub) integration**, alongside Slack — Chapter 4.14 and Chapter 8
+  item 3 undersold this; the backend integration was already fully implemented and has now been
+  surfaced in Settings ▸ Integrations (it previously had no UI at all).
+- Several correctness gaps were also fixed: a payroll `markRunPaid` race condition (no
+  compare-and-swap guard on the status transition, so concurrent/retried calls could double-decrement
+  loan balances), payroll run submission not blocking on red-severity exceptions (missing bank
+  details/salary), no duplicate-payroll-run-per-period guard, a leave-service bug where `used` days
+  were only tracked for the three built-in leave types (a custom type's balance never decremented),
+  no state-transition guard on leave approval/rejection (an already-decided request could be
+  silently re-decided), a `getTeamLeaves` endpoint that returned company-wide approved leave to any
+  authenticated caller instead of being scoped, a broken new-hire onboarding redirect (the `status`
+  field was dropped during session hydration, and the onboarding-completion handler called
+  `AuthContext.login` with swapped arguments, corrupting the stored session), and the ATS pipeline
+  dead-ending at "hired" with no employee record or requisition closure created.
+- R2: the bucket binding in `wrangler.toml` was already active, not commented out as Chapter 2.2 and
+  Chapter 8 item 4 state — the actual gap is narrower: company logo upload doesn't use it yet
+  (`Settings.tsx` still stores a base64 data URI), though the backend upload/stream pipeline exists.
+
+Chapters 1–10 above are left as originally written for historical accuracy; treat this addendum,
+not those chapters, as the current state of the items it lists.
+
+---
+
 ## Appendix A: Full Database Table Inventory (by domain)
 
 | Domain | Tables |

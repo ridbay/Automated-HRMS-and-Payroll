@@ -100,6 +100,12 @@ describe('Auth Service', () => {
       await expect(service.changePassword('emp-1', 'old', 'new')).rejects.toThrow('Employee not found');
     });
 
+    it('should throw error if account has no password set (never bypass the check)', async () => {
+      mockDb.query.employees.findFirst.mockResolvedValueOnce({ id: 'emp-1' }); // No hash/salt
+      await expect(service.changePassword('emp-1', 'anything', 'new')).rejects.toThrow('Account not fully set up');
+      expect(mockDb.update).not.toHaveBeenCalled();
+    });
+
     it('should throw error if current password attempt is incorrect', async () => {
       const salt = generateSalt();
       const hash = await hashPassword('correct_old', salt);

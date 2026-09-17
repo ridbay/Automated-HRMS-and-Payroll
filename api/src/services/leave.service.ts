@@ -1,6 +1,6 @@
 import { D1Database } from '@cloudflare/workers-types';
 import { drizzle } from 'drizzle-orm/d1';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, inArray } from 'drizzle-orm';
 import * as schema from '../db/schema';
 
 export class LeaveService {
@@ -18,8 +18,16 @@ export class LeaveService {
       .all();
   }
 
-  async getTeamLeaves(companyId: string) {
-    // Fetch approved requests, joined with employee names
+  async getTeamLeaves(companyId: string, employeeId: string) {
+    // "Team Calendar" is scoped to the caller's own department ("colleagues
+    // currently on leave") — not company-wide, and not limited to direct
+    // reports, since every employee (not just managers) uses this view.
+    const caller = await this.db.query.employees.findFirst({
+      where: and(eq(schema.employees.id, employeeId), eq(schema.employees.companyId, companyId)),
+    });
+    // No department on record means no defined cohort to show as "my team".
+    if (!caller || !caller.department) return [];
+
     const requests = await this.db
       .select({
         id: schema.leaveRequests.id,
@@ -38,7 +46,8 @@ export class LeaveService {
       .where(
         and(
           eq(schema.leaveRequests.companyId, companyId),
-          eq(schema.leaveRequests.status, 'approved')
+          eq(schema.leaveRequests.status, 'approved'),
+          eq(schema.employees.department, caller.department)
         )
       )
       .all();
@@ -115,9 +124,13 @@ export class LeaveService {
       )
     });
 
-    const usedAnnual = requests.filter((r: any) => r.type === 'Annual Leave').reduce((sum: number, r: any) => sum + r.days, 0);
-    const usedSick = requests.filter((r: any) => r.type === 'Sick Leave').reduce((sum: number, r: any) => sum + r.days, 0);
-    const usedMaternity = requests.filter((r: any) => r.type === 'Maternity Leave').reduce((sum: number, r: any) => sum + r.days, 0);
+    // Sum approved days per leave type generically — not just the three
+    // built-in defaults — so a custom type (HR can add one via the employee
+    // profile) has its usage tracked too, instead of always reading as 0.
+    const usedByType = new Map<string, number>();
+    for (const r of requests as any[]) {
+      usedByType.set(r.type, (usedByType.get(r.type) || 0) + r.days);
+    }
 
     let balances: any[] = await this.db.query.leaveBalances.findMany({
       where: and(
@@ -134,20 +147,49 @@ export class LeaveService {
       ];
     }
 
-    return balances.map((b: any) => {
-      let used = 0;
-      if (b.type === 'Annual Leave') used = usedAnnual;
-      else if (b.type === 'Sick Leave') used = usedSick;
-      else if (b.type === 'Maternity Leave') used = usedMaternity;
-      
-      return {
-        ...b,
-        used
-      };
-    });
+    return balances.map((b: any) => ({
+      ...b,
+      used: usedByType.get(b.type) || 0,
+    }));
   }
 
   async createLeaveRequest(companyId: string, employeeId: string, data: any) {
+    const days = Number(data.days) || 0;
+    const startDate = data.startDate;
+    const endDate = data.endDate || data.startDate;
+
+    // Don't let a request exceed the employee's remaining balance for that type.
+    if (days > 0) {
+      const balances = await this.calculateLeaveBalances(companyId, employeeId);
+      const balance = balances.find((b: any) => b.type === data.type);
+      if (balance) {
+        const remaining = balance.total - balance.used;
+        if (days > remaining) {
+          throw new Error(`Insufficient ${data.type} balance: ${remaining} day(s) remaining, requested ${days}.`);
+        }
+      }
+    }
+
+    // Don't let a new request overlap an existing pending/approved request —
+    // no double-booking the same days across two leave requests.
+    const existing = await this.db.query.leaveRequests.findMany({
+      where: and(
+        eq(schema.leaveRequests.companyId, companyId),
+        eq(schema.leaveRequests.employeeId, employeeId),
+        inArray(schema.leaveRequests.status, ['pending', 'approved'])
+      ),
+    });
+    const newStart = new Date(startDate).getTime();
+    const newEnd = new Date(endDate).getTime();
+    const overlaps = (existing as any[]).some((r) => {
+      const rStart = new Date(r.startDate).getTime();
+      const rEnd = new Date(r.endDate).getTime();
+      return newStart <= rEnd && rStart <= newEnd;
+    });
+    if (overlaps) {
+      throw new Error('You already have a pending or approved leave request that overlaps these dates.');
+    }
+
     const id = `LR-${Math.floor(1000 + Math.random() * 9000)}`;
     const appliedOn = new Date().toISOString().split('T')[0];
 
@@ -156,8 +198,8 @@ export class LeaveService {
       companyId,
       employeeId,
       type: data.type,
-      startDate: data.startDate,
-      endDate: data.endDate || data.startDate,
+      startDate,
+      endDate,
       days: data.days,
       reason: data.reason,
       status: 'pending',
@@ -177,10 +219,17 @@ export class LeaveService {
       updateData.days = data.days;
     }
 
+    // Only a still-pending request can be decided — scoping the WHERE to
+    // status='pending' makes this a compare-and-swap, so a request already
+    // approved/rejected can't be silently re-decided or flipped back.
     const result = await this.db
       .update(schema.leaveRequests)
       .set(updateData)
-      .where(and(eq(schema.leaveRequests.companyId, companyId), eq(schema.leaveRequests.id, requestId)))
+      .where(and(
+        eq(schema.leaveRequests.companyId, companyId),
+        eq(schema.leaveRequests.id, requestId),
+        eq(schema.leaveRequests.status, 'pending')
+      ))
       .returning();
 
     return result[0];

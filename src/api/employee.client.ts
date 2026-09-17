@@ -416,7 +416,7 @@ export const useEmployeeTrainings = (employeeId: string) => {
   return useQuery({
     queryKey: ['employeeTrainings', employeeId],
     queryFn: async () => {
-      const res = await fetchWithTenant(`${API_URL}/training/employee/${employeeId}`);
+      const res = await fetchWithTenant(`${API_URL}/admin/training/employee/${employeeId}`);
       if (!res.ok) throw new Error('Failed to fetch trainings');
       return res.json();
     },
@@ -428,7 +428,7 @@ export const useAddEmployeeTraining = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ employeeId, data }: { employeeId: string; data: any }) => {
-      const res = await fetchWithTenant(`${API_URL}/training/employee/${employeeId}`, {
+      const res = await fetchWithTenant(`${API_URL}/admin/training/employee/${employeeId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -490,7 +490,7 @@ export const useEmployeeLeaveRequests = (employeeId: string) => {
   return useQuery({
     queryKey: ['employeeLeaveRequests', employeeId],
     queryFn: async () => {
-      const res = await fetchWithTenant(`${API_URL}/leaves/employee/${employeeId}/requests`);
+      const res = await fetchWithTenant(`${API_URL}/admin/leaves/employee/${employeeId}/requests`);
       if (!res.ok) throw new Error('Failed to fetch leave requests');
       return res.json();
     },

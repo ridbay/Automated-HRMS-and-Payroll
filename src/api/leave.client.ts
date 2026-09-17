@@ -1,17 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { API_URL, fetchWithTenant } from './http';
 
-export const useLeaveRequests = () => {
-  return useQuery({
-    queryKey: ['leaveRequests'],
-    queryFn: async () => {
-      const res = await fetchWithTenant(`${API_URL}/employee/leave-requests`);
-      if (!res.ok) throw new Error('Failed to fetch leave requests');
-      return res.json();
-    },
-  });
-};
-
 // --- Employee self-service leave ---
 
 export const useMyLeave = () => {
@@ -34,7 +23,14 @@ export const useApplyLeave = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
-      if (!res.ok) throw new Error('Failed to apply for leave');
+      if (!res.ok) {
+        let message = 'Failed to apply for leave';
+        try {
+          const body = await res.json();
+          if (body?.error) message = body.error;
+        } catch { /* non-JSON error body */ }
+        throw new Error(message);
+      }
       return res.json();
     },
     onSuccess: () => {

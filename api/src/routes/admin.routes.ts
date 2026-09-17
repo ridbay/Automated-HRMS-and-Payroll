@@ -386,7 +386,9 @@ adminRoutes.post("/company/logo", adminOnly, edit("settings"), async (c: any) =>
 
   const storage = new StorageService(c.env.BUCKET);
   const fileKey = await storage.uploadCompanyLogo(companyId, file);
-  const logoUrl = `/api/public/company/${companyId}/logo`;
+  // Matches the mount in index.ts (`app.route('/public', publicRoutes)`) — there
+  // is no `/api` prefix anywhere else in this API's routing.
+  const logoUrl = `/public/company/${companyId}/logo`;
 
   const companyService = new CompanyService(c.env.DB);
   const company = await companyService.updateCompany(companyId, { logoUrl: fileKey });

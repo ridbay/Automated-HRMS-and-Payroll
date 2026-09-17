@@ -21,8 +21,9 @@ export const login = async (c: Context<AppEnv>) => {
 
 export const changePassword = async (c: Context<AppEnv>) => {
   try {
-    // Both employeeId and companyId should come from the verified JWT (or req header during initial auth)
-    const employeeId = c.get('employeeId') || c.req.header('x-employee-id');
+    // employeeId is set by authMiddleware from the verified JWT — never trust a
+    // client-supplied header for identity on a credential-mutating endpoint.
+    const employeeId = c.get('employeeId');
     if (!employeeId) {
       return c.json({ error: 'Unauthorized' }, 401);
     }

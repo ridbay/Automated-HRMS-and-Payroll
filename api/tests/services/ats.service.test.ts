@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AtsService } from '../../src/services/ats.service';
+import { EmployeeService } from '../../src/services/employee.service';
+
+vi.mock('../../src/services/employee.service');
 
 describe('Ats Service', () => {
   let mockDb: any;
@@ -177,6 +180,64 @@ describe('Ats Service', () => {
       await expect(service.respondToOffer('comp-1', actor, 'OFF-1', 'accepted')).rejects.toThrow(
         'Cannot record a response for an offer in "draft" status'
       );
+    });
+
+    describe('respondToOffer("accepted") bridges the ATS pipeline to Workforce', () => {
+      beforeEach(() => {
+        EmployeeService.prototype.createForCompany = vi.fn();
+      });
+
+      it('creates an employee record, links it to the candidate, and closes the requisition', async () => {
+        mockDb.query.offers.findFirst.mockResolvedValueOnce({
+          id: 'OFF-1', companyId: 'comp-1', status: 'sent', candidateId: 'CAND-1',
+          department: 'Engineering', salary: 5000000, startDate: '2026-01-01', requisitionId: 'REQ-1',
+        });
+        mockDb.query.candidates.findFirst
+          .mockResolvedValueOnce({ id: 'CAND-1', companyId: 'comp-1', status: 'offer' }) // inside updateCandidateStatus
+          .mockResolvedValueOnce({ id: 'CAND-1', companyId: 'comp-1', name: 'Ada Lovelace', email: 'ada@example.com', hiredEmployeeId: null }); // inside hireCandidate
+        (EmployeeService.prototype.createForCompany as any).mockResolvedValue({ id: 'EMP-99' });
+
+        const result = await service.respondToOffer('comp-1', actor, 'OFF-1', 'accepted');
+
+        expect(result?.status).toBe('accepted');
+        expect(EmployeeService.prototype.createForCompany).toHaveBeenCalledWith('comp-1', expect.objectContaining({
+          name: 'Ada',
+          lastName: 'Lovelace',
+          email: 'ada@example.com',
+          department: 'Engineering',
+          salary: 5000000,
+        }));
+        // Candidate linked back to the new employee.
+        expect(mockDb.set.mock.calls.some((c: any) => c[0]?.hiredEmployeeId === 'EMP-99')).toBe(true);
+        // Requisition auto-closed now that it's filled.
+        expect(mockDb.set.mock.calls.some((c: any) => c[0]?.status === 'Filled')).toBe(true);
+      });
+
+      it('does not re-create an employee if the candidate is already linked (idempotent)', async () => {
+        mockDb.query.offers.findFirst.mockResolvedValueOnce({ id: 'OFF-1', companyId: 'comp-1', status: 'sent', candidateId: 'CAND-1' });
+        mockDb.query.candidates.findFirst
+          .mockResolvedValueOnce({ id: 'CAND-1', companyId: 'comp-1', status: 'offer' })
+          .mockResolvedValueOnce({ id: 'CAND-1', companyId: 'comp-1', name: 'Ada Lovelace', email: 'ada@example.com', hiredEmployeeId: 'EMP-99' });
+
+        await service.respondToOffer('comp-1', actor, 'OFF-1', 'accepted');
+
+        expect(EmployeeService.prototype.createForCompany).not.toHaveBeenCalled();
+      });
+
+      it('logs a timeline note instead of throwing if employee auto-creation fails', async () => {
+        mockDb.query.offers.findFirst.mockResolvedValueOnce({ id: 'OFF-1', companyId: 'comp-1', status: 'sent', candidateId: 'CAND-1' });
+        mockDb.query.candidates.findFirst
+          .mockResolvedValueOnce({ id: 'CAND-1', companyId: 'comp-1', status: 'offer' })
+          .mockResolvedValueOnce({ id: 'CAND-1', companyId: 'comp-1', name: 'Ada Lovelace', email: 'ada@example.com', hiredEmployeeId: null });
+        (EmployeeService.prototype.createForCompany as any).mockRejectedValue(new Error('duplicate email'));
+
+        const result = await service.respondToOffer('comp-1', actor, 'OFF-1', 'accepted');
+
+        // The hiring decision itself still records successfully.
+        expect(result?.status).toBe('accepted');
+        const timelineCall = mockDb.values.mock.calls.find((c: any) => c[0]?.event?.includes('could not be auto-created'));
+        expect(timelineCall).toBeDefined();
+      });
     });
   });
 });

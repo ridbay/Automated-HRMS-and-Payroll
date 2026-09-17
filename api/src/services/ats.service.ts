@@ -2,6 +2,7 @@ import { D1Database } from '@cloudflare/workers-types';
 import { drizzle } from 'drizzle-orm/d1';
 import { eq, and, desc, inArray } from 'drizzle-orm';
 import * as schema from '../db/schema';
+import { EmployeeService } from './employee.service';
 
 const genId = (prefix: string) => `${prefix}-${crypto.randomUUID().split('-')[0].toUpperCase()}`;
 
@@ -16,9 +17,11 @@ export interface AtsActor {
 
 export class AtsService {
   private db;
+  private dbBinding: D1Database;
 
   constructor(dbBinding: D1Database) {
     this.db = drizzle(dbBinding, { schema });
+    this.dbBinding = dbBinding;
   }
 
   private async logTimeline(companyId: string, candidateId: string, actor: AtsActor | undefined, event: string, note?: string) {
@@ -293,10 +296,54 @@ export class AtsService {
     await this.db.update(schema.offers).set({ status: decision, respondedAt }).where(eq(schema.offers.id, id));
     if (decision === 'accepted') {
       await this.updateCandidateStatus(companyId, actor, offer.candidateId, 'hired');
+      // The state transition above (offer accepted, candidate hired) must
+      // succeed regardless of whether auto-creating the employee record
+      // works — e.g. a duplicate email should surface as a timeline note for
+      // HR to resolve manually, not roll back a real hiring decision.
+      try {
+        await this.hireCandidate(companyId, actor, offer);
+      } catch (err: any) {
+        await this.logTimeline(companyId, offer.candidateId, actor, `Employee record could not be auto-created: ${err.message}`);
+      }
     } else {
       await this.logTimeline(companyId, offer.candidateId, actor, 'Offer declined');
     }
     return { ...offer, status: decision, respondedAt };
+  }
+
+  // Bridges the ATS pipeline to Workforce/onboarding: an accepted offer used
+  // to leave the candidate at status 'hired' with no employee record and no
+  // requisition closure — HR had to re-key the person by hand.
+  private async hireCandidate(companyId: string, actor: AtsActor | undefined, offer: any) {
+    const candidate = await this.db.query.candidates.findFirst({ where: eq(schema.candidates.id, offer.candidateId) });
+    if (!candidate || candidate.hiredEmployeeId) return; // already linked — don't double-create on a re-triggered response
+
+    const [firstName, ...rest] = candidate.name.trim().split(/\s+/);
+    const lastName = rest.join(' ') || firstName;
+
+    const employeeService = new EmployeeService(this.dbBinding);
+    const employee = await employeeService.createForCompany(companyId, {
+      name: firstName,
+      lastName,
+      email: candidate.email,
+      phone: candidate.phone || null,
+      role: 'EMPLOYEE',
+      department: offer.department || null,
+      employmentType: 'Full-time',
+      salary: offer.salary,
+      hireDate: offer.startDate || new Date().toISOString().split('T')[0],
+    });
+
+    await this.db.update(schema.candidates).set({ hiredEmployeeId: employee.id }).where(eq(schema.candidates.id, candidate.id));
+
+    if (offer.requisitionId) {
+      await this.db
+        .update(schema.jobRequisitions)
+        .set({ status: 'Filled' })
+        .where(and(eq(schema.jobRequisitions.id, offer.requisitionId), eq(schema.jobRequisitions.companyId, companyId)));
+    }
+
+    await this.logTimeline(companyId, candidate.id, actor, `Employee record created (${employee.id}) — onboarding started`);
   }
 
   async rescindOffer(companyId: string, actor: AtsActor | undefined, id: string) {

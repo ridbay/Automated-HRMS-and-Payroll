@@ -55,11 +55,8 @@ import {
   AreaChart,
   Area,
 } from "recharts";
-import {
-  MOCK_LEAVE_BALANCES,
-  MOCK_EMPLOYEES,
-} from "../../data/mocks";
 import { useMyAttendance, useClockIn, useClockOut, useOvertimeRequests, useSubmitOvertime } from "../../api/client";
+import { useAuth } from "../../context/AuthContext";
 
 const Attendance: React.FC = () => {
   const [activeTab, setActiveTab] = useState<
@@ -127,7 +124,7 @@ const Attendance: React.FC = () => {
     });
   };
 
-  const me = MOCK_EMPLOYEES[0];
+  const { user: me } = useAuth();
   const noteRef = useRef<HTMLTextAreaElement>(null);
 
   // Stats calculation
@@ -975,7 +972,7 @@ const Attendance: React.FC = () => {
         <div className="flex items-center gap-6">
           <div className="relative">
             <img
-              src={me.avatar}
+              src={me?.avatar}
               className="w-16 h-16 rounded-[1.5rem] object-cover border-4 border-white shadow-xl ring-1 ring-slate-100"
             />
             <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-emerald-500 border-4 border-white rounded-xl shadow-md" />
@@ -985,7 +982,7 @@ const Attendance: React.FC = () => {
               Professional Presence
             </h1>
             <p className="text-slate-500 font-medium">
-              {me.name} • {me.role}
+              {me?.name} • {me?.role}
             </p>
           </div>
         </div>
