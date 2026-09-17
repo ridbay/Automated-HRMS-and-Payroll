@@ -110,7 +110,7 @@ export const useUpdateLeaveRequest = () => {
   return useMutation({
     mutationFn: async ({ id, status, days, managerComment }: any) => {
       const res = await fetchWithTenant(`${API_URL}/admin/leaves/${id}/status`, {
-        method: 'PATCH',
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status, days, managerComment }),
       });

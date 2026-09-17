@@ -1,13 +1,15 @@
-import React, { useState } from 'react';
-import { useCreateCourse } from '../../api/learning.client';
+import React, { useEffect, useState } from 'react';
+import { useCreateCourse, useUpdateCourse } from '../../api/learning.client';
 import { X } from 'lucide-react';
 
 interface CourseModalProps {
   isOpen: boolean;
   onClose: () => void;
+  course?: { id: string; title: string; description?: string; url?: string; duration: number; status: string } | null;
 }
 
-export const CourseModal: React.FC<CourseModalProps> = ({ isOpen, onClose }) => {
+export const CourseModal: React.FC<CourseModalProps> = ({ isOpen, onClose, course = null }) => {
+  const isEditing = !!course;
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [url, setUrl] = useState('');
@@ -15,30 +17,42 @@ export const CourseModal: React.FC<CourseModalProps> = ({ isOpen, onClose }) => 
   const [status, setStatus] = useState('active');
 
   const createCourse = useCreateCourse();
+  const updateCourse = useUpdateCourse();
+  const saveCourse = isEditing ? updateCourse : createCourse;
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setTitle(course?.title || '');
+    setDescription(course?.description || '');
+    setUrl(course?.url || '');
+    setDuration(course ? String(course.duration) : '');
+    setStatus(course?.status || 'active');
+  }, [isOpen, course]);
 
   if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    createCourse.mutate(
-      {
-        title,
-        description,
-        url,
-        duration: parseInt(duration, 10),
-        status,
-      },
-      {
-        onSuccess: () => {
-          onClose();
-          setTitle('');
-          setDescription('');
-          setUrl('');
-          setDuration('');
-          setStatus('active');
-        },
-      }
-    );
+    const payload = {
+      title,
+      description,
+      url,
+      duration: parseInt(duration, 10),
+      status,
+    };
+    const onSuccess = () => {
+      onClose();
+      setTitle('');
+      setDescription('');
+      setUrl('');
+      setDuration('');
+      setStatus('active');
+    };
+    if (isEditing) {
+      updateCourse.mutate({ id: course!.id, data: payload }, { onSuccess });
+    } else {
+      createCourse.mutate(payload, { onSuccess });
+    }
   };
 
   return (
@@ -50,7 +64,7 @@ export const CourseModal: React.FC<CourseModalProps> = ({ isOpen, onClose }) => 
         >
           <X size={24} />
         </button>
-        <h2 className="text-2xl font-black text-slate-800 mb-6 tracking-tight">Add New Course</h2>
+        <h2 className="text-2xl font-black text-slate-800 mb-6 tracking-tight">{isEditing ? 'Edit Course' : 'Add New Course'}</h2>
         
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -111,10 +125,10 @@ export const CourseModal: React.FC<CourseModalProps> = ({ isOpen, onClose }) => 
           
           <button
             type="submit"
-            disabled={createCourse.isPending}
+            disabled={saveCourse.isPending}
             className="w-full bg-indigo-600 text-white rounded-xl py-4 font-black uppercase tracking-widest text-sm hover:bg-indigo-700 transition-colors disabled:opacity-50 mt-4"
           >
-            {createCourse.isPending ? 'Saving...' : 'Save Course'}
+            {saveCourse.isPending ? 'Saving...' : isEditing ? 'Save Changes' : 'Save Course'}
           </button>
         </form>
       </div>

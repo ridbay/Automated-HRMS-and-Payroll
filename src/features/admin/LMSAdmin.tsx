@@ -4,6 +4,7 @@ import {
   GraduationCap,
   Plus,
   Trash2,
+  Pencil,
   BookOpen,
   Clock,
   PlayCircle,
@@ -16,6 +17,7 @@ import { AssignCourseModal } from "./AssignCourseModal";
 
 const LMSAdmin: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingCourse, setEditingCourse] = useState<any | null>(null);
   const [assigningCourse, setAssigningCourse] = useState<{ id: string; title: string } | null>(null);
   const { data: courses = [], isLoading } = useAdminCourses();
   const deleteCourse = useDeleteCourse();
@@ -32,8 +34,8 @@ const LMSAdmin: React.FC = () => {
             Manage employee training, courses, and compliance modules.
           </p>
         </div>
-        <button 
-          onClick={() => setIsModalOpen(true)}
+        <button
+          onClick={() => { setEditingCourse(null); setIsModalOpen(true); }}
           className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-100 hover:scale-105 transition-all flex items-center gap-2"
         >
           <Plus size={18} /> Add Course
@@ -65,16 +67,24 @@ const LMSAdmin: React.FC = () => {
               >
                 <div className="h-32 bg-indigo-50 flex items-center justify-center border-b border-indigo-100 relative">
                   <PlayCircle size={40} className="text-indigo-300 group-hover:text-indigo-500 transition-colors" />
-                  <button 
-                    onClick={() => {
-                      if (window.confirm("Are you sure you want to delete this course?")) {
-                        deleteCourse.mutate(course.id);
-                      }
-                    }}
-                    className="absolute top-4 right-4 p-2 bg-white/50 text-slate-400 hover:bg-red-50 hover:text-red-600 rounded-xl transition-colors backdrop-blur-sm"
-                  >
-                    <Trash2 size={16} />
-                  </button>
+                  <div className="absolute top-4 right-4 flex gap-2">
+                    <button
+                      onClick={() => { setEditingCourse(course); setIsModalOpen(true); }}
+                      className="p-2 bg-white/50 text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 rounded-xl transition-colors backdrop-blur-sm"
+                    >
+                      <Pencil size={16} />
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (window.confirm("Are you sure you want to delete this course?")) {
+                          deleteCourse.mutate(course.id);
+                        }
+                      }}
+                      className="p-2 bg-white/50 text-slate-400 hover:bg-red-50 hover:text-red-600 rounded-xl transition-colors backdrop-blur-sm"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
                 </div>
 
                 <div className="p-6 flex-1 flex flex-col">
@@ -110,7 +120,8 @@ const LMSAdmin: React.FC = () => {
 
       <CourseModal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={() => { setIsModalOpen(false); setEditingCourse(null); }}
+        course={editingCourse}
       />
 
       <AssignCourseModal

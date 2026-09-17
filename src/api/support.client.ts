@@ -33,7 +33,7 @@ export const useUpdateSupportTicket = () => {
   return useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
       const res = await fetchWithTenant(`${API_URL}/support/tickets/${id}/status`, {
-        method: 'PATCH',
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status }),
       });

@@ -21,6 +21,17 @@ export const createCourse = async (data: any) => {
   return body.data;
 };
 
+export const updateCourse = async ({ id, data }: { id: string; data: any }) => {
+  const res = await fetchWithTenant(`${API_URL}/admin/courses/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error('Failed to update course');
+  const body = await res.json();
+  return body.data;
+};
+
 export const deleteCourse = async (courseId: string) => {
   const res = await fetchWithTenant(`${API_URL}/admin/courses/${courseId}`, {
     method: 'DELETE',
@@ -88,6 +99,16 @@ export const useCreateCourse = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: createCourse,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-courses'] });
+    },
+  });
+};
+
+export const useUpdateCourse = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: updateCourse,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-courses'] });
     },
