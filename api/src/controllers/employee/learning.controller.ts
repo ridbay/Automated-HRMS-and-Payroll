@@ -15,6 +15,7 @@ export class EmployeeLearningController {
     const employeeId = c.get('user')?.sub || c.get('employeeId');
     if (!employeeId) return c.json({ error: 'Employee not found' }, 400);
     const enrollmentId = c.req.param('id');
+    if (!enrollmentId) return c.json({ error: 'Enrollment ID is required' }, 400);
     const body = await c.req.json();
 
     if (body.progress === undefined) {

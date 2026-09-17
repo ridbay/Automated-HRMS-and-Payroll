@@ -22,7 +22,7 @@ const DEFAULT_SETTINGS = {
   workingDaysPerMonth: 22,
   prorationEnabled: true,
   minWageCheckEnabled: true,
-  minWageAnnual: 360000,
+  minWageAnnual: 840000,
   pensionEmployeeRate: 8,
   pensionEmployerRate: 10,
   applyConsolidatedReliefAllowance: true,
@@ -273,15 +273,19 @@ export class PayrollService {
   }
 
   // ---------------- Exceptions (dashboard) ----------------
-  private buildExceptions(activeEmployees: any[]) {
+  private buildExceptions(activeEmployees: any[], settings?: any) {
     const exceptions: any[] = [];
+    const minWage = settings?.minWageAnnual ?? 840000;
     for (const emp of activeEmployees) {
       const name = `${emp.name} ${emp.lastName || ''}`.trim();
+      const salary = emp.salary || emp.baseSalary || 0;
       if (!emp.accountNumber || !emp.bankName) {
         exceptions.push({ employeeId: emp.id, employeeName: name, issue: 'Missing Bank Details', severity: 'red', type: 'Compliance' });
       }
-      if (!emp.salary && !emp.baseSalary) {
+      if (!salary) {
         exceptions.push({ employeeId: emp.id, employeeName: name, issue: 'Salary Not Configured', severity: 'red', type: 'Calculation' });
+      } else if (settings?.minWageCheckEnabled && salary < minWage) {
+        exceptions.push({ employeeId: emp.id, employeeName: name, issue: `Below Statutory Minimum Wage (₦${Math.round(minWage / 12).toLocaleString()}/mo)`, severity: 'red', type: 'Compliance' });
       }
       if (!emp.pfa && !emp.pensionId) {
         exceptions.push({ employeeId: emp.id, employeeName: name, issue: 'Missing PFA / Pension ID', severity: 'orange', type: 'Statutory' });
@@ -330,14 +334,28 @@ export class PayrollService {
     const itfContribution = settings.itfEnabled ? Math.round(grossPay * ((settings.itfRate ?? 1) / 100)) : 0;
 
     const grossAnnual = grossPay * 12;
+    // PITA Section 33(2) statutory deductions allowable as relief: Pension + NHF
+    const statutoryReliefAnnual = (pensionDeductions + nhfDeductions) * 12;
     let taxableAnnual;
     if (settings.applyConsolidatedReliefAllowance) {
       const cra = Math.max(200000, grossAnnual * 0.01) + grossAnnual * 0.2;
-      taxableAnnual = Math.max(0, grossAnnual - cra - pensionDeductions * 12);
+      taxableAnnual = Math.max(0, grossAnnual - cra - statutoryReliefAnnual);
     } else {
-      taxableAnnual = Math.max(0, grossAnnual - pensionDeductions * 12);
+      taxableAnnual = Math.max(0, grossAnnual - statutoryReliefAnnual);
     }
-    const taxDeductions = Math.round(calculateAnnualPaye(taxableAnnual, brackets) / 12);
+
+    const minWageAnnual = settings.minWageAnnual ?? 840000;
+    // Finance Act / PITA Section 37: Minimum wage earners (₦840,000/yr or less) are exempt from PAYE
+    const isMinWageExempt = settings.minWageCheckEnabled && grossAnnual <= minWageAnnual;
+
+    let taxDeductions = 0;
+    if (!isMinWageExempt) {
+      const calculatedAnnualPaye = calculateAnnualPaye(taxableAnnual, brackets);
+      // PITA Section 37: 1% minimum tax on gross income if computed tax is lower
+      const minTaxAnnual = grossAnnual * 0.01;
+      const annualPaye = taxableAnnual > 0 ? Math.max(calculatedAnnualPaye, minTaxAnnual) : minTaxAnnual;
+      taxDeductions = Math.round(annualPaye / 12);
+    }
 
     const loanDeduction = loan && loan.remainingBalance > 0 ? Math.min(loan.monthlyInstallment, loan.remainingBalance) : 0;
     const otherDeductions = Math.max(0, Math.round(Number(overrides?.otherDeductions) || 0));
@@ -420,7 +438,7 @@ export class PayrollService {
       totalItf,
       totalLoanDeductions,
       employeeCount: activeEmployees.length,
-      exceptions: this.buildExceptions(activeEmployees),
+      exceptions: this.buildExceptions(activeEmployees, settings),
       payslips,
     };
   }

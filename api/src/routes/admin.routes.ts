@@ -38,7 +38,7 @@ import {
   updateCycleStage,
 } from "../controllers/admin/reviewCycle.controller";
 import { authMiddleware } from "../middlewares/auth.middleware";
-import { requireRole, requirePermission } from "../middlewares/role.middleware";
+import { requireRole, requirePermission, PermissionModule } from "../middlewares/role.middleware";
 import payrollRoutes from "./payroll.routes";
 import leaveAdminRoutes from "./leave-admin.routes";
 import requisitionRoutes from "./requisition.routes";
@@ -59,6 +59,9 @@ import {
   DataExportService,
   NotificationService,
 } from "../services/controlCenter.service";
+import { MailgunService } from "../services/mailgun.service";
+import { WorkflowEngineService } from "../services/workflowEngine.service";
+import { StorageService } from "../services/storage.service";
 import {
   getOverview as getReportsOverview,
   getWorkforceReport,
@@ -75,19 +78,21 @@ const adminRoutes = new Hono();
 
 import { eq } from "drizzle-orm";
 
+adminRoutes.use("*", authMiddleware);
+
 // Only SUPER_ADMIN and HR_ADMIN reach any admin surface today (see role.middleware
 // plan notes) except payroll, which additionally allows MANAGER/PAYROLL_OFFICER.
 // requirePermission() layers an optional, additive narrowing on top for any
 // employee who's been assigned a custom role in Settings > Roles & Permissions;
 // it's a no-op for everyone else (the common case today).
 const adminOnly = requireRole("SUPER_ADMIN", "HR_ADMIN");
-const view = (mod: "workforce" | "payroll" | "performance" | "settings" | "leave") => requirePermission(mod, "view");
-const create = (mod: "workforce" | "performance") => requirePermission(mod, "create");
-const edit = (mod: "workforce" | "performance" | "settings") => requirePermission(mod, "edit");
-const del = (mod: "workforce") => requirePermission(mod, "delete");
+const view = (mod: PermissionModule) => requirePermission(mod, "view");
+const create = (mod: PermissionModule) => requirePermission(mod, "create");
+const edit = (mod: PermissionModule) => requirePermission(mod, "edit");
+const del = (mod: PermissionModule) => requirePermission(mod, "delete");
 
 // Development-only seed route to create default users with known passwords
-adminRoutes.get("/dev/seed", async (c: any) => {
+adminRoutes.get("/dev/seed", adminOnly, async (c: any) => {
   try {
     const db = drizzle(c.env.DB, { schema });
 
@@ -159,8 +164,6 @@ adminRoutes.get("/dev/seed", async (c: any) => {
     return c.json({ error: err.message, stack: err.stack }, 500);
   }
 });
-
-adminRoutes.use("*", authMiddleware);
 
 adminRoutes.get("/employees", adminOnly, view("workforce"), getEmployees);
 adminRoutes.get("/employees/:id", adminOnly, view("workforce"), getEmployee);
@@ -373,6 +376,29 @@ adminRoutes.put("/company", adminOnly, edit("settings"), async (c: any) => {
     ip: c.req.header("cf-connecting-ip"),
   });
   return c.json(company);
+});
+
+adminRoutes.post("/company/logo", adminOnly, edit("settings"), async (c: any) => {
+  const companyId = c.get("companyId");
+  const body = await c.req.parseBody();
+  const file = body["file"] as File;
+  if (!file) return c.json({ error: "No file provided" }, 400);
+
+  const storage = new StorageService(c.env.BUCKET);
+  const fileKey = await storage.uploadCompanyLogo(companyId, file);
+  const logoUrl = `/api/public/company/${companyId}/logo`;
+
+  const companyService = new CompanyService(c.env.DB);
+  const company = await companyService.updateCompany(companyId, { logoUrl: fileKey });
+
+  await new AuditService(c.env.DB).log(companyId, {
+    actorId: c.get("employeeId"),
+    action: "Updated company logo",
+    module: "company",
+    ip: c.req.header("cf-connecting-ip"),
+  });
+
+  return c.json({ data: { ...company, logoUrl, fileKey } });
 });
 
 // Org Routes (Departments & Locations)
@@ -590,6 +616,39 @@ adminRoutes.put("/email-templates/:key", adminOnly, edit("settings"), async (c: 
   return c.json(template);
 });
 
+adminRoutes.post("/email-templates/:key/test", adminOnly, edit("settings"), async (c: any) => {
+  const companyId = c.get("companyId");
+  const key = c.req.param("key");
+  const payload = await c.req.json().catch(() => ({}));
+  const toEmail = payload.to || "employee@example.com";
+  const mailgun = new MailgunService(c.env.DB, c.env);
+  const result = await mailgun.sendEmail({
+    companyId,
+    to: toEmail,
+    templateKey: key,
+    variables: payload.variables || {
+      employee_first_name: "Alex",
+      employee_last_name: "Johnson",
+      job_title: "Software Engineer",
+      start_date: "Monday, Oct 6",
+      manager_name: "Sarah Connor",
+      company_name: "ZenHR Demo",
+      leave_type: "Annual Leave",
+      end_date: "Friday, Oct 17",
+      approver_name: "HR Admin",
+      rejection_reason: "Operational constraints",
+      pay_period: "May 2024",
+      net_pay: "₦450,000",
+      company_domain: "example.com",
+    },
+    eventType: `template.test.${key}`,
+  });
+  if (!result.success) {
+    return c.json({ error: result.error || "Failed to send test template email" }, 502);
+  }
+  return c.json(result);
+});
+
 // ---------------- Integrations ----------------
 adminRoutes.get("/integrations", adminOnly, view("settings"), async (c: any) => {
   const companyId = c.get("companyId");
@@ -664,6 +723,56 @@ adminRoutes.post("/integrations/slack/test", adminOnly, edit("settings"), async 
   return c.json({ success: true });
 });
 
+// Mailgun Email Delivery integration
+adminRoutes.put("/integrations/mailgun/connect", adminOnly, edit("settings"), async (c: any) => {
+  const companyId = c.get("companyId");
+  const payload = await c.req.json();
+  const service = new IntegrationService(c.env.DB);
+  try {
+    const integration = await service.connectMailgun(companyId, payload);
+    await new AuditService(c.env.DB).log(companyId, {
+      actorId: c.get("employeeId"),
+      action: "Connected Mailgun Email Delivery",
+      module: "integrations",
+      ip: c.req.header("cf-connecting-ip"),
+    });
+    return c.json(integration);
+  } catch (error: any) {
+    return c.json({ error: error.message }, 400);
+  }
+});
+
+adminRoutes.post("/integrations/mailgun/disconnect", adminOnly, edit("settings"), async (c: any) => {
+  const companyId = c.get("companyId");
+  const service = new IntegrationService(c.env.DB);
+  const integration = await service.disconnect(companyId, "mailgun");
+  await new AuditService(c.env.DB).log(companyId, {
+    actorId: c.get("employeeId"),
+    action: "Disconnected Mailgun Email Delivery",
+    module: "integrations",
+    ip: c.req.header("cf-connecting-ip"),
+  });
+  return c.json(integration);
+});
+
+adminRoutes.post("/integrations/mailgun/test", adminOnly, edit("settings"), async (c: any) => {
+  const companyId = c.get("companyId");
+  const payload = await c.req.json().catch(() => ({}));
+  const toEmail = payload.to || "test@example.com";
+  const mailgun = new MailgunService(c.env.DB, c.env);
+  const result = await mailgun.sendEmail({
+    companyId,
+    to: toEmail,
+    subject: "Test Email from ZenHR",
+    text: "This is a test email confirming that your Mailgun email delivery integration is working correctly.",
+    eventType: "mailgun.test",
+  });
+  if (!result.success) {
+    return c.json({ error: result.error || "Failed to deliver test email" }, 502);
+  }
+  return c.json(result);
+});
+
 adminRoutes.get("/integrations/:key/events", adminOnly, view("settings"), async (c: any) => {
   const companyId = c.get("companyId");
   const service = new IntegrationService(c.env.DB);
@@ -690,6 +799,30 @@ adminRoutes.put("/workflows/:key", adminOnly, edit("settings"), async (c: any) =
     ip: c.req.header("cf-connecting-ip"),
   });
   return c.json(workflow);
+});
+
+adminRoutes.post("/workflows/:key/trigger", adminOnly, edit("settings"), async (c: any) => {
+  const companyId = c.get("companyId");
+  const key = c.req.param("key");
+  const payload = await c.req.json().catch(() => ({}));
+  const engine = new WorkflowEngineService(c.env.DB, c.env);
+  const result = await engine.trigger({
+    companyId,
+    workflowKey: key,
+    triggerEvent: payload.triggerEvent || `manual.trigger.${key}`,
+    entityId: payload.entityId,
+    actorId: c.get("employeeId"),
+    data: payload.data || {},
+  });
+  return c.json(result);
+});
+
+adminRoutes.get("/workflows/executions", adminOnly, view("settings"), async (c: any) => {
+  const companyId = c.get("companyId");
+  const engine = new WorkflowEngineService(c.env.DB, c.env);
+  const key = c.req.query("key");
+  const limit = parseInt(c.req.query("limit") || "20", 10);
+  return c.json(await engine.listExecutions(companyId, key, limit));
 });
 
 // ---------------- Data & Backup ----------------

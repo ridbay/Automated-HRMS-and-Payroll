@@ -47,7 +47,7 @@ describe('Admin Performance Controller', () => {
 
   it('getEmployeeAssessments should return assessments', async () => {
     mockContext.req.param.mockReturnValue('emp-1');
-    const res = await performanceController.getEmployeeAssessments(mockContext);
+    const res: any = await performanceController.getEmployeeAssessments(mockContext);
     expect(res.data).toEqual([{ id: 'ass-1' }]);
   });
 });

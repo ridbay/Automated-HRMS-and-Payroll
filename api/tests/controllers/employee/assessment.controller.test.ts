@@ -11,7 +11,6 @@ describe('Employee Assessment Controller', () => {
     vi.clearAllMocks();
 
     AssessmentService.prototype.getEmployeeAssessments = vi.fn();
-    AssessmentService.prototype.getAssessment = vi.fn();
     AssessmentService.prototype.getAssessmentById = vi.fn();
     AssessmentService.prototype.createAssessment = vi.fn();
     AssessmentService.prototype.updateAssessment = vi.fn();

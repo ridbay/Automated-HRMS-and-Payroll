@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { AdminLearningController } from '../../../../src/controllers/admin/learning.controller';
-import { LearningService } from '../../../../src/services/learning.service';
+import { AdminLearningController } from '../../../src/controllers/admin/learning.controller';
+import { LearningService } from '../../../src/services/learning.service';
 
-vi.mock('../../../../src/services/learning.service');
+vi.mock('../../../src/services/learning.service');
 
 describe('Admin Learning Controller', () => {
   let mockContext: any;
@@ -30,35 +30,35 @@ describe('Admin Learning Controller', () => {
   });
 
   it('should return all courses', async () => {
-    const res = await AdminLearningController.getAllCourses(mockContext);
+    const res: any = await AdminLearningController.getAllCourses(mockContext);
     expect(res.data.data).toHaveLength(1);
     expect(res.data.data[0].title).toBe('React Basics');
   });
 
   it('should create a course', async () => {
-    const res = await AdminLearningController.createCourse(mockContext);
+    const res: any = await AdminLearningController.createCourse(mockContext);
     expect(res.status).toBe(201);
     expect(res.data.data.title).toBe('React Basics');
   });
 
   it('should get course by id', async () => {
-    const res = await AdminLearningController.getCourseById(mockContext);
+    const res: any = await AdminLearningController.getCourseById(mockContext);
     expect(res.data.data.title).toBe('React Basics');
   });
 
   it('should update a course', async () => {
-    const res = await AdminLearningController.updateCourse(mockContext);
+    const res: any = await AdminLearningController.updateCourse(mockContext);
     expect(res.data.data.title).toBe('React Advanced');
   });
 
   it('should assign a course', async () => {
-    const res = await AdminLearningController.assignCourse(mockContext);
+    const res: any = await AdminLearningController.assignCourse(mockContext);
     expect(res.status).toBe(201);
     expect(res.data.data.success).toBe(true);
   });
 
   it('should delete a course', async () => {
-    const res = await AdminLearningController.deleteCourse(mockContext);
+    const res: any = await AdminLearningController.deleteCourse(mockContext);
     expect(res.data.success).toBe(true);
   });
 });

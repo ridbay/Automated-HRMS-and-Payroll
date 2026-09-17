@@ -15,6 +15,7 @@ export class EmployeeSurveyController {
     const companyId = c.get('tenantId') || c.get('companyId');
     if (!companyId) return c.json({ error: 'Tenant not found' }, 400);
     const surveyId = c.req.param('id');
+    if (!surveyId) return c.json({ error: 'Survey ID is required' }, 400);
 
     const surveyService = new SurveyService(c.env.DB);
     const survey = await surveyService.getSurveyById(surveyId, companyId);
@@ -29,7 +30,9 @@ export class EmployeeSurveyController {
     const companyId = c.get('tenantId') || c.get('companyId');
     const employeeId = c.get('user')?.sub || c.get('employeeId');
     if (!companyId) return c.json({ error: 'Tenant not found' }, 400);
+    if (!employeeId) return c.json({ error: 'Employee not found' }, 400);
     const surveyId = c.req.param('id');
+    if (!surveyId) return c.json({ error: 'Survey ID is required' }, 400);
 
     const body = await c.req.json();
     if (!body.answers) {

@@ -13,7 +13,7 @@ export const payrollSettings = sqliteTable('payroll_settings', {
   workingDaysPerMonth: integer('working_days_per_month').notNull().default(22),
   prorationEnabled: integer('proration_enabled', { mode: 'boolean' }).notNull().default(true),
   minWageCheckEnabled: integer('min_wage_check_enabled', { mode: 'boolean' }).notNull().default(true),
-  minWageAnnual: integer('min_wage_annual').notNull().default(360000), // Nigeria national minimum wage baseline
+  minWageAnnual: integer('min_wage_annual').notNull().default(840000), // Nigeria national minimum wage baseline (₦70,000/mo)
   pensionEmployeeRate: real('pension_employee_rate').notNull().default(8), // % of basic+housing+transport
   pensionEmployerRate: real('pension_employer_rate').notNull().default(10),
   applyConsolidatedReliefAllowance: integer('apply_cra', { mode: 'boolean' }).notNull().default(true),

@@ -10,7 +10,7 @@ describe('Employee Attendance Controller', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    AttendanceService.prototype.getEmployeeAttendanceRecord = vi.fn();
+    AttendanceService.prototype.getEmployeeAttendance = vi.fn();
     AttendanceService.prototype.clockIn = vi.fn();
     AttendanceService.prototype.clockOut = vi.fn();
 

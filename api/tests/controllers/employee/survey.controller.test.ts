@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { EmployeeSurveyController } from '../../../../src/controllers/employee/survey.controller';
-import { SurveyService } from '../../../../src/services/survey.service';
+import { EmployeeSurveyController } from '../../../src/controllers/employee/survey.controller';
+import { SurveyService } from '../../../src/services/survey.service';
 
-vi.mock('../../../../src/services/survey.service');
+vi.mock('../../../src/services/survey.service');
 
 describe('Employee Survey Controller', () => {
   let mockContext: any;
@@ -30,18 +30,18 @@ describe('Employee Survey Controller', () => {
   });
 
   it('should get active surveys', async () => {
-    const res = await EmployeeSurveyController.getActiveSurveys(mockContext);
+    const res: any = await EmployeeSurveyController.getActiveSurveys(mockContext);
     expect(res.data.data).toHaveLength(1);
     expect(res.data.data[0].title).toBe('Q1 Pulse');
   });
 
   it('should get survey details for an active survey', async () => {
-    const res = await EmployeeSurveyController.getSurveyDetails(mockContext);
+    const res: any = await EmployeeSurveyController.getSurveyDetails(mockContext);
     expect(res.data.data.title).toBe('Q1 Pulse');
   });
 
   it('should submit a survey response', async () => {
-    const res = await EmployeeSurveyController.submitSurveyResponse(mockContext);
+    const res: any = await EmployeeSurveyController.submitSurveyResponse(mockContext);
     expect(res.status).toBe(201);
     expect(res.data.data.success).toBe(true);
   });

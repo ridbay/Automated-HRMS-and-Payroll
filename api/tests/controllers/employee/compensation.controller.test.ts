@@ -1,23 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as compensationController from '../../../src/controllers/employee/compensation.controller';
+import { BenefitsService } from '../../../src/services/benefits.service';
 
-vi.mock('drizzle-orm/d1', () => ({
-  drizzle: vi.fn(() => ({
-    select: vi.fn(() => ({
-      from: vi.fn(() => ({
-        where: vi.fn(() => ({
-          orderBy: vi.fn().mockResolvedValue([{ id: 'comp-1' }])
-        }))
-      }))
-    })),
-  }))
-}));
+vi.mock('../../../src/services/benefits.service');
 
 describe('Employee Compensation Controller', () => {
   let mockContext: any;
 
   beforeEach(() => {
     vi.clearAllMocks();
+
+    BenefitsService.prototype.getEmployeeCompensation = vi.fn().mockResolvedValue({
+      baseSalary: 5000000,
+      benefits: { id: 'ben-1', companyId: 'comp-1', employeeId: 'emp-1' }
+    });
 
     mockContext = {
       req: {
@@ -29,15 +25,6 @@ describe('Employee Compensation Controller', () => {
       get: vi.fn((k: string) => {
         if (k === 'companyId') return 'comp-1';
         if (k === 'employeeId') return 'emp-1';
-        if (k === 'db') return {
-          select: vi.fn(() => ({
-            from: vi.fn(() => ({
-              where: vi.fn(() => ({
-                orderBy: vi.fn().mockResolvedValue([{ id: 'comp-1' }])
-              }))
-            }))
-          }))
-        };
         return undefined;
       }),
       json: vi.fn((data, status) => ({ data, status })),
@@ -45,7 +32,9 @@ describe('Employee Compensation Controller', () => {
   });
 
   it('getMyCompensation should return compensation data', async () => {
-    const res = await compensationController.getMyCompensation(mockContext);
+    const res: any = await compensationController.getMyCompensation(mockContext);
     expect(res.data).toBeDefined();
+    expect(res.data.baseSalary).toBe(5000000);
+    expect(BenefitsService.prototype.getEmployeeCompensation).toHaveBeenCalledWith('comp-1', 'emp-1');
   });
 });

@@ -5,6 +5,7 @@ import * as schema from '../../db/schema';
 import { AtsService, AtsActor } from '../../services/ats.service';
 import { StorageService } from '../../services/storage.service';
 import { NotificationService } from '../../services/controlCenter.service';
+import { MailgunService } from '../../services/mailgun.service';
 import { AppEnv } from '../../types';
 
 // Same shape/derivation as requisition.controller.ts's getActor — kept as a
@@ -220,6 +221,15 @@ export const sendOffer = async (c: Context<AppEnv>) => {
       'ats.offer_sent',
       `📨 Offer sent to ${candidate?.name || 'a candidate'} for *${updated.title}*`
     );
+
+    if (candidate?.email) {
+      new MailgunService(c.env.DB, c.env).sendOfferLetter(companyId, {
+        email: candidate.email,
+        firstName: candidate.name,
+        jobTitle: updated.title,
+        startDate: updated.startDate || undefined,
+      }).catch(() => {});
+    }
 
     return c.json({ data: updated });
   } catch (error: any) {

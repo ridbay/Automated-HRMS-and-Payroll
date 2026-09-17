@@ -31,6 +31,9 @@ import {
   completeComplianceTask,
   getPayrollDashboard,
   getEmployeePayslips,
+  disbursePayrollRun,
+  validateBankAccount,
+  getMonnifyBanks,
 } from '../controllers/admin/payroll.controller';
 import { tenantMiddleware } from '../middlewares/tenant.middleware';
 import { requireRole, requirePermission } from '../middlewares/role.middleware';
@@ -87,9 +90,12 @@ payrollRoutes.get('/runs', adminOrManager, requirePermission('payroll', 'view'),
 payrollRoutes.get('/runs/:id', adminOnly, requirePermission('payroll', 'view'), getPayrollRun);
 payrollRoutes.post('/runs/:id/approve', adminOnly, requirePermission('payroll', 'approve'), approvePayrollRun);
 payrollRoutes.post('/runs/:id/reject', adminOnly, requirePermission('payroll', 'edit'), rejectPayrollRun);
+payrollRoutes.post('/runs/:id/disburse', adminOnly, requirePermission('payroll', 'edit'), disbursePayrollRun);
 payrollRoutes.post('/runs/:id/mark-paid', adminOnly, requirePermission('payroll', 'edit'), markPayrollRunPaid);
 payrollRoutes.get('/runs/:id/bank-file', adminOnly, requirePermission('payroll', 'view'), getBankFile);
 payrollRoutes.get('/runs/:id/remittance/:type', adminOnly, requirePermission('payroll', 'view'), getRemittanceSchedule);
+payrollRoutes.get('/banks', adminOrManager, requirePermission('payroll', 'view'), getMonnifyBanks);
+payrollRoutes.get('/validate-account', adminOrManager, requirePermission('payroll', 'view'), validateBankAccount);
 
 // Compliance / remittances
 payrollRoutes.get('/compliance', adminOnly, requirePermission('payroll', 'view'), getComplianceTasks);

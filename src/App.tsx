@@ -54,7 +54,7 @@ const AppContent: React.FC = () => {
     typeof window !== "undefined" ? window.location.pathname.match(CAREERS_PATH_MATCH) : null;
 
   useEffect(() => {
-    if (user) {
+    if (user && (window.location.pathname === "/" || window.location.pathname === "")) {
       if (user.role === "EMPLOYEE") {
         setActiveTab("portal");
       } else if (user.role === "MANAGER") {
@@ -62,8 +62,6 @@ const AppContent: React.FC = () => {
       } else if (user.role === "RECRUITER") {
         setActiveTab("recruiter-dashboard");
       } else {
-        // HR_ADMIN, SUPER_ADMIN, PAYROLL_OFFICER all land on "dashboard" —
-        // renderContent below picks the right dashboard component per role.
         setActiveTab("dashboard");
       }
     }

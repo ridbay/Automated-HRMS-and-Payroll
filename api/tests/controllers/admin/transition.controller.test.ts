@@ -11,8 +11,8 @@ describe('Admin Transition Controller', () => {
     vi.clearAllMocks();
 
     TransitionService.prototype.getAllByCompany = vi.fn();
-    TransitionService.prototype.getTransition = vi.fn();
-    TransitionService.prototype.createTransition = vi.fn();
+    TransitionService.prototype.getById = vi.fn();
+    TransitionService.prototype.create = vi.fn();
 
     mockContext = {
       req: {

@@ -1,6 +1,8 @@
 import { Context } from 'hono';
 import { EmployeeService } from '../../services/employee.service';
 import { AuditService } from '../../services/audit.service';
+import { MailgunService } from '../../services/mailgun.service';
+import { WorkflowEngineService } from '../../services/workflowEngine.service';
 import { AppEnv } from '../../types';
 
 export const getEmployees = async (c: Context<AppEnv>) => {
@@ -47,6 +49,32 @@ export const createEmployee = async (c: Context<AppEnv>) => {
       details: `Role: ${result.role} · Department: ${result.department || 'Unassigned'}`,
       ip: c.req.header('cf-connecting-ip'),
     });
+
+    if (result.email) {
+      new MailgunService(c.env.DB, c.env).sendWelcomeEmail(companyId, {
+        email: result.email,
+        firstName: result.name,
+        lastName: result.lastName || '',
+        jobTitle: result.jobTitle || result.role,
+        startDate: result.startDate,
+      }).catch(() => {});
+    }
+
+    new WorkflowEngineService(c.env.DB, c.env).trigger({
+      companyId,
+      workflowKey: 'onboarding',
+      triggerEvent: 'employee.created',
+      entityId: result.id,
+      actorId: c.get('employeeId'),
+      data: {
+        employeeName: `${result.name} ${result.lastName || ''}`.trim(),
+        email: result.email,
+        jobTitle: result.jobTitle || result.role,
+        department: result.department,
+        startDate: result.startDate,
+      },
+    }).catch(() => {});
+
     return c.json(result, 201);
   } catch (err: any) {
     const errorMessage = err.message || '';

@@ -66,3 +66,14 @@ export const workflows = sqliteTable('workflows', {
   createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text('updated_at').$onUpdate(() => new Date().toISOString()),
 });
+
+export const workflowExecutions = sqliteTable('workflow_executions', {
+  id: text('id').primaryKey(),
+  companyId: text('company_id').references(() => companies.id).notNull(),
+  workflowKey: text('workflow_key').notNull(),
+  triggerEvent: text('trigger_event').notNull(),
+  entityId: text('entity_id'),
+  status: text('status').notNull().default('completed'), // 'completed' | 'failed' | 'skipped'
+  details: text('details', { mode: 'json' }),
+  createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+});

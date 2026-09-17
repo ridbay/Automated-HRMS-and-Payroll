@@ -15,6 +15,7 @@ export class AdminAssetController {
     const companyId = c.get('tenantId') || c.get('companyId');
     if (!companyId) return c.json({ error: 'Tenant not found' }, 400);
     const assetId = c.req.param('id');
+    if (!assetId) return c.json({ error: 'Asset ID is required' }, 400);
 
     const assetService = new AssetService(c.env.DB);
     const asset = await assetService.getAssetById(assetId, companyId);
@@ -43,6 +44,7 @@ export class AdminAssetController {
     const companyId = c.get('tenantId') || c.get('companyId');
     if (!companyId) return c.json({ error: 'Tenant not found' }, 400);
     const assetId = c.req.param('id');
+    if (!assetId) return c.json({ error: 'Asset ID is required' }, 400);
     const body = await c.req.json();
 
     const assetService = new AssetService(c.env.DB);
@@ -55,6 +57,7 @@ export class AdminAssetController {
     const companyId = c.get('tenantId') || c.get('companyId');
     if (!companyId) return c.json({ error: 'Tenant not found' }, 400);
     const assetId = c.req.param('id');
+    if (!assetId) return c.json({ error: 'Asset ID is required' }, 400);
 
     const assetService = new AssetService(c.env.DB);
     await assetService.deleteAsset(assetId, companyId);

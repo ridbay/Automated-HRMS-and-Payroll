@@ -11,7 +11,7 @@ describe('Employee Profile Controller', () => {
     vi.clearAllMocks();
 
     EmployeeService.prototype.getEmployeeProfile = vi.fn();
-    EmployeeService.prototype.updateMyProfile = vi.fn();
+    EmployeeService.prototype.updateEmployeeProfile = vi.fn();
     EmployeeService.prototype.addEmergencyContact = vi.fn();
     EmployeeService.prototype.deleteEmergencyContact = vi.fn();
 

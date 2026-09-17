@@ -30,7 +30,6 @@ describe('Employee Performance Summary Controller', () => {
     ReviewCycleService.prototype.getActiveCycle = vi.fn();
     AssessmentService.prototype.getEmployeeAssessments = vi.fn();
     AssessmentService.prototype.getTeamPendingAssessments = vi.fn();
-    GoalService.prototype.getGoalStats = vi.fn();
     GoalService.prototype.getCompletionStats = vi.fn();
 
     mockContext = {

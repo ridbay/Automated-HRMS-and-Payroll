@@ -1367,6 +1367,47 @@ export const useMarkPayrollRunPaid = () => {
   });
 };
 
+export const useDisbursePayrollRun = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (runId: string) => {
+      const res = await fetchWithTenant(`${API_URL}/admin/payroll/runs/${runId}/disburse`, { method: 'POST' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to disburse payroll run');
+      }
+      const json = await res.json();
+      return json.data;
+    },
+    onSuccess: () => invalidatePayrollRuns(queryClient),
+  });
+};
+
+export const useMonnifyBanks = () => {
+  return useQuery({
+    queryKey: ['monnify', 'banks'],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/admin/payroll/banks`);
+      if (!res.ok) throw new Error('Failed to fetch bank list');
+      const json = await res.json();
+      return json.data as Array<{ name: string; code: string }>;
+    },
+    staleTime: 1000 * 60 * 60,
+  });
+};
+
+export const validateBankAccount = async (accountNumber: string, bankCode: string) => {
+  const res = await fetchWithTenant(
+    `${API_URL}/admin/payroll/validate-account?accountNumber=${encodeURIComponent(accountNumber)}&bankCode=${encodeURIComponent(bankCode)}`
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Account validation failed');
+  }
+  const json = await res.json();
+  return json.data as { accountName: string; accountNumber: string; bankCode: string };
+};
+
 // Triggers a browser download of the bank disbursement file for a run.
 export const downloadPayrollBankFile = async (runId: string) => {
   const res = await fetchWithTenant(`${API_URL}/admin/payroll/runs/${runId}/bank-file`);

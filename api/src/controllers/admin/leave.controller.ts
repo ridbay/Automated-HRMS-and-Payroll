@@ -1,5 +1,7 @@
 import { Context } from 'hono';
 import { LeaveService } from '../../services/leave.service';
+import { EmployeeService } from '../../services/employee.service';
+import { MailgunService } from '../../services/mailgun.service';
 import { AppEnv } from '../../types';
 
 export const getAllLeaves = async (c: Context<AppEnv>) => {
@@ -29,6 +31,26 @@ export const updateLeaveStatus = async (c: Context<AppEnv>) => {
       managerId
     }
   );
+
+  if (updated && (payload.status === 'approved' || payload.status === 'rejected')) {
+    new EmployeeService(c.env.DB)
+      .getEmployeeProfile(companyId, updated.employeeId)
+      .then((emp) => {
+        if (emp?.email) {
+          return new MailgunService(c.env.DB, c.env).sendLeaveStatusEmail(companyId, {
+            email: emp.email,
+            firstName: emp.name,
+            leaveType: updated.type,
+            startDate: updated.startDate,
+            endDate: updated.endDate,
+            approverName: 'HR / Manager',
+            status: payload.status as 'approved' | 'rejected',
+            rejectionReason: payload.managerComment,
+          });
+        }
+      })
+      .catch(() => {});
+  }
   
   return c.json(updated);
 };

@@ -32,6 +32,7 @@ export class AdminLearningController {
     const companyId = c.get('tenantId') || c.get('companyId');
     if (!companyId) return c.json({ error: 'Tenant not found' }, 400);
     const courseId = c.req.param('id');
+    if (!courseId) return c.json({ error: 'Course ID is required' }, 400);
 
     const learningService = new LearningService(c.env.DB);
     const course = await learningService.getCourseById(courseId, companyId);
@@ -44,6 +45,7 @@ export class AdminLearningController {
     const companyId = c.get('tenantId') || c.get('companyId');
     if (!companyId) return c.json({ error: 'Tenant not found' }, 400);
     const courseId = c.req.param('id');
+    if (!courseId) return c.json({ error: 'Course ID is required' }, 400);
     const body = await c.req.json();
 
     const learningService = new LearningService(c.env.DB);
@@ -57,6 +59,7 @@ export class AdminLearningController {
     const companyId = c.get('tenantId') || c.get('companyId');
     if (!companyId) return c.json({ error: 'Tenant not found' }, 400);
     const courseId = c.req.param('id');
+    if (!courseId) return c.json({ error: 'Course ID is required' }, 400);
 
     const learningService = new LearningService(c.env.DB);
     const success = await learningService.deleteCourse(courseId, companyId);
@@ -69,6 +72,7 @@ export class AdminLearningController {
     const companyId = c.get('tenantId') || c.get('companyId');
     if (!companyId) return c.json({ error: 'Tenant not found' }, 400);
     const courseId = c.req.param('id');
+    if (!courseId) return c.json({ error: 'Course ID is required' }, 400);
     const body = await c.req.json();
 
     if (!body.employeeIds || !Array.isArray(body.employeeIds)) {
@@ -89,6 +93,7 @@ export class AdminLearningController {
     const companyId = c.get('tenantId') || c.get('companyId');
     if (!companyId) return c.json({ error: 'Tenant not found' }, 400);
     const courseId = c.req.param('id');
+    if (!courseId) return c.json({ error: 'Course ID is required' }, 400);
 
     const learningService = new LearningService(c.env.DB);
     const enrollments = await learningService.getCourseEnrollments(courseId);

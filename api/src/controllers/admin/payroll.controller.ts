@@ -3,6 +3,9 @@ import { eq, and, desc } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { AppEnv } from '../../types';
 import { PayrollService } from '../../services/payroll.service';
+import { EmployeeService } from '../../services/employee.service';
+import { MonnifyService, NIGERIAN_BANK_CODES } from '../../services/monnify.service';
+import { MailgunService } from '../../services/mailgun.service';
 import { NotificationService } from '../../services/controlCenter.service';
 import * as schema from '../../db/schema';
 
@@ -295,6 +298,25 @@ export const markPayrollRunPaid = async (c: Context<AppEnv>) => {
       `💰 Payroll for *${period}* has been paid — ${run.employeeCount} employees, net ₦${run.totalNet.toLocaleString()}`
     );
 
+    service.getRun(companyId, run.id).then(async (runDetail) => {
+      if (!runDetail?.payslips) return;
+      const mailgun = new MailgunService(c.env.DB, c.env);
+      const empService = new EmployeeService(c.env.DB);
+      for (const slip of runDetail.payslips) {
+        try {
+          const emp = await empService.getEmployeeProfile(companyId, slip.employeeId);
+          if (emp?.email) {
+            await mailgun.sendPayslipNotification(companyId, {
+              email: emp.email,
+              firstName: emp.name,
+              payPeriod: period,
+              netPay: `₦${slip.netPay.toLocaleString()}`,
+            });
+          }
+        } catch {}
+      }
+    }).catch(() => {});
+
     return c.json({ data: run });
   } catch (error: any) {
     return c.json({ error: error.message }, 400);
@@ -398,6 +420,50 @@ export const getEmployeePayslips = async (c: Context<AppEnv>) => {
       .orderBy(desc(schema.payrollRuns.periodYear), desc(schema.payrollRuns.periodMonth));
 
     return c.json({ data: records });
+  } catch (error: any) {
+    return c.json({ error: error.message }, 500);
+  }
+};
+
+export const disbursePayrollRun = async (c: Context<AppEnv>) => {
+  try {
+    const companyId = c.get('companyId') as string;
+    const runId = c.req.param('id') as string;
+    const monnify = new MonnifyService(c.env.DB, c.env);
+    const result = await monnify.initiatePayrollDisbursement(companyId, runId);
+    return c.json({ data: result }, 200);
+  } catch (error: any) {
+    return c.json({ error: error.message }, 400);
+  }
+};
+
+export const validateBankAccount = async (c: Context<AppEnv>) => {
+  try {
+    const accountNumber = c.req.query('accountNumber');
+    const bankCode = c.req.query('bankCode');
+    if (!accountNumber || !bankCode) {
+      return c.json({ error: 'accountNumber and bankCode are required' }, 400);
+    }
+    const monnify = new MonnifyService(c.env.DB, c.env);
+    const result = await monnify.validateBankAccount(accountNumber, bankCode);
+    return c.json({ data: result }, 200);
+  } catch (error: any) {
+    return c.json({ error: error.message }, 400);
+  }
+};
+
+export const getMonnifyBanks = async (c: Context<AppEnv>) => {
+  try {
+    const monnify = new MonnifyService(c.env.DB, c.env);
+    if (!monnify.isConfigured()) {
+      const banks = Object.entries(NIGERIAN_BANK_CODES).map(([name, code]) => ({
+        name: name.toUpperCase(),
+        code,
+      }));
+      return c.json({ data: banks });
+    }
+    const banks = await monnify.getBankList();
+    return c.json({ data: banks });
   } catch (error: any) {
     return c.json({ error: error.message }, 500);
   }

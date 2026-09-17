@@ -14,7 +14,7 @@ describe('Employee Leave Controller', () => {
     LeaveService.prototype.calculateLeaveBalances = vi.fn();
     LeaveService.prototype.createLeaveRequest = vi.fn();
     LeaveService.prototype.getTeamLeaves = vi.fn();
-    LeaveService.prototype.getTeamPendingLeaves = vi.fn();
+    LeaveService.prototype.getPendingTeamLeaveRequests = vi.fn();
     LeaveService.prototype.updateLeaveRequestStatus = vi.fn();
 
     mockContext = {

@@ -18,7 +18,7 @@ export const requireRole = (...allowedRoles: string[]) => {
   };
 };
 
-export type PermissionModule = 'workforce' | 'payroll' | 'performance' | 'settings' | 'leave' | 'attendance';
+export type PermissionModule = 'workforce' | 'payroll' | 'performance' | 'settings' | 'leave' | 'attendance' | 'company';
 export type PermissionAction = 'view' | 'create' | 'edit' | 'delete' | 'approve';
 
 // Decides whether an employee's optional custom role grants a given module/action.

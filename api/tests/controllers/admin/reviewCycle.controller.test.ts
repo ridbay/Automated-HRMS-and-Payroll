@@ -13,8 +13,7 @@ describe('Admin Review Cycle Controller', () => {
     ReviewCycleService.prototype.getCycles = vi.fn();
     ReviewCycleService.prototype.createCycle = vi.fn();
     ReviewCycleService.prototype.updateCycle = vi.fn();
-    ReviewCycleService.prototype.activateCycle = vi.fn();
-    ReviewCycleService.prototype.closeCycle = vi.fn();
+    ReviewCycleService.prototype.setStatus = vi.fn();
 
     mockContext = {
       req: {

@@ -116,6 +116,7 @@ export class EmailTemplateService {
 const DEFAULT_INTEGRATIONS = [
   { key: 'google_calendar', name: 'Google Calendar', category: 'Scheduling', status: 'connected' },
   { key: 'slack', name: 'Slack Notifications', category: 'Communication', status: 'available' },
+  { key: 'mailgun', name: 'Mailgun Email Delivery', category: 'Communication', status: 'available' },
   { key: 'paystack', name: 'Paystack Bank', category: 'Fintech', status: 'connected' },
   { key: 'outlook', name: 'Microsoft Outlook', category: 'Communications', status: 'available' },
   { key: 'zoom', name: 'Zoom Conferencing', category: 'Video', status: 'available' },
@@ -188,6 +189,24 @@ export class IntegrationService {
         updatedAt: new Date().toISOString(),
       })
       .where(and(eq(schema.integrations.companyId, companyId), eq(schema.integrations.key, 'slack')))
+      .returning()
+      .get();
+  }
+
+  async connectMailgun(companyId: string, config: { apiKey: string; domain: string; from?: string; baseUrl?: string }) {
+    if (!config.apiKey || !config.domain) {
+      throw new Error('Mailgun API Key and Domain are required.');
+    }
+    await this.list(companyId);
+    return this.db.update(schema.integrations)
+      .set({
+        status: 'connected',
+        connectedAt: new Date().toISOString(),
+        config,
+        lastError: null,
+        updatedAt: new Date().toISOString(),
+      })
+      .where(and(eq(schema.integrations.companyId, companyId), eq(schema.integrations.key, 'mailgun')))
       .returning()
       .get();
   }

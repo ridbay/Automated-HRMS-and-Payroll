@@ -41,6 +41,8 @@ export const updateTicketStatus = async (c: Context<AppEnv>) => {
     return c.json({ error: 'Forbidden' }, 403);
   }
 
+  if (!ticketId) return c.json({ error: 'Ticket ID is required' }, 400);
+
   const { status } = await c.req.json();
   const service = new SupportService(c.env.DB);
   const ticket = await service.updateTicketStatus(companyId, ticketId, status);
@@ -52,6 +54,7 @@ export const getTicketMessages = async (c: Context<AppEnv>) => {
   const ticketId = c.req.param('id');
 
   if (!companyId) return c.json({ error: 'Unauthorized' }, 401);
+  if (!ticketId) return c.json({ error: 'Ticket ID is required' }, 400);
 
   const service = new SupportService(c.env.DB);
   const messages = await service.getTicketMessages(ticketId);
@@ -64,6 +67,7 @@ export const addTicketMessage = async (c: Context<AppEnv>) => {
   const ticketId = c.req.param('id');
 
   if (!companyId || !senderId) return c.json({ error: 'Unauthorized' }, 401);
+  if (!ticketId) return c.json({ error: 'Ticket ID is required' }, 400);
 
   const { message } = await c.req.json();
   const service = new SupportService(c.env.DB);

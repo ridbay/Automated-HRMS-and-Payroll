@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { AdminAssetController } from '../../../../src/controllers/admin/asset.controller';
-import { AssetService } from '../../../../src/services/asset.service';
+import { AdminAssetController } from '../../../src/controllers/admin/asset.controller';
+import { AssetService } from '../../../src/services/asset.service';
 
-vi.mock('../../../../src/services/asset.service');
+vi.mock('../../../src/services/asset.service');
 
 describe('Admin Asset Controller', () => {
   let mockContext: any;
@@ -28,13 +28,13 @@ describe('Admin Asset Controller', () => {
   });
 
   it('should return all assets', async () => {
-    const res = await AdminAssetController.getAllAssets(mockContext);
+    const res: any = await AdminAssetController.getAllAssets(mockContext);
     expect(res.data.data).toHaveLength(1);
     expect(res.data.data[0].name).toBe('MacBook Pro');
   });
 
   it('should create an asset', async () => {
-    const res = await AdminAssetController.createAsset(mockContext);
+    const res: any = await AdminAssetController.createAsset(mockContext);
     expect(res.status).toBe(201);
     expect(res.data.data.name).toBe('Magic Mouse');
   });

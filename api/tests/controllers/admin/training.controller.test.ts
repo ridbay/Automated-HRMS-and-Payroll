@@ -53,14 +53,14 @@ describe('Admin Training Controller', () => {
 
   it('getEmployeeTrainings should return trainings', async () => {
     mockContext.req.param.mockReturnValue('emp-1');
-    const res = await trainingController.getEmployeeTrainings(mockContext);
+    const res: any = await trainingController.getEmployeeTrainings(mockContext);
     expect(res.data).toEqual([{ id: 'train-1' }]);
   });
 
   it('addEmployeeTraining should add training', async () => {
     mockContext.req.param.mockReturnValue('emp-1');
     mockContext.req.json.mockResolvedValue({ name: 'Course' });
-    const res = await trainingController.addEmployeeTraining(mockContext);
+    const res: any = await trainingController.addEmployeeTraining(mockContext);
     expect(res.data).toEqual({ id: 'train-1' });
   });
 });

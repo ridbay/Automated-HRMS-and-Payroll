@@ -11,7 +11,7 @@ describe('Employee Benefits Controller', () => {
     vi.clearAllMocks();
 
     BenefitsService.prototype.getMySummary = vi.fn();
-    BenefitsService.prototype.listAvailablePlans = vi.fn();
+    BenefitsService.prototype.listPlans = vi.fn();
     BenefitsService.prototype.listEnrollments = vi.fn();
     BenefitsService.prototype.enroll = vi.fn();
     BenefitsService.prototype.setEnrollmentStatus = vi.fn();

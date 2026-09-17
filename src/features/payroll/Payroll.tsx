@@ -32,6 +32,7 @@ import {
   Loader2,
   Trash2,
   Pencil,
+  Zap,
 } from "lucide-react";
 import { useNavigation } from "../../context/NavigationContext";
 import { useAuth } from "../../context/AuthContext";
@@ -47,6 +48,7 @@ import {
   useApprovePayrollRun,
   useRejectPayrollRun,
   useMarkPayrollRunPaid,
+  useDisbursePayrollRun,
   downloadPayrollBankFile,
   useComplianceTasks,
   useCompleteComplianceTask,
@@ -140,6 +142,7 @@ const Payroll: React.FC = () => {
   const approveMutation = useApprovePayrollRun();
   const rejectMutation = useRejectPayrollRun();
   const markPaidMutation = useMarkPayrollRunPaid();
+  const disburseMutation = useDisbursePayrollRun();
 
   const { data: complianceTasks } = useComplianceTasks(activeTab === "compliance" || activeTab === "dashboard" || wizardStep === 7);
   const completeComplianceMutation = useCompleteComplianceTask();
@@ -219,6 +222,18 @@ const Payroll: React.FC = () => {
     markPaidMutation.mutate(activeRunSummary.id, {
       onSuccess: () => setWizardStep(7),
       onError: (e: any) => popupAlert(e.message, "Error"),
+    });
+  };
+
+  const handleDisburseMonnify = async () => {
+    if (!activeRunSummary) return;
+    if (!(await confirm(`Disburse ${periodLabel(periodMonth, periodYear)} payroll via Monnify batch transfer? Funds will be paid directly to employee accounts.`))) return;
+    disburseMutation.mutate(activeRunSummary.id, {
+      onSuccess: (data: any) => {
+        popupAlert(`Disbursement initiated via Monnify! Status: ${data.status || 'Processing'}. Reference: ${data.batchReference || data.reference || 'Complete'}`, "Disbursement Submitted");
+        setWizardStep(7);
+      },
+      onError: (e: any) => popupAlert(e.message, "Disbursement Error"),
     });
   };
 
@@ -722,18 +737,31 @@ const Payroll: React.FC = () => {
                           <Download size={18} /> Download Bank File
                         </button>
                       </div>
-                      <div className="bg-indigo-600 p-10 rounded-[3rem] text-white shadow-2xl relative overflow-hidden flex flex-col justify-center">
+                      <div className="bg-gradient-to-br from-indigo-600 via-indigo-700 to-purple-800 p-10 rounded-[3rem] text-white shadow-2xl relative overflow-hidden flex flex-col justify-center">
                         <Wallet className="absolute -bottom-10 -right-10 w-48 h-48 text-white/10 rotate-12" />
-                        <h4 className="text-2xl font-black mb-4">{activeRunSummary.status === "paid" ? "Payroll Paid" : "Finalize Disbursement"}</h4>
-                        <p className="text-indigo-100 text-sm font-medium mb-10 leading-relaxed">
+                        <h4 className="text-2xl font-black mb-2">{activeRunSummary.status === "paid" ? "Payroll Paid" : "Disbursement Options"}</h4>
+                        <p className="text-indigo-100 text-sm font-medium mb-8 leading-relaxed">
                           {activeRunSummary.status === "paid"
                             ? `Marked paid on ${new Date(activeRunSummary.paidAt).toLocaleString()}. Payslips are now visible to employees.`
-                            : "Once funds have been disbursed via your bank file, mark this run as paid to notify employees and schedule statutory remittances."}
+                            : "Disburse automated bank transfers directly via Monnify, or manually mark as paid once manual bank transfers are completed."}
                         </p>
                         {activeRunSummary.status !== "paid" && !isViewOnly && (
-                          <button onClick={handleMarkPaid} disabled={markPaidMutation.isPending} className="w-full py-5 bg-white text-indigo-600 rounded-[1.8rem] font-black text-xs uppercase tracking-widest shadow-xl hover:bg-indigo-50 transition-all flex items-center justify-center gap-3">
-                            {markPaidMutation.isPending ? <Loader2 className="animate-spin" size={18} /> : <CheckCircle2 size={18} />} Mark Payroll as Paid
-                          </button>
+                          <div className="flex flex-col gap-3">
+                            <button
+                              onClick={handleDisburseMonnify}
+                              disabled={disburseMutation.isPending || markPaidMutation.isPending}
+                              className="w-full py-4 bg-emerald-500 hover:bg-emerald-400 text-white rounded-[1.8rem] font-black text-xs uppercase tracking-widest shadow-xl transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+                            >
+                              {disburseMutation.isPending ? <Loader2 className="animate-spin" size={18} /> : <Zap size={18} />} Disburse via Monnify
+                            </button>
+                            <button
+                              onClick={handleMarkPaid}
+                              disabled={markPaidMutation.isPending || disburseMutation.isPending}
+                              className="w-full py-4 bg-white/20 hover:bg-white/30 text-white border border-white/30 rounded-[1.8rem] font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+                            >
+                              {markPaidMutation.isPending ? <Loader2 className="animate-spin" size={18} /> : <CheckCircle2 size={18} />} Mark Manually as Paid
+                            </button>
+                          </div>
                         )}
                       </div>
                     </div>

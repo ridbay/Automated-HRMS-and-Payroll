@@ -217,4 +217,44 @@ describe('Payroll Service', () => {
       expect(file?.content).toContain('2023-10,500000,5000');
     });
   });
+
+  describe('Nigerian Statutory Compliance: Minimum Wage Exemption & Relief', () => {
+    it('exempts minimum wage earners (<= 840,000 NGN) from PAYE under Finance Act', async () => {
+      mockDb.query.employees.findMany.mockResolvedValueOnce([
+        { id: 'emp-min', name: 'Musa', lastName: 'Ali', status: 'active', salary: 840000, bankName: 'Zenith', accountNumber: '123' },
+      ]);
+      mockDb.query.payrollSettings.findFirst.mockResolvedValueOnce({
+        companyId: 'comp-1',
+        prorationEnabled: false,
+        minWageCheckEnabled: true,
+        minWageAnnual: 840000,
+        applyConsolidatedReliefAllowance: true,
+        nhfEnabled: true,
+      });
+
+      const preview = await service.previewRun('comp-1', 10, 2024);
+      const ps = preview.payslips[0];
+      expect(ps.grossPay).toBe(70000); // 840,000 / 12
+      expect(ps.taxDeductions).toBe(0); // Legally exempt from PAYE!
+    });
+
+    it('flags employees earning below statutory minimum wage in exceptions', async () => {
+      mockDb.query.employees.findMany.mockResolvedValueOnce([
+        { id: 'emp-low', name: 'Emeka', lastName: 'Okafor', status: 'active', salary: 500000, bankName: 'Access', accountNumber: '456' },
+      ]);
+      mockDb.query.payrollSettings.findFirst.mockResolvedValueOnce({
+        companyId: 'comp-1',
+        minWageCheckEnabled: true,
+        minWageAnnual: 840000,
+      });
+
+      const preview = await service.previewRun('comp-1', 10, 2024);
+      expect(preview.exceptions).toContainEqual(
+        expect.objectContaining({
+          employeeId: 'emp-low',
+          issue: expect.stringContaining('Below Statutory Minimum Wage'),
+        })
+      );
+    });
+  });
 });

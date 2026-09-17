@@ -12,9 +12,9 @@ describe('Employee Goal Controller', () => {
 
     GoalService.prototype.getMyGoals = vi.fn();
     GoalService.prototype.createGoal = vi.fn();
-    GoalService.prototype.updateGoalProgress = vi.fn();
+    GoalService.prototype.updateGoal = vi.fn();
     GoalService.prototype.getTeamGoals = vi.fn();
-    GoalService.prototype.getMyObjectives = vi.fn();
+    GoalService.prototype.getObjectivesForEmployee = vi.fn();
 
     mockContext = {
       req: {
