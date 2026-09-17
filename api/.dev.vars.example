@@ -1,0 +1,6 @@
+JWT_SECRET=replace-with-a-long-random-string
+
+# Generate one with: openssl rand -hex 32
+# Copy this file to .dev.vars (gitignored) and fill in a real value — wrangler
+# dev reads .dev.vars automatically. authMiddleware refuses every request
+# with a 503 if JWT_SECRET is unset, so this is required for local dev.

@@ -77,18 +77,26 @@ api/wrangler.toml         Worker + D1 binding config
 
 ## 4. Setup & everyday commands
 
-Frontend (repo root):
+Install both apps' dependencies once (`npm install` at repo root, then `npm install` inside `api/`), then one-time local secrets setup:
 
 ```bash
-npm install
-npm run dev        # Vite dev server on :3001
-npm run build
+cd api && cp .dev.vars.example .dev.vars   # fill in JWT_SECRET (e.g. `openssl rand -hex 32`) — gitignored
 ```
 
-Backend (`api/`):
+`authMiddleware` refuses every request with a 503 if `JWT_SECRET` is unset — this step isn't optional.
+
+From the repo root:
 
 ```bash
-npm install
+npm run dev         # runs BOTH: Vite dev server on :3001 + wrangler dev on :8787 (via concurrently)
+npm run dev:web      # frontend only
+npm run dev:api      # backend only (equivalent to `cd api && npm run dev`)
+npm run build        # frontend production build (vite build)
+```
+
+Backend-specific commands still run from `api/`:
+
+```bash
 npm run dev              # wrangler dev, local Worker + local D1 on :8787
 npm run db:generate      # drizzle-kit generate — creates a new migration from schema changes
 npm run db:migrate       # apply migrations to the local D1 instance
