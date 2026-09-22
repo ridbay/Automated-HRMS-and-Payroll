@@ -97,14 +97,63 @@ export class DashboardService {
       fill: genderColors[d.name || ''] || '#f59e0b'
     }));
 
-    // Dummy values for Attrition & Trend to keep it simple but realistic
-    const attritionRate = totalHeadcount > 0 ? (Math.random() * 5).toFixed(1) + '%' : '0%';
-    const headcountTrend = [
-      { month: "Jan", total: totalHeadcount > 20 ? totalHeadcount - 10 : 0, hires: 2, exits: 0 },
-      { month: "Feb", total: totalHeadcount > 20 ? totalHeadcount - 5 : 0, hires: 5, exits: 0 },
-      { month: "Mar", total: totalHeadcount, hires: newHires, exits: 1 },
-    ];
-    
+    // Attrition & headcount trend, computed from real hire dates (employees.hireDate)
+    // and real completed offboarding transitions (transitions.completedAt) rather than
+    // simulated values.
+    const today = new Date();
+    const toDateStr = (d: Date) => d.toISOString().slice(0, 10);
+
+    const allEmployeeDates = await this.db
+      .select({ hireDate: schema.employees.hireDate })
+      .from(schema.employees)
+      .where(eq(schema.employees.companyId, companyId));
+
+    const completedExits = await this.db
+      .select({ completedAt: schema.transitions.completedAt })
+      .from(schema.transitions)
+      .where(
+        and(
+          eq(schema.transitions.companyId, companyId),
+          eq(schema.transitions.type, 'Offboarding'),
+          eq(schema.transitions.status, 'Completed')
+        )
+      );
+
+    const hireDates = allEmployeeDates.map((e) => e.hireDate).filter((d): d is string => !!d);
+    const exitDates = completedExits
+      .map((e) => e.completedAt?.slice(0, 10))
+      .filter((d): d is string => !!d);
+
+    const headcountAsOf = (dateStr: string) =>
+      hireDates.filter((d) => d <= dateStr).length - exitDates.filter((d) => d <= dateStr).length;
+
+    const monthsBack = 6;
+    const headcountTrend = Array.from({ length: monthsBack }, (_, idx) => {
+      const i = monthsBack - 1 - idx;
+      const monthStartDate = new Date(today.getFullYear(), today.getMonth() - i, 1);
+      const monthEndDate = new Date(today.getFullYear(), today.getMonth() - i + 1, 0);
+      const start = toDateStr(monthStartDate);
+      const end = toDateStr(monthEndDate);
+
+      return {
+        month: monthStartDate.toLocaleString('en-US', { month: 'short' }),
+        total: Math.max(headcountAsOf(end), 0),
+        hires: hireDates.filter((d) => d >= start && d <= end).length,
+        exits: exitDates.filter((d) => d >= start && d <= end).length,
+      };
+    });
+
+    const twelveMonthsAgo = new Date(today);
+    twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
+    const twelveMonthsAgoStr = toDateStr(twelveMonthsAgo);
+
+    const exitsLast12mo = exitDates.filter((d) => d >= twelveMonthsAgoStr).length;
+    const headcountStartOf12mo = Math.max(headcountAsOf(twelveMonthsAgoStr), 0);
+    const avgHeadcount = (headcountStartOf12mo + totalHeadcount) / 2;
+    const attritionRate = avgHeadcount > 0
+      ? `${((exitsLast12mo / avgHeadcount) * 100).toFixed(1)}%`
+      : '0%';
+
     // Calculate total payroll roughly (sum of salaries)
     const payrollResult = await this.db
       .select({ total: sql<number>`sum(${schema.employees.salary})` })
@@ -123,7 +172,6 @@ export class DashboardService {
     const alerts = [];
     
     // 1a. Probation Ending (next 30 days)
-    const today = new Date();
     const thirtyDaysFromNow = new Date(today);
     thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
     const todayStr = today.toISOString().slice(0, 10);

@@ -1,8 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AtsService } from '../../src/services/ats.service';
 import { EmployeeService } from '../../src/services/employee.service';
+import { TransitionService } from '../../src/services/transition.service';
 
 vi.mock('../../src/services/employee.service');
+vi.mock('../../src/services/transition.service');
 
 describe('Ats Service', () => {
   let mockDb: any;
@@ -185,6 +187,7 @@ describe('Ats Service', () => {
     describe('respondToOffer("accepted") bridges the ATS pipeline to Workforce', () => {
       beforeEach(() => {
         EmployeeService.prototype.createForCompany = vi.fn();
+        TransitionService.prototype.create = vi.fn().mockResolvedValue({ id: 'TRN-1' });
       });
 
       it('creates an employee record, links it to the candidate, and closes the requisition', async () => {
@@ -211,6 +214,32 @@ describe('Ats Service', () => {
         expect(mockDb.set.mock.calls.some((c: any) => c[0]?.hiredEmployeeId === 'EMP-99')).toBe(true);
         // Requisition auto-closed now that it's filled.
         expect(mockDb.set.mock.calls.some((c: any) => c[0]?.status === 'Filled')).toBe(true);
+        // Onboarding checklist started for the new hire, so they show up on
+        // the Onboarding board immediately rather than needing a manual start.
+        expect(TransitionService.prototype.create).toHaveBeenCalledWith('comp-1', actor, expect.objectContaining({
+          employeeId: 'EMP-99',
+          startDate: '2026-01-01',
+        }));
+      });
+
+      it('logs a distinct timeline note if the onboarding checklist fails to auto-create, without failing the hire', async () => {
+        mockDb.query.offers.findFirst.mockResolvedValueOnce({
+          id: 'OFF-1', companyId: 'comp-1', status: 'sent', candidateId: 'CAND-1', startDate: '2026-01-01',
+        });
+        mockDb.query.candidates.findFirst
+          .mockResolvedValueOnce({ id: 'CAND-1', companyId: 'comp-1', status: 'offer' })
+          .mockResolvedValueOnce({ id: 'CAND-1', companyId: 'comp-1', name: 'Ada Lovelace', email: 'ada@example.com', hiredEmployeeId: null });
+        (EmployeeService.prototype.createForCompany as any).mockResolvedValue({ id: 'EMP-99' });
+        (TransitionService.prototype.create as any).mockRejectedValue(new Error('no manager assigned'));
+
+        const result = await service.respondToOffer('comp-1', actor, 'OFF-1', 'accepted');
+
+        // The hire itself still succeeds even though the checklist failed.
+        expect(result?.status).toBe('accepted');
+        const timelineCall = mockDb.values.mock.calls.find(
+          (c: any) => c[0]?.event?.includes('Onboarding checklist could not be auto-created')
+        );
+        expect(timelineCall).toBeDefined();
       });
 
       it('does not re-create an employee if the candidate is already linked (idempotent)', async () => {

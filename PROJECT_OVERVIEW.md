@@ -878,6 +878,50 @@ not those chapters, as the current state of the items it lists.
 
 ---
 
+## Addendum (2026-09-22): Navigation Audit and Fixes
+
+A follow-up audit on 2026-09-22 checked the current state of the codebase against this report
+and against the 2026-09-17 addendum, found several of their claims already superseded by later
+commits, and fixed three broken role-navigation paths plus one remaining pipeline seam. The items
+below supersede the corresponding claims elsewhere in this document.
+
+- **A CI pipeline now exists** (`.github/workflows/ci.yml`, added in commit `65befca`), contradicting
+  Chapter 2.7, Chapter 8 item 6, and Chapter 9 item 5, which all describe deploys as fully manual with
+  no automated gate. It runs both test suites plus a frontend production build on every push/PR.
+  However, until this audit it targeted branch `main`, which does not exist in this repository (the
+  only branch is `master`) — so it had never actually triggered since being added. This is now fixed
+  to target `master`.
+- **The frontend test harness now exists** (Vitest + React Testing Library, wired into the root
+  `package.json`), contradicting Chapter 7's and Chapter 8 item 5's claims that no frontend test
+  harness is configured. Coverage is still thin — 4 files / 14 tests, covering only `AuthContext`,
+  `Header`, `NavigationContext`, and `themeColors` — so Chapter 9 item 4's recommendation to add
+  coverage for the wizard/calculation-heavy components (onboarding wizard, assessment wizard, payroll
+  preview) still stands.
+- **Company logo upload now goes through R2**, not a base64 data URI — `Settings.tsx` calls
+  `useUploadCompanyLogo`/`resolveCompanyLogoUrl`. This supersedes the narrower gap the 2026-09-17
+  addendum described ("company logo upload doesn't use it yet").
+- **Test counts, for accuracy**: backend is now 60 files / 335 tests (was 49/213 at the time of
+  Chapter 7 and the `agent.md` guidance); frontend is 4 files / 14 tests (was 0). Appendix D below is
+  stale on the backend figure.
+- **Three broken role-navigation paths were found and fixed**, none previously documented: (1) the
+  HR Admin sidebar's "Compliance" item pointed at a tab with no route handler and silently fell back
+  to the generic employee dashboard — `Payroll` now takes an `initialTab` prop and it opens directly
+  on Payroll's existing Compliance tab; (2) HR Admin/Super Admin had no sidebar entry for Asset
+  Management at all, despite it being an admin-owned, company-wide registry — added; (3) the Employee
+  and Manager sidebars had no entries for Surveys or Learning (LMS), even though both screens
+  (`EmployeeSurveys`, `EmployeeLMS`) were fully built and routed in `App.tsx` — added to both.
+- **The ATS-hire → onboarding-checklist gap is now closed.** The 2026-09-17 addendum's ATS fix
+  (commit `c3338b2`) made an accepted offer create a real `employees` row and close the requisition,
+  but stopped there — no `transitions` (HR/IT/Finance/Admin onboarding checklist) row was created, so
+  a newly hired employee had a working self-service onboarding flow on first login but didn't appear
+  on HR's Onboarding tracking board until someone started a transition for them by hand.
+  `AtsService.hireCandidate()` now also calls `TransitionService.create(...)` right after the
+  employee record is created, in its own try/catch so a failure there is reported as a distinct
+  timeline note ("Onboarding checklist could not be auto-created: ...") and never rolls back the hire
+  itself — matching the existing philosophy for the employee-record-creation step just above it.
+
+---
+
 ## Appendix A: Full Database Table Inventory (by domain)
 
 | Domain | Tables |

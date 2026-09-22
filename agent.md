@@ -46,7 +46,7 @@ Role/permission enforcement lives in [api/src/middlewares/role.middleware.ts](ap
 | -------- | ---- |
 | Frontend | React 19, Vite 6, TypeScript, React Context (`src/context`), TanStack Query, Framer Motion, Recharts, Lucide icons, vanilla CSS |
 | Backend  | Cloudflare Workers, Hono 4, Drizzle ORM, Cloudflare D1 (SQLite), `hono/jwt` for auth |
-| Storage  | Cloudflare R2 (binding configured in [api/wrangler.toml](api/wrangler.toml), `storage.service.ts` implements upload/stream; company logo upload still stores a base64 data URI instead of using it — see `Settings.tsx`) |
+| Storage  | Cloudflare R2 (binding configured in [api/wrangler.toml](api/wrangler.toml)); `storage.service.ts` implements upload/stream and company logo upload now goes through it (`useUploadCompanyLogo`/`resolveCompanyLogoUrl` in `Settings.tsx`) — no longer a base64 data URI |
 | Tooling  | Wrangler (local Worker + D1 emulation), Drizzle Kit (migrations), Vitest (backend tests) |
 
 ## 3. Repo layout
@@ -111,13 +111,13 @@ All requests — local/dev included — authenticate via a `Bearer` JWT; `authMi
 
 **Every change that touches backend logic (routes, controllers, services, models, middleware) must be accompanied by unit and, where the change crosses a boundary (route → controller → service → db, or a multi-step service flow), integration tests. Do not consider a task done until tests exist and pass.** This applies to bug fixes too — a fix without a regression test isn't finished.
 
-- Run `cd api && npm run test:run` before calling any backend work complete. All tests must pass — currently 49 files / 213 tests green; keep it that way.
+- Run `cd api && npm run test:run` before calling any backend work complete. All tests must pass — currently 60 files / 335 tests green; keep it that way.
 - **Service unit tests** (`*.service.test.ts`, e.g. [api/src/services/leave.service.test.ts](api/src/services/leave.service.test.ts)): mock the Drizzle db as a chainable object — `vi.fn().mockReturnThis()` for query builder methods, `vi.fn().mockResolvedValue(...)` for terminal calls (`.all()`, `.returning()`, `.query.<table>.findFirst`, etc.) — then inject it via `(service as any).db = mockDb`. Assert both the returned value and that the right db methods were called, especially authorization short-circuits (e.g. a manager acting on someone else's report must return `null`/error without calling `update`).
 - **Controller unit tests** (`*.controller.test.ts`, e.g. [api/src/controllers/admin/attendance.controller.test.ts](api/src/controllers/admin/attendance.controller.test.ts)): `vi.mock` the service module, stub methods on `Service.prototype`, and call the controller function directly with a hand-built mock Hono `Context` (`req.query`/`req.param`/`req.json`, `env`, `get`, `json` as `vi.fn()`s). Assert the service was called with the right args and `c.json` was called with the right payload/status.
 - **Middleware unit tests** (`*.middleware.test.ts`, e.g. [api/src/middlewares/auth.middleware.test.ts](api/src/middlewares/auth.middleware.test.ts)): same mock-`Context` approach, asserting `next()` is/isn't called and the right error response shape.
 - **Integration tests**: exercise the real Hono app end-to-end via `app.request()` — see [api/src/index.test.ts](api/src/index.test.ts) for the pattern (mocks `hono/jwt`'s `verify`, then asserts on routing/auth status codes through the full middleware chain). Add to this style of test for new routes, non-trivial multi-table operations, or auth/tenant edge cases. Treat [test-api.js](test-api.js) as a scratch/manual-check script only, never a substitute for a real test under `api/src/**/*.test.ts`.
 - New Drizzle models/queries: test against realistic data shapes, including empty results, not-found, and cross-tenant access attempts (a company must never see another company's rows — this is a multi-tenant system, so tenant-scoping bugs are security bugs).
-- Frontend currently has **no test harness configured** (no Vitest/RTL wired into the root `package.json`). If you touch frontend logic that has meaningful branching (hooks, wizards, calculations), either add one (Vitest + React Testing Library is the natural fit given Vite) or, at minimum, flag the gap explicitly in your summary — don't silently skip verification. Prefer testing shared logic pulled out of components over testing JSX rendering.
+- Frontend has a Vitest + React Testing Library harness (`npm run test:run` from the repo root), but coverage is thin — currently 4 files / 14 tests, limited to `AuthContext`, `Header`, `NavigationContext`, and `themeColors`. None of the 46 feature screens or the components with real branching logic (onboarding wizard, assessment wizard, payroll preview) are covered yet. If you touch frontend logic with meaningful branching, add a test using the existing harness, or, at minimum, flag the gap explicitly in your summary — don't silently skip verification. Prefer testing shared logic pulled out of components over testing JSX rendering.
 - If a task genuinely cannot include tests (e.g. pure copy/style change), say so explicitly and why, rather than leaving it unstated.
 
 ## 6. Conventions & gotchas
@@ -141,3 +141,5 @@ Before reporting a backend task complete, confirm:
 - [ ] Integration test added for new/changed routes or multi-step flows, where practical.
 - [ ] `cd api && npm run test:run` passes.
 - [ ] New migrations generated via `db:generate` if the schema changed (and committed alongside the model change).
+
+CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs both test suites plus the frontend production build on every push/PR to `master` — keep it green rather than relying solely on local runs.

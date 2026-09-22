@@ -3,6 +3,7 @@ import { drizzle } from 'drizzle-orm/d1';
 import { eq, and, desc, inArray } from 'drizzle-orm';
 import * as schema from '../db/schema';
 import { EmployeeService } from './employee.service';
+import { TransitionService } from './transition.service';
 
 const genId = (prefix: string) => `${prefix}-${crypto.randomUUID().split('-')[0].toUpperCase()}`;
 
@@ -341,6 +342,21 @@ export class AtsService {
         .update(schema.jobRequisitions)
         .set({ status: 'Filled' })
         .where(and(eq(schema.jobRequisitions.id, offer.requisitionId), eq(schema.jobRequisitions.companyId, companyId)));
+    }
+
+    // Start the HR/IT/Finance/Admin onboarding checklist so this hire shows up
+    // on the Onboarding board right away instead of only existing as a bare
+    // employee record until someone remembers to start one by hand. Kept in
+    // its own try/catch so a failure here is reported distinctly from an
+    // employee-record failure and never rolls back the hire itself.
+    try {
+      const transitionService = new TransitionService(this.dbBinding);
+      await transitionService.create(companyId, actor || { id: 'ATS', name: 'ATS Auto-Hire' }, {
+        employeeId: employee.id,
+        startDate: offer.startDate || new Date().toISOString().split('T')[0],
+      });
+    } catch (err: any) {
+      await this.logTimeline(companyId, candidate.id, actor, `Onboarding checklist could not be auto-created: ${err.message}`);
     }
 
     await this.logTimeline(companyId, candidate.id, actor, `Employee record created (${employee.id}) — onboarding started`);
