@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode } from "react";
 import { User } from "../types/index";
-
-const API = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8787';
+import { API_URL } from "../api/http";
 
 interface AuthContextType {
   user: User | null;
@@ -33,7 +32,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
 
     // Fetch the real employee profile in the background to hydrate avatar
     const companyId = (userData as any).companyId || 'comp-1234';
-    fetch(`${API}/employee/me`, {
+    fetch(`${API_URL}/employee/me`, {
       headers: {
         'Authorization': `Bearer ${authToken}`,
         'x-company-id': companyId,

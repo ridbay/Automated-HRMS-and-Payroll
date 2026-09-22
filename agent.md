@@ -88,7 +88,7 @@ cd api && cp .dev.vars.example .dev.vars   # fill in JWT_SECRET (e.g. `openssl r
 From the repo root:
 
 ```bash
-npm run dev         # runs BOTH: Vite dev server on :3001 + wrangler dev on :8787 (via concurrently)
+npm run dev         # runs BOTH: Vite dev server on :3001 + wrangler dev on :8788 (via concurrently)
 npm run dev:web      # frontend only
 npm run dev:api      # backend only (equivalent to `cd api && npm run dev`)
 npm run build        # frontend production build (vite build)
@@ -97,7 +97,7 @@ npm run build        # frontend production build (vite build)
 Backend-specific commands still run from `api/`:
 
 ```bash
-npm run dev              # wrangler dev, local Worker + local D1 on :8787
+npm run dev              # wrangler dev, local Worker + local D1 on :8788
 npm run db:generate      # drizzle-kit generate — creates a new migration from schema changes
 npm run db:migrate       # apply migrations to the local D1 instance
 npm run db:studio        # Drizzle Studio GUI against the local DB

@@ -4,6 +4,9 @@ compatibility_date = "2024-03-20"
 compatibility_flags = ["nodejs_compat"]
 account_id = "3f509287c54b566a4a6fba51ec5bc842"
 
+[dev]
+port = 8788
+
 [[d1_databases]]
 binding = "DB"
 database_name = "zenhr-prod-db"
