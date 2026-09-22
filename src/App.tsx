@@ -99,6 +99,8 @@ const AppContent: React.FC = () => {
         return <ManagerDashboard />;
       case "payroll":
         return <Payroll />;
+      case "compliance":
+        return <Payroll initialTab="compliance" />;
       case "recruitment":
       case "requisitions":
       case "pipeline":

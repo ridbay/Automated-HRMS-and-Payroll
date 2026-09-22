@@ -92,7 +92,11 @@ const STATUS_LABELS: Record<string, string> = {
   rejected: "Rejected",
 };
 
-const Payroll: React.FC = () => {
+interface PayrollProps {
+  initialTab?: "dashboard" | "wizard" | "compliance" | "loans" | "history" | "settings";
+}
+
+const Payroll: React.FC<PayrollProps> = ({ initialTab = "dashboard" }) => {
   const { setActiveTab: setGlobalTab } = useNavigation();
   const { user } = useAuth();
   const { alert: popupAlert, confirm, prompt } = usePopup();
@@ -104,7 +108,7 @@ const Payroll: React.FC = () => {
   const [periodYear, setPeriodYear] = useState(now.getFullYear());
   const [activeTab, setActiveTab] = useState<
     "dashboard" | "wizard" | "compliance" | "loans" | "history" | "settings"
-  >("dashboard");
+  >(initialTab);
   const [wizardStep, setWizardStep] = useState(1);
   const [overrides, setOverrides] = useState<Record<string, { bonuses?: number; otherDeductions?: number }>>({});
   const [livePreview, setLivePreview] = useState<any>(null);

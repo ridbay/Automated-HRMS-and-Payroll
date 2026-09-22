@@ -70,6 +70,8 @@ const Sidebar: React.FC = () => {
     { name: "My Performance", icon: <Trophy size={20} />, path: "performance" },
     { name: "My Documents", icon: <FileText size={20} />, path: "documents" },
     { name: "Team Directory", icon: <Users size={20} />, path: "directory" },
+    { name: "Surveys", icon: <MessageSquare size={20} />, path: "surveys" },
+    { name: "Learning (LMS)", icon: <GraduationCap size={20} />, path: "lms" },
     { name: "Settings", icon: <Settings size={20} />, path: "settings" },
     { name: "Help & Support", icon: <LifeBuoy size={20} />, path: "help" },
   ];
@@ -88,6 +90,8 @@ const Sidebar: React.FC = () => {
     { name: "Budget & Payroll", icon: <Wallet size={20} />, path: "payroll" },
     { name: "Assets", icon: <Box size={20} />, path: "assets" }, // Added Assets menu item
     { name: "Benefits", icon: <Heart size={20} />, path: "benefits" },
+    { name: "Surveys", icon: <MessageSquare size={20} />, path: "surveys" },
+    { name: "Learning (LMS)", icon: <GraduationCap size={20} />, path: "lms" },
     { name: "Reports", icon: <BarChart3 size={20} />, path: "reports" },
     { name: "Goals & OKRs", icon: <Target size={20} />, path: "goals" },
     { name: "Settings", icon: <Settings size={20} />, path: "settings" },
@@ -145,6 +149,7 @@ const Sidebar: React.FC = () => {
     { name: "Surveys", icon: <MessageSquare size={20} />, path: "surveys" },
     { name: "Learning (LMS)", icon: <GraduationCap size={20} />, path: "lms" },
     { name: "Benefits Admin", icon: <Heart size={20} />, path: "benefits" },
+    { name: "Assets", icon: <Box size={20} />, path: "assets" },
     {
       name: "Reports & Analytics",
       icon: <BarChart3 size={20} />,
