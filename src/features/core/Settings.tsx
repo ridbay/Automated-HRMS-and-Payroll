@@ -12,12 +12,12 @@ import {
   Copy, KeyRound, Loader2, Workflow,
   X, ChevronDown, Crown, Star,
   Link2, Unlink, HardDrive, ListChecks,
-  Download, CalendarPlus, CheckCheck
+  Download, CalendarPlus, CheckCheck, Palette, Check
 } from 'lucide-react';
 import { usePopup } from '../../components/PopupProvider';
 import {
   useSettings, useUpdateSettings, useApiKeys, useCreateApiKey, useDeleteApiKey,
-  useCompany, useUpdateCompany, useUploadCompanyLogo, resolveCompanyLogoUrl,
+  useCompany, useUpdateCompany, useUploadCompanyLogo, useDeleteCompanyLogo, resolveCompanyLogoUrl,
   useDepartments, useCreateDepartment, useDeleteDepartment, useUpdateDepartment,
   useDepartmentMembers, useAssignDepartmentMember, useRemoveDepartmentMember,
   useLocations, useCreateLocation, useDeleteLocation,
@@ -34,6 +34,8 @@ import {
   useAuditLogs, exportAuditLogsCsv,
 } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
+import { useBranding } from '../../context/BrandingContext';
+import { CURATED_PRESETS, DEFAULT_PRIMARY_COLOR, isValidHexColor } from '../../utils/themeColors';
 
 const WEEKDAYS = [
   { iso: 1, label: 'M' }, { iso: 2, label: 'T' }, { iso: 3, label: 'W' }, { iso: 4, label: 'T' },
@@ -89,6 +91,12 @@ const Settings: React.FC = () => {
   const { data: company, isLoading: isCompanyLoading } = useCompany(isAdmin);
   const updateCompanyMutation = useUpdateCompany();
   const uploadLogoMutation = useUploadCompanyLogo();
+  const deleteLogoMutation = useDeleteCompanyLogo();
+  const { setPrimaryColor: applyGlobalColor } = useBranding();
+
+  const [selectedColor, setSelectedColor] = useState<string>(DEFAULT_PRIMARY_COLOR);
+  const [customHexInput, setCustomHexInput] = useState<string>(DEFAULT_PRIMARY_COLOR);
+
   const { data: departments, isLoading: isDeptsLoading } = useDepartments(isAdmin);
   const { data: locations, isLoading: isLocsLoading } = useLocations(isAdmin);
   const { data: employees = [] } = useEmployees(isAdmin);
@@ -125,8 +133,17 @@ const Settings: React.FC = () => {
   useEffect(() => {
     if (company?.id && company?.logoUrl) {
       setLogoPreview(resolveCompanyLogoUrl(company.id, company.logoUrl));
+    } else if (company && !company.logoUrl) {
+      setLogoPreview(null);
     }
   }, [company?.id, company?.logoUrl]);
+
+  useEffect(() => {
+    if (company?.primaryColor && isValidHexColor(company.primaryColor)) {
+      setSelectedColor(company.primaryColor);
+      setCustomHexInput(company.primaryColor);
+    }
+  }, [company?.primaryColor]);
 
   // Email Templates
   const { data: emailTemplates, isLoading: isTemplatesLoading } = useEmailTemplates(isAdmin);
@@ -190,14 +207,22 @@ const Settings: React.FC = () => {
       industry: formData.get('industry') as string,
       fiscalYearStart: formData.get('fiscalYearStart') as string,
       address: formData.get('address') as string,
+      primaryColor: selectedColor,
+    }, {
+      onSuccess: () => {
+        popupAlert('Company identity and branding saved successfully!', 'Settings Saved');
+      },
+      onError: (err: any) => {
+        popupAlert(err.message || 'Failed to update company settings', 'Error');
+      }
     });
   };
 
   const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) {
-      popupAlert('Logo must be 2MB or smaller.', 'File Too Large');
+    if (file.size > 5 * 1024 * 1024) {
+      popupAlert('Logo must be 5MB or smaller.', 'File Too Large');
       e.target.value = '';
       return;
     }
@@ -216,6 +241,26 @@ const Settings: React.FC = () => {
       },
     });
     e.target.value = '';
+  };
+
+  const handleRemoveLogo = async () => {
+    if (await confirm('Are you sure you want to remove the custom company logo? This will revert back to the default brand icon.', 'Remove Logo')) {
+      deleteLogoMutation.mutate(undefined, {
+        onSuccess: () => {
+          setLogoPreview(null);
+          popupAlert('Company logo removed successfully.', 'Logo Removed');
+        },
+        onError: (err: any) => {
+          popupAlert(err.message || 'Failed to remove logo.', 'Error');
+        }
+      });
+    }
+  };
+
+  const handleColorChange = (hex: string) => {
+    setSelectedColor(hex);
+    setCustomHexInput(hex);
+    applyGlobalColor(hex);
   };
 
   const toggleWorkingDay = (iso: number) => {
@@ -247,22 +292,169 @@ const Settings: React.FC = () => {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
           <div className="lg:col-span-1 space-y-6">
-            <div className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm flex flex-col items-center text-center">
-                <label className="relative group cursor-pointer mb-6">
-                  <div className="w-32 h-32 bg-slate-50 rounded-[2.5rem] flex items-center justify-center border-2 border-dashed border-slate-200 group-hover:border-indigo-400 transition-all overflow-hidden">
-                      {logoPreview ? (
-                        <img src={logoPreview} alt="Company logo" className="w-full h-full object-cover" />
+            {/* Company Logo Card */}
+            <div className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm flex flex-col items-center text-center relative overflow-hidden">
+                <label className="relative group cursor-pointer mb-4">
+                  <div className="w-32 h-32 bg-slate-50 rounded-[2.5rem] flex items-center justify-center border-2 border-dashed border-slate-200 group-hover:border-indigo-500 transition-all overflow-hidden p-2 shadow-inner">
+                      {uploadLogoMutation.isPending || deleteLogoMutation.isPending ? (
+                        <Loader2 className="animate-spin text-indigo-500" size={32} />
+                      ) : logoPreview ? (
+                        <img src={logoPreview} alt="Company logo" className="w-full h-full object-contain" />
                       ) : (
-                        <Building2 size={48} className="text-slate-300 group-hover:text-indigo-400 transition-colors" />
+                        <Building2 size={48} className="text-slate-300 group-hover:text-indigo-500 transition-colors" />
                       )}
                   </div>
-                  <div className="absolute inset-0 bg-indigo-600/0 group-hover:bg-indigo-600/10 transition-all rounded-[2.5rem] flex items-center justify-center">
-                      <Upload size={20} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <div className="absolute inset-0 bg-indigo-900/60 opacity-0 group-hover:opacity-100 transition-opacity rounded-[2.5rem] flex flex-col items-center justify-center text-white backdrop-blur-[2px]">
+                      <Upload size={22} className="mb-1" />
+                      <span className="text-[10px] font-black uppercase tracking-wider">
+                        {logoPreview ? 'Change' : 'Upload'}
+                      </span>
                   </div>
-                  <input type="file" accept="image/png,image/jpeg,image/svg+xml" className="hidden" onChange={handleLogoChange} />
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                    className="hidden"
+                    disabled={uploadLogoMutation.isPending || deleteLogoMutation.isPending}
+                    onChange={handleLogoChange}
+                  />
                 </label>
-                <h3 className="font-black text-slate-800">Company Logo</h3>
-                <p className="text-[10px] text-slate-400 uppercase font-black mt-1 tracking-widest">SVG, PNG, JPG (Max 2MB)</p>
+                <h3 className="font-black text-slate-800 text-sm">Company Logo</h3>
+                <p className="text-[10px] text-slate-400 uppercase font-black mt-1 tracking-widest">SVG, PNG, JPG, WebP (Max 5MB)</p>
+
+                {logoPreview && (
+                  <button
+                    type="button"
+                    onClick={handleRemoveLogo}
+                    disabled={deleteLogoMutation.isPending}
+                    className="mt-4 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-rose-600 hover:bg-rose-50 font-bold text-xs transition-colors border border-rose-100"
+                  >
+                    <Trash2 size={13} />
+                    <span>Remove Logo</span>
+                  </button>
+                )}
+            </div>
+
+            {/* Sitewide Brand & Theme Color Card */}
+            <div className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm space-y-6">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <div className="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600">
+                      <Palette size={16} />
+                    </div>
+                    <h3 className="font-black text-slate-800 text-sm">Brand Color</h3>
+                  </div>
+                  <p className="text-[11px] text-slate-400 font-medium leading-relaxed">
+                    Customizes buttons, navigation highlights, badges, and focus rings across ZenHR.
+                  </p>
+                </div>
+
+                {/* Preset Palettes */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
+                    Curated Palettes
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {CURATED_PRESETS.map((preset) => {
+                      const isSelected = selectedColor.toLowerCase() === preset.hex.toLowerCase();
+                      return (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          onClick={() => handleColorChange(preset.hex)}
+                          className={`flex items-center gap-2.5 p-2.5 rounded-2xl border text-left transition-all group ${
+                            isSelected
+                              ? 'border-indigo-600 bg-indigo-50/50 shadow-sm ring-2 ring-indigo-500/20'
+                              : 'border-slate-100 bg-slate-50 hover:bg-white hover:border-slate-200'
+                          }`}
+                        >
+                          <div
+                            className="w-6 h-6 rounded-full shrink-0 flex items-center justify-center text-white shadow-sm transition-transform group-hover:scale-105"
+                            style={{ backgroundColor: preset.hex }}
+                          >
+                            {isSelected && <Check size={13} strokeWidth={3} />}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-black text-slate-800 truncate leading-none">
+                              {preset.name}
+                            </p>
+                            <p className="text-[9px] font-mono text-slate-400 mt-0.5">
+                              {preset.hex}
+                            </p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Custom Color Input */}
+                <div className="space-y-2 pt-2 border-t border-slate-100">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
+                    Custom Hex Color
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <div className="relative shrink-0">
+                      <input
+                        type="color"
+                        value={isValidHexColor(selectedColor) ? selectedColor : DEFAULT_PRIMARY_COLOR}
+                        onChange={(e) => handleColorChange(e.target.value)}
+                        className="w-10 h-10 rounded-xl cursor-pointer border-2 border-slate-200 p-0.5 bg-white shadow-sm"
+                        title="Pick custom color"
+                      />
+                    </div>
+                    <div className="relative flex-1">
+                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-mono font-bold text-slate-400 text-xs">
+                        #
+                      </span>
+                      <input
+                        type="text"
+                        value={customHexInput.replace(/^#/, '')}
+                        maxLength={6}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/[^0-9A-Fa-f]/g, '');
+                          setCustomHexInput(`#${val}`);
+                          if (val.length === 6 || val.length === 3) {
+                            handleColorChange(`#${val}`);
+                          }
+                        }}
+                        placeholder="4F46E5"
+                        className="w-full pl-7 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20 uppercase"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Live UI Preview Card */}
+                <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-100 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                      Live UI Preview
+                    </span>
+                    <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">
+                      Active
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        className="px-3.5 py-1.5 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-wider shadow-md shadow-indigo-600/20 hover:opacity-95"
+                      >
+                        Primary Action
+                      </button>
+                      <span className="px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-lg text-[10px] font-black uppercase">
+                        Verified
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 px-3 py-2 bg-indigo-600 text-white rounded-xl text-[11px] font-black shadow-sm">
+                      <Zap size={14} fill="currentColor" />
+                      <span>Sidebar Highlight</span>
+                    </div>
+                  </div>
+                  <p className="text-[9px] text-slate-400 italic text-center">
+                    Instant preview. Save Changes to apply company-wide.
+                  </p>
+                </div>
             </div>
           </div>
 

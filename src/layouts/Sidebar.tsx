@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import { useNavigation } from "../context/NavigationContext";
 import { useAuth } from "../context/AuthContext";
+import { useBranding } from "../context/BrandingContext";
 
 const Sidebar: React.FC = () => {
   const {
@@ -47,6 +48,7 @@ const Sidebar: React.FC = () => {
     setIsMobileOpen,
   } = useNavigation();
   const { user } = useAuth();
+  const { logoUrl, companyName } = useBranding();
   const userRole = user?.role || "EMPLOYEE"; // Fallback or handle null user appropriately
 
   // Navigation for Employees
@@ -184,17 +186,25 @@ const Sidebar: React.FC = () => {
           />
           <aside className="fixed inset-y-0 left-0 w-72 bg-white shadow-2xl flex flex-col z-50 animate-in slide-in-from-left duration-200">
             <div className="h-16 flex items-center justify-between px-6 border-b border-slate-100 shrink-0">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white shrink-0 shadow-lg shadow-indigo-600/20">
-                  <Zap size={20} fill="currentColor" />
-                </div>
-                <span className="font-black text-xl tracking-tighter text-slate-800 uppercase italic">
-                  ZenHR
+              <div className="flex items-center gap-3 min-w-0">
+                {logoUrl ? (
+                  <img
+                    src={logoUrl}
+                    alt={companyName}
+                    className="w-8 h-8 rounded-lg object-contain bg-slate-50 border border-slate-100 shadow-sm shrink-0"
+                  />
+                ) : (
+                  <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white shrink-0 shadow-lg shadow-indigo-600/20">
+                    <Zap size={20} fill="currentColor" />
+                  </div>
+                )}
+                <span className="font-black text-xl tracking-tighter text-slate-800 uppercase italic truncate">
+                  {companyName}
                 </span>
               </div>
               <button
                 onClick={() => setIsMobileOpen(false)}
-                className="p-2 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors"
+                className="p-2 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors shrink-0"
               >
                 <X size={20} />
               </button>
@@ -231,13 +241,21 @@ const Sidebar: React.FC = () => {
         className={`${isOpen ? "w-64" : "w-20"} transition-all duration-300 bg-white border-r border-slate-200 hidden md:flex flex-col z-30 shrink-0`}
       >
         <div className="h-16 flex items-center px-6 border-b border-slate-100 shrink-0">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white shrink-0 shadow-lg shadow-indigo-600/20">
-              <Zap size={20} fill="currentColor" />
-            </div>
+          <div className="flex items-center gap-3 min-w-0">
+            {logoUrl ? (
+              <img
+                src={logoUrl}
+                alt={companyName}
+                className="w-8 h-8 rounded-lg object-contain bg-slate-50 border border-slate-100 shadow-sm shrink-0"
+              />
+            ) : (
+              <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white shrink-0 shadow-lg shadow-indigo-600/20">
+                <Zap size={20} fill="currentColor" />
+              </div>
+            )}
             {isOpen && (
-              <span className="font-black text-xl tracking-tighter text-slate-800 uppercase italic">
-                ZenHR
+              <span className="font-black text-xl tracking-tighter text-slate-800 uppercase italic truncate">
+                {companyName}
               </span>
             )}
           </div>

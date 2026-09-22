@@ -54,10 +54,26 @@ import {
 } from '../controllers/employee/peerReview.controller';
 import { getTeamReport } from '../controllers/admin/reports.controller';
 import benefitsEmployeeRoutes from './benefits-employee.routes';
+import { CompanyService } from '../services/company.service';
 
 const employeeRoutes = new Hono();
 
 employeeRoutes.use('*', authMiddleware);
+
+// Company Branding (accessible by all authenticated employees)
+employeeRoutes.get('/company/branding', async (c: any) => {
+  const companyId = c.get('companyId');
+  if (!companyId) return c.json({ error: 'Company ID missing from session' }, 400);
+  const companyService = new CompanyService(c.env.DB);
+  const company = await companyService.getCompany(companyId);
+  if (!company) return c.json({ error: 'Company not found' }, 404);
+  return c.json({
+    id: company.id,
+    name: company.name,
+    logoUrl: company.logoUrl,
+    primaryColor: company.primaryColor || '#4F46E5',
+  });
+});
 
 // Directory
 employeeRoutes.get('/directory', getDirectory);

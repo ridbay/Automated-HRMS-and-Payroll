@@ -115,18 +115,21 @@ export const useUpdateCompany = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
-      if (!res.ok) throw new Error('Failed to update company profile');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to update company profile');
+      }
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['company'] });
+      queryClient.invalidateQueries({ queryKey: ['company-branding'] });
+      window.dispatchEvent(new Event('zenhr:branding_updated'));
     },
   });
 };
 
-// Real R2-backed upload (POST /admin/company/logo) — the frontend previously
-// base64-encoded the file and stored it inline via useUpdateCompany instead.
-// No Content-Type header here: the browser sets the multipart boundary itself.
+// Real R2-backed upload (POST /admin/company/logo)
 export const useUploadCompanyLogo = () => {
   const queryClient = useQueryClient();
   return useMutation({
@@ -146,7 +149,45 @@ export const useUploadCompanyLogo = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['company'] });
+      queryClient.invalidateQueries({ queryKey: ['company-branding'] });
+      window.dispatchEvent(new Event('zenhr:branding_updated'));
     },
+  });
+};
+
+// Deletes the company logo (DELETE /admin/company/logo)
+export const useDeleteCompanyLogo = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/admin/company/logo`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to remove logo');
+      }
+      const body = await res.json();
+      return body.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['company'] });
+      queryClient.invalidateQueries({ queryKey: ['company-branding'] });
+      window.dispatchEvent(new Event('zenhr:branding_updated'));
+    },
+  });
+};
+
+// Read company branding (employee or admin)
+export const useCompanyBranding = (enabled: boolean = true) => {
+  return useQuery({
+    queryKey: ['company-branding'],
+    queryFn: async () => {
+      const res = await fetchWithTenant(`${API_URL}/employee/company/branding`);
+      if (!res.ok) throw new Error('Failed to fetch branding');
+      return res.json();
+    },
+    enabled,
   });
 };
 

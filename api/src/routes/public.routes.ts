@@ -37,6 +37,22 @@ publicRoutes.get('/company/:companyIdentifier/logo', async (c) => {
   return c.body(object.body, 200, Object.fromEntries(headers.entries()));
 });
 
+// Publicly fetch company branding details (name, logoUrl, primaryColor)
+publicRoutes.get('/company/:companyIdentifier/branding', async (c) => {
+  const companyIdentifier = c.req.param('companyIdentifier');
+  const companyService = new CompanyService(c.env.DB);
+  const company = await companyService.getCompany(companyIdentifier);
+  if (!company) {
+    return c.json({ error: 'Company not found' }, 404);
+  }
+  return c.json({
+    id: company.id,
+    name: company.name,
+    logoUrl: company.logoUrl,
+    primaryColor: company.primaryColor || '#4F46E5',
+  });
+});
+
 // Monnify disbursement & transaction webhook
 publicRoutes.post('/webhooks/monnify', async (c) => {
   try {

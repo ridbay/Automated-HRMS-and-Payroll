@@ -44,4 +44,14 @@ describe('Company Service', () => {
     expect(mockDb.returning).toHaveBeenCalled();
     expect(mockDb.get).toHaveBeenCalled();
   });
+
+  it('should update company branding primaryColor and logoUrl', async () => {
+    mockDb.get.mockResolvedValueOnce({ id: 'comp-1', primaryColor: '#059669', logoUrl: null });
+    const payload = { primaryColor: '#059669', logoUrl: null };
+    const result = await service.updateCompany('comp-1', payload);
+
+    expect(result?.primaryColor).toBe('#059669');
+    expect(result?.logoUrl).toBeNull();
+    expect(mockDb.set).toHaveBeenCalledWith(payload);
+  });
 });

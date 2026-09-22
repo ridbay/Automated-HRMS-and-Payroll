@@ -3,6 +3,7 @@ import Sidebar from "./layouts/Sidebar";
 import Header from "./layouts/Header";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { NavigationProvider, useNavigation } from "./context/NavigationContext";
+import { BrandingProvider } from "./context/BrandingContext";
 import { PopupProvider } from "./components/PopupProvider";
 import ErrorBoundary from "./components/ErrorBoundary";
 import PageLoader from "./components/PageLoader";
@@ -230,7 +231,9 @@ const App: React.FC = () => {
       <PopupProvider>
         <AuthProvider>
           <NavigationProvider>
-            <AppContent />
+            <BrandingProvider>
+              <AppContent />
+            </BrandingProvider>
           </NavigationProvider>
         </AuthProvider>
       </PopupProvider>

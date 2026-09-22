@@ -13,6 +13,7 @@ export const companies = sqliteTable('companies', {
   // Data URI (small SVG/PNG/JPG, capped client-side at 2MB) — no R2 bucket is
   // provisioned for this environment yet, so branding is stored inline.
   logoUrl: text('logo_url'),
+  primaryColor: text('primary_color').default('#4F46E5'),
   createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text('updated_at').$onUpdate(() => new Date().toISOString()),
 });

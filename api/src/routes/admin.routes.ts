@@ -366,6 +366,9 @@ adminRoutes.get("/company", adminOnly, view("settings"), async (c: any) => {
 adminRoutes.put("/company", adminOnly, edit("settings"), async (c: any) => {
   const companyId = c.get("companyId");
   const payload = await c.req.json();
+  if (payload.primaryColor && !/^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test(payload.primaryColor)) {
+    return c.json({ error: "Invalid primary color format. Must be a valid hex code (e.g. #4F46E5)." }, 400);
+  }
   const companyService = new CompanyService(c.env.DB);
   const company = await companyService.updateCompany(companyId, payload);
   await new AuditService(c.env.DB).log(companyId, {
@@ -401,6 +404,26 @@ adminRoutes.post("/company/logo", adminOnly, edit("settings"), async (c: any) =>
   });
 
   return c.json({ data: { ...company, logoUrl, fileKey } });
+});
+
+adminRoutes.delete("/company/logo", adminOnly, edit("settings"), async (c: any) => {
+  const companyId = c.get("companyId");
+  const companyService = new CompanyService(c.env.DB);
+  const existing = await companyService.getCompany(companyId);
+  if (existing?.logoUrl) {
+    const storage = new StorageService(c.env.BUCKET);
+    await storage.deleteFile(existing.logoUrl);
+  }
+  const company = await companyService.updateCompany(companyId, { logoUrl: null });
+
+  await new AuditService(c.env.DB).log(companyId, {
+    actorId: c.get("employeeId"),
+    action: "Removed company logo",
+    module: "company",
+    ip: c.req.header("cf-connecting-ip"),
+  });
+
+  return c.json({ data: company });
 });
 
 // Org Routes (Departments & Locations)

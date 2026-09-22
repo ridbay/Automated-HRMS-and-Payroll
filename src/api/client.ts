@@ -285,6 +285,8 @@ export {
   useCompany,
   useUpdateCompany,
   useUploadCompanyLogo,
+  useDeleteCompanyLogo,
+  useCompanyBranding,
   useDepartments,
   useCreateDepartment,
   useDeleteDepartment,
