@@ -480,13 +480,7 @@ export const useEmailTemplates = (enabled: boolean = true) => {
 export const useUpdateEmailTemplate = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({
-      key,
-      data,
-    }: {
-      key: string;
-      data: { subject?: string; body?: string };
-    }) => {
+    mutationFn: async ({ key, data }: { key: string; data: { subject: string; body: string } }) => {
       const res = await fetchWithTenant(`${API_URL}/admin/email-templates/${key}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -495,7 +489,24 @@ export const useUpdateEmailTemplate = () => {
       if (!res.ok) throw new Error('Failed to update email template');
       return res.json();
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['emailTemplates'] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['email-templates'] }),
+  });
+};
+
+export const useTestEmailTemplate = () => {
+  return useMutation({
+    mutationFn: async ({ key, to }: { key: string; to?: string }) => {
+      const res = await fetchWithTenant(`${API_URL}/admin/email-templates/${key}/test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(to ? { to } : {}),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to send test email');
+      }
+      return res.json();
+    },
   });
 };
 
@@ -682,6 +693,22 @@ export const useUpdateWorkflow = () => {
       return res.json();
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['workflows'] }),
+  });
+};
+
+export const useWorkflowExecutions = (workflowKey?: string, enabled: boolean = true) => {
+  return useQuery({
+    queryKey: ['workflow-executions', workflowKey],
+    queryFn: async () => {
+      const query = new URLSearchParams();
+      if (workflowKey) query.set('key', workflowKey);
+      query.set('limit', '20');
+      const qs = query.toString();
+      const res = await fetchWithTenant(`${API_URL}/admin/workflows/executions?${qs}`);
+      if (!res.ok) throw new Error('Failed to fetch workflow executions');
+      return res.json();
+    },
+    enabled,
   });
 };
 

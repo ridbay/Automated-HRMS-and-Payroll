@@ -41,6 +41,8 @@ const EmployeeOnboarding = React.lazy(() => import("./features/employee/Employee
 const Directory = React.lazy(() => import("./features/core/Directory"));
 const SurveysAdmin = React.lazy(() => import("./features/admin/SurveysAdmin"));
 const LMSAdmin = React.lazy(() => import("./features/admin/LMSAdmin"));
+const EmployeeSurveys = React.lazy(() => import("./features/employee/EmployeeSurveys"));
+const EmployeeLMS = React.lazy(() => import("./features/employee/EmployeeLMS"));
 const Support = React.lazy(() => import("./features/support/Support"));
 
 // The app has no client-side router anywhere else — this is the one
@@ -133,12 +135,12 @@ const AppContent: React.FC = () => {
         if (user.role === "HR_ADMIN" || user.role === "SUPER_ADMIN") {
           return <SurveysAdmin />;
         }
-        return <Dashboard />;
+        return <EmployeeSurveys />;
       case "lms":
         if (user.role === "HR_ADMIN" || user.role === "SUPER_ADMIN") {
           return <LMSAdmin />;
         }
-        return <Dashboard />;
+        return <EmployeeLMS />;
       case "leave-approvals":
         return <AdminLeaveRequests />;
       case "leave":

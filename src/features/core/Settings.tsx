@@ -24,12 +24,12 @@ import {
   useRoles, useCreateRole, useUpdateRole, useDeleteRole,
   useEmployees,
   useHolidays, useCreateHoliday, useDeleteHoliday,
-  useEmailTemplates, useUpdateEmailTemplate,
+  useEmailTemplates, useUpdateEmailTemplate, useTestEmailTemplate,
   useIntegrations, useToggleIntegration,
   useConnectSlack, useDisconnectSlack, useTestSlack,
   useConnectMailgun, useDisconnectMailgun, useTestMailgun,
   useIntegrationEvents,
-  useWorkflows, useUpdateWorkflow,
+  useWorkflows, useUpdateWorkflow, useWorkflowExecutions,
   useDataStats, exportCompanyData,
   useAuditLogs, exportAuditLogsCsv,
 } from '../../api/client';
@@ -148,11 +148,10 @@ const Settings: React.FC = () => {
   // Email Templates
   const { data: emailTemplates, isLoading: isTemplatesLoading } = useEmailTemplates(isAdmin);
   const updateEmailTemplate = useUpdateEmailTemplate();
+  const testEmailTemplate = useTestEmailTemplate();
   const [selectedTemplateKey, setSelectedTemplateKey] = useState<string | null>(null);
-  // null = no unsaved edits yet; falls back to the selected template's saved
-  // values. Using null (rather than empty strings) so the fields show the
-  // template's real content before the user has typed anything.
   const [templateDraft, setTemplateDraft] = useState<{ subject: string; body: string } | null>(null);
+  const [isTestingTemplate, setIsTestingTemplate] = useState(false);
 
   // Integrations
   const { data: integrations, isLoading: isIntegrationsLoading } = useIntegrations(isAdmin);
@@ -184,6 +183,12 @@ const Settings: React.FC = () => {
   const [workflowStepsDraft, setWorkflowStepsDraft] = useState<{ id: string; name: string; assignee: string }[]>([]);
   const [newStepName, setNewStepName] = useState('');
   const [newStepAssignee, setNewStepAssignee] = useState('');
+  const [showExecutionLog, setShowExecutionLog] = useState(false);
+  const [executionLogKey, setExecutionLogKey] = useState<string | undefined>(undefined);
+  const { data: workflowExecutions, isLoading: isExecutionsLoading } = useWorkflowExecutions(
+    executionLogKey,
+    isAdmin && showExecutionLog
+  );
 
   // Data & Backup
   const { data: dataStats, isLoading: isDataStatsLoading } = useDataStats(isAdmin && activeSection === 'data');
@@ -1475,18 +1480,37 @@ const Settings: React.FC = () => {
                 <p className="text-sm font-bold text-slate-400 text-center py-16">Select a template to edit.</p>
               ) : (
                 <>
-                  <div className="flex justify-between items-start">
+                  <div className="flex justify-between items-start gap-3">
                     <h3 className="text-lg font-black text-slate-800">{selected.name}</h3>
-                    <button
-                      onClick={() => updateEmailTemplate.mutate({
-                        key: selected.key,
-                        data: { subject: draft.subject, body: draft.body },
-                      })}
-                      disabled={updateEmailTemplate.isPending}
-                      className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-indigo-700 disabled:opacity-50"
-                    >
-                      <Save size={14} /> {updateEmailTemplate.isPending ? 'Saving...' : 'Save Template'}
-                    </button>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={async () => {
+                          setIsTestingTemplate(true);
+                          try {
+                            await testEmailTemplate.mutateAsync({ key: selected.key });
+                            popupAlert('Test email sent! Check your inbox (or the configured "from" address).', 'Test Sent');
+                          } catch (e: any) {
+                            popupAlert(e.message || 'Failed to send test email.', 'Test Failed');
+                          } finally {
+                            setIsTestingTemplate(false);
+                          }
+                        }}
+                        disabled={isTestingTemplate}
+                        className="flex items-center gap-2 px-5 py-2.5 bg-slate-100 text-slate-700 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-200 disabled:opacity-50"
+                      >
+                        <Mail size={14} /> {isTestingTemplate ? 'Sending…' : 'Send Test'}
+                      </button>
+                      <button
+                        onClick={() => updateEmailTemplate.mutate({
+                          key: selected.key,
+                          data: { subject: draft.subject, body: draft.body },
+                        })}
+                        disabled={updateEmailTemplate.isPending}
+                        className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-indigo-700 disabled:opacity-50"
+                      >
+                        <Save size={14} /> {updateEmailTemplate.isPending ? 'Saving...' : 'Save Template'}
+                      </button>
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Subject</label>
@@ -1625,6 +1649,89 @@ const Settings: React.FC = () => {
           })}
         </div>
       )}
+
+      {/* Execution History Panel */}
+      <div className="bg-white rounded-[3rem] border border-slate-200 shadow-sm overflow-hidden">
+        <button
+          onClick={() => setShowExecutionLog((v) => !v)}
+          className="w-full flex items-center justify-between px-10 py-6 hover:bg-slate-50 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <History className="text-indigo-500" size={20} />
+            <h3 className="font-black text-slate-800 text-sm">Execution History</h3>
+            <span className="text-[10px] text-slate-400 font-medium">(last 20 runs)</span>
+          </div>
+          <ChevronDown size={16} className={`text-slate-400 transition-transform ${showExecutionLog ? 'rotate-180' : ''}`} />
+        </button>
+        <AnimatePresence>
+          {showExecutionLog && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="overflow-hidden border-t border-slate-100"
+            >
+              <div className="p-8 space-y-4">
+                <div className="flex items-center gap-3">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    Filter by Workflow:
+                  </label>
+                  <select
+                    value={executionLogKey ?? ''}
+                    onChange={(e) => setExecutionLogKey(e.target.value || undefined)}
+                    className="px-4 py-2 bg-slate-50 border border-slate-200 text-slate-600 rounded-xl font-black text-[10px] uppercase tracking-widest outline-none"
+                  >
+                    <option value="">All Workflows</option>
+                    {workflows?.map((wf: any) => (
+                      <option key={wf.key} value={wf.key}>{wf.name}</option>
+                    ))}
+                  </select>
+                </div>
+                {isExecutionsLoading ? (
+                  <div className="flex justify-center py-10"><Loader2 className="animate-spin text-indigo-500" size={24} /></div>
+                ) : workflowExecutions?.length === 0 || !workflowExecutions ? (
+                  <p className="text-sm font-bold text-slate-400 text-center py-10">No executions recorded yet.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {workflowExecutions.map((exec: any) => (
+                      <div
+                        key={exec.id}
+                        className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className={`w-2 h-2 rounded-full shrink-0 ${
+                            exec.status === 'completed' ? 'bg-emerald-500' :
+                            exec.status === 'failed' ? 'bg-rose-500' :
+                            'bg-amber-400'
+                          }`} />
+                          <div className="min-w-0">
+                            <p className="text-xs font-black text-slate-700 truncate">{exec.workflowName ?? exec.workflowKey}</p>
+                            {exec.triggerEvent && (
+                              <p className="text-[10px] font-medium text-slate-400 truncate">{exec.triggerEvent}</p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4 shrink-0 ml-4">
+                          <span className={`px-2 py-0.5 text-[9px] font-black uppercase tracking-widest rounded-lg ${
+                            exec.status === 'completed' ? 'bg-emerald-50 text-emerald-600' :
+                            exec.status === 'failed' ? 'bg-rose-50 text-rose-600' :
+                            'bg-amber-50 text-amber-600'
+                          }`}>
+                            {exec.status}
+                          </span>
+                          <span className="text-[10px] font-mono text-slate-400 whitespace-nowrap">
+                            {new Date(exec.createdAt).toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   );
 
