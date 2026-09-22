@@ -102,23 +102,18 @@ import {
   candidateResumeUrl,
   downloadAuthenticatedBlob,
   useDirectory,
+  useRecruitmentReport,
 } from "../../api/client";
 import { RecruitmentAnalyticsBody } from "./RecruitmentAnalytics";
 
-const funnelData = [
-  { name: "Applied", value: 450, fill: "#6366f1" },
-  { name: "Screening", value: 230, fill: "#818cf8" },
-  { name: "Interview", value: 120, fill: "#f59e0b" },
-  { name: "Offer", value: 50, fill: "#10b981" },
-  { name: "Hired", value: 30, fill: "#8b5cf6" },
-];
-
-const sourceData = [
-  { name: "LinkedIn", value: 45 },
-  { name: "Direct", value: 25 },
-  { name: "Referral", value: 20 },
-  { name: "Indeed", value: 10 },
-];
+const daysAgoLabel = (dateStr?: string) => {
+  if (!dateStr) return "Applied recently";
+  const diffMs = Date.now() - new Date(dateStr).getTime();
+  const days = Math.floor(diffMs / 86400000);
+  if (days <= 0) return "Applied today";
+  if (days === 1) return "Applied 1d ago";
+  return `Applied ${days}d ago`;
+};
 
 const Recruitment: React.FC = () => {
   const [activeTab, setActiveTab] = useState<
@@ -202,10 +197,87 @@ const Recruitment: React.FC = () => {
   const createOffer = useCreateOffer();
   const sendOffer = useSendOffer();
   const respondToOffer = useRespondToOffer();
+  const { data: recruitmentReport } = useRecruitmentReport();
   const candidatesById = useMemo(
     () => new Map(candidates.map((c: Candidate) => [c.id, c])),
     [candidates],
   );
+
+  const dashboardStats = useMemo(() => {
+    const now = new Date();
+    const openReqs = requisitions.filter((r) => r.status === "Open");
+    const urgentOpen = openReqs.filter((r) => r.priority === "High").length;
+
+    const appliedThisMonth = candidates.filter((c: Candidate) => {
+      if (!c.appliedDate) return false;
+      const d = new Date(c.appliedDate);
+      return (
+        d.getFullYear() === now.getFullYear() &&
+        d.getMonth() === now.getMonth()
+      );
+    }).length;
+
+    const todayStr = now.toISOString().slice(0, 10);
+    const interviewsToday = interviews.filter(
+      (i: Interview) => i.dateTime?.slice(0, 10) === todayStr,
+    ).length;
+
+    const pendingOffers = offers.filter((o: any) => o.status === "sent");
+    const expiringSoon = pendingOffers.filter((o: any) => {
+      if (!o.expiryDate) return false;
+      const daysLeft =
+        (new Date(o.expiryDate).getTime() - now.getTime()) / 86400000;
+      return daysLeft >= 0 && daysLeft <= 7;
+    }).length;
+
+    const hiredCount = candidates.filter(
+      (c: Candidate) => c.status === "hired",
+    ).length;
+    const conversionRate = candidates.length
+      ? Math.round((hiredCount / candidates.length) * 100)
+      : 0;
+
+    return {
+      openPositions: openReqs.length,
+      urgentOpen,
+      totalApplicants: candidates.length,
+      appliedThisMonth,
+      interviewsTotal: interviews.length,
+      interviewsToday,
+      offersPending: pendingOffers.length,
+      expiringSoon,
+      hiredCount,
+      conversionRate,
+    };
+  }, [requisitions, candidates, interviews, offers]);
+
+  const funnelData = useMemo(() => {
+    const stages: { key: Candidate["status"]; name: string; fill: string }[] = [
+      { key: "applied", name: "Applied", fill: "#6366f1" },
+      { key: "screening", name: "Screening", fill: "#818cf8" },
+      { key: "interview", name: "Interview", fill: "#f59e0b" },
+      { key: "offer", name: "Offer", fill: "#10b981" },
+      { key: "hired", name: "Hired", fill: "#8b5cf6" },
+    ];
+    return stages.map((s) => ({
+      name: s.name,
+      fill: s.fill,
+      value: candidates.filter((c: Candidate) => c.status === s.key).length,
+    }));
+  }, [candidates]);
+
+  const sourceData = useMemo(() => {
+    const total = candidates.length;
+    if (!total) return [];
+    const counts = candidates.reduce((acc: Record<string, number>, c: Candidate) => {
+      acc[c.source] = (acc[c.source] || 0) + 1;
+      return acc;
+    }, {});
+    return Object.entries(counts).map(([name, count]) => ({
+      name,
+      value: Math.round(((count as number) / total) * 100),
+    }));
+  }, [candidates]);
 
   const openScheduleModal = () => {
     setScheduleForm({ ...emptyScheduleForm, candidateId: selectedCandidate?.id || "" });
@@ -320,43 +392,55 @@ const Recruitment: React.FC = () => {
         {[
           {
             label: "Open Positions",
-            val: "24",
-            sub: "8 Urgent",
+            val: String(dashboardStats.openPositions),
+            sub: `${dashboardStats.urgentOpen} Urgent`,
             icon: <Briefcase />,
             color: "indigo",
           },
           {
             label: "Total Applicants",
-            val: "582",
-            sub: "+12% this mo",
+            val: String(dashboardStats.totalApplicants),
+            sub:
+              dashboardStats.appliedThisMonth > 0
+                ? `+${dashboardStats.appliedThisMonth} this mo`
+                : "No new applicants",
             icon: <Users />,
             color: "emerald",
           },
           {
             label: "Interviews",
-            val: "18",
-            sub: "Today: 4",
+            val: String(dashboardStats.interviewsTotal),
+            sub: `Today: ${dashboardStats.interviewsToday}`,
             icon: <Calendar />,
             color: "amber",
           },
           {
             label: "Offers Pending",
-            val: "5",
-            sub: "2 Expiring",
+            val: String(dashboardStats.offersPending),
+            sub:
+              dashboardStats.expiringSoon > 0
+                ? `${dashboardStats.expiringSoon} Expiring`
+                : "None expiring",
             icon: <Zap />,
             color: "rose",
           },
           {
             label: "Time to Hire",
-            val: "18d",
-            sub: "Target: 21d",
+            val:
+              recruitmentReport?.summary?.avgTimeToFill != null
+                ? `${recruitmentReport.summary.avgTimeToFill}d`
+                : "—",
+            sub:
+              recruitmentReport?.summary?.avgDaysOpen != null
+                ? `Open Avg: ${recruitmentReport.summary.avgDaysOpen}d`
+                : "—",
             icon: <Clock />,
             color: "violet",
           },
           {
             label: "Conv. Rate",
-            val: "12%",
-            sub: "+2% Trend",
+            val: `${dashboardStats.conversionRate}%`,
+            sub: `${dashboardStats.hiredCount} Hired`,
             icon: <TrendingUp />,
             color: "sky",
           },
@@ -391,7 +475,7 @@ const Recruitment: React.FC = () => {
                 Hiring Velocity Funnel
               </h3>
               <p className="text-sm text-slate-400 font-medium">
-                Candidate drop-off analysis per stage.
+                Current candidate distribution by pipeline stage.
               </p>
             </div>
             <div className="flex gap-2">
@@ -446,29 +530,37 @@ const Recruitment: React.FC = () => {
           <h3 className="text-xl font-black text-slate-800 mb-10">
             Sourcing Effectiveness
           </h3>
-          <div className="flex-1 min-h-[250px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={sourceData}
-                  innerRadius={60}
-                  outerRadius={80}
-                  paddingAngle={5}
-                  dataKey="value"
-                >
-                  {sourceData.map((entry, index) => (
-                    <Cell
-                      key={`cell-${index}`}
-                      fill={
-                        ["#6366f1", "#10b981", "#f59e0b", "#ef4444"][index % 4]
-                      }
-                    />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
+          {sourceData.length === 0 ? (
+            <div className="flex-1 flex items-center justify-center min-h-[250px] text-center">
+              <p className="text-xs font-black text-slate-300 uppercase tracking-widest">
+                No candidates yet
+              </p>
+            </div>
+          ) : (
+            <div className="flex-1 min-h-[250px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={sourceData}
+                    innerRadius={60}
+                    outerRadius={80}
+                    paddingAngle={5}
+                    dataKey="value"
+                  >
+                    {sourceData.map((entry, index) => (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={
+                          ["#6366f1", "#10b981", "#f59e0b", "#ef4444"][index % 4]
+                        }
+                      />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          )}
           <div className="space-y-4 mt-6">
             {sourceData.map((s, i) => (
               <div key={i} className="flex items-center justify-between">
@@ -559,10 +651,11 @@ const Recruitment: React.FC = () => {
             style={{ backgroundImage: "none" }}
           >
             <option value="All">All Depts</option>
-            <option value="Engineering">Engineering</option>
-            <option value="Product">Product</option>
-            <option value="Design">Design</option>
-            <option value="Marketing">Marketing</option>
+            {departments.map((d: any) => (
+              <option key={d.id} value={d.name}>
+                {d.name}
+              </option>
+            ))}
           </select>
 
           <select
@@ -1059,9 +1152,11 @@ const Recruitment: React.FC = () => {
                   className="w-10 h-10 rounded-2xl border-4 border-white shadow-md ring-1 ring-slate-100"
                 />
               ))}
-              <div className="w-10 h-10 bg-indigo-600 rounded-2xl border-4 border-white shadow-md flex items-center justify-center text-white text-[10px] font-black">
-                +2
-              </div>
+              {directory.length > teamMembers.length && (
+                <div className="w-10 h-10 bg-indigo-600 rounded-2xl border-4 border-white shadow-md flex items-center justify-center text-white text-[10px] font-black">
+                  +{directory.length - teamMembers.length}
+                </div>
+              )}
             </div>
             <div className="h-8 w-px bg-slate-200 mx-2" />
             <button className="px-6 py-2.5 bg-slate-50 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-50 hover:text-indigo-600 transition-all flex items-center gap-2">
@@ -1150,7 +1245,7 @@ const Recruitment: React.FC = () => {
                           {cand.name}
                         </h4>
                         <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-1 pointer-events-none">
-                          Applied 3d ago
+                          {daysAgoLabel(cand.appliedDate)}
                         </p>
                       </div>
                     </div>
@@ -1323,8 +1418,17 @@ const Recruitment: React.FC = () => {
               Recruitment OS
             </h1>
             <p className="text-slate-500 font-medium">
-              Global talent velocity is currently at{" "}
-              <b className="text-emerald-500">82%</b> efficiency.
+              {dashboardStats.totalApplicants > 0 ? (
+                <>
+                  Candidate conversion rate is currently at{" "}
+                  <b className="text-emerald-500">
+                    {dashboardStats.conversionRate}%
+                  </b>
+                  .
+                </>
+              ) : (
+                "No candidate pipeline activity yet."
+              )}
             </p>
           </div>
         </div>
