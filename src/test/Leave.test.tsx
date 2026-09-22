@@ -115,8 +115,8 @@ describe('Leave (employee)', () => {
     // Step 3: reason
     fireEvent.click(screen.getByText('Vacation'));
     fireEvent.click(screen.getByText('Next Step'));
-    // Step 4: handover (optional) -> Next Step
-    fireEvent.click(screen.getByText('Next Step'));
+    // Step 4: handover (optional) -> "Skip / Next"
+    fireEvent.click(screen.getByText('Skip / Next'));
     // Step 5: review & submit
     fireEvent.click(screen.getByText('Submit Request'));
 
@@ -137,7 +137,7 @@ describe('Leave (employee)', () => {
     fireEvent.click(screen.getByText('Next Step'));
     fireEvent.click(screen.getByText('Vacation'));
     fireEvent.click(screen.getByText('Next Step'));
-    fireEvent.click(screen.getByText('Next Step'));
+    fireEvent.click(screen.getByText('Skip / Next'));
     fireEvent.click(screen.getByText('Submit Request'));
 
     expect(mockAlert).toHaveBeenCalledWith('Insufficient balance', 'Error');
