@@ -52,6 +52,11 @@ describe('MonnifyService', () => {
     // Test that empty signature or invalid signature returns false
     const isValid = await service.verifyWebhookSignature(rawBody, 'invalid-signature');
     expect(isValid).toBe(false);
+
+    // Test that missing secret key returns false (never fails open)
+    const unconfigured = new MonnifyService({} as any, {} as any);
+    const unconfiguredValid = await unconfigured.verifyWebhookSignature(rawBody, 'any-sig');
+    expect(unconfiguredValid).toBe(false);
   });
 
   it('should simulate disbursement when credentials are missing', async () => {

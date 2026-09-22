@@ -26,8 +26,29 @@ export class AttendanceService {
     return (h || 0) * 60 + (m || 0);
   }
 
-  private computeAttendanceStatus(clockInDate: Date, policy: AttendancePolicy): string {
-    const clockInMinutes = clockInDate.getHours() * 60 + clockInDate.getMinutes();
+  private getMinutesInTimezone(date: Date, timeZone: string = 'Africa/Lagos'): number {
+    const formatter = new Intl.DateTimeFormat('en-GB', {
+      timeZone,
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    });
+    const formatted = formatter.format(date);
+    const [h, m] = formatted.split(':').map((n) => parseInt(n, 10));
+    return (h || 0) * 60 + (m || 0);
+  }
+
+  getTodayDate(date: Date = new Date(), timeZone: string = 'Africa/Lagos'): string {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(date);
+  }
+
+  private computeAttendanceStatus(clockInDate: Date, policy: AttendancePolicy, timeZone: string = 'Africa/Lagos'): string {
+    const clockInMinutes = this.getMinutesInTimezone(clockInDate, timeZone);
     const thresholdMinutes = this.timeStringToMinutes(policy.attendanceStartTime) + (policy.attendanceGraceMinutes || 0);
     return clockInMinutes > thresholdMinutes ? 'late' : 'present';
   }
@@ -104,7 +125,7 @@ export class AttendanceService {
   }
 
   async getTodaySessions(companyId: string, employeeId: string) {
-    const today = new Date().toISOString().split('T')[0];
+    const today = this.getTodayDate();
     return this.db.query.attendanceRecords.findMany({
       where: and(
         eq(schema.attendanceRecords.companyId, companyId),
@@ -116,7 +137,7 @@ export class AttendanceService {
   }
 
   async getActiveSession(companyId: string, employeeId: string) {
-    const today = new Date().toISOString().split('T')[0];
+    const today = this.getTodayDate();
     const records = await this.db.query.attendanceRecords.findMany({
       where: and(
         eq(schema.attendanceRecords.companyId, companyId),
@@ -158,7 +179,7 @@ export class AttendanceService {
 
   async clockIn(companyId: string, employeeId: string, data: any) {
     const clockInDate = new Date();
-    const today = clockInDate.toISOString().split('T')[0];
+    const today = this.getTodayDate(clockInDate);
     const clockInTime = clockInDate.toISOString();
     const id = `ATT-${Math.floor(1000 + Math.random() * 9000)}`;
 
@@ -333,7 +354,7 @@ export class AttendanceService {
     });
     if (team.length === 0) return [];
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = this.getTodayDate();
     const teamIds = team.map((t: any) => t.id);
     const records = await this.db.query.attendanceRecords.findMany({
       where: and(
@@ -367,7 +388,7 @@ export class AttendanceService {
 
   async createManualAttendanceRecord(companyId: string, data: any) {
     const id = `ATT-${Math.floor(1000 + Math.random() * 9000)}`;
-    const date = data.date || new Date().toISOString().split('T')[0];
+    const date = data.date || this.getTodayDate();
     const clockIn = data.clockIn || `${date}T00:00:00.000Z`;
 
     let workHours = data.workHours ?? 0;

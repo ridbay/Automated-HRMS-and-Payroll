@@ -60,3 +60,37 @@ export const registerCompany = async (c: Context<AppEnv>) => {
     return c.json({ error: error.message }, 400);
   }
 };
+
+export const forgotPassword = async (c: Context<AppEnv>) => {
+  try {
+    const { email } = await c.req.json();
+    if (!email) {
+      return c.json({ error: 'Email is required' }, 400);
+    }
+
+    const authService = new AuthService(c.env.DB);
+    const jwtSecret = c.env.JWT_SECRET || 'fallback_secret_for_local_dev';
+
+    const result = await authService.requestPasswordReset(email, jwtSecret);
+    return c.json(result);
+  } catch (error: any) {
+    return c.json({ error: error.message }, 400);
+  }
+};
+
+export const resetPassword = async (c: Context<AppEnv>) => {
+  try {
+    const { token, newPassword } = await c.req.json();
+    if (!token || !newPassword) {
+      return c.json({ error: 'Token and new password are required' }, 400);
+    }
+
+    const authService = new AuthService(c.env.DB);
+    const jwtSecret = c.env.JWT_SECRET || 'fallback_secret_for_local_dev';
+
+    const result = await authService.resetPassword(token, newPassword, jwtSecret);
+    return c.json(result);
+  } catch (error: any) {
+    return c.json({ error: error.message }, 400);
+  }
+};

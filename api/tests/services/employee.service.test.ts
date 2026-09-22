@@ -21,6 +21,9 @@ describe('Employee Service', () => {
         departments: {
           findFirst: vi.fn().mockResolvedValue({ id: 'dept-1', companyId: 'comp-1', name: 'Engineering' }),
         },
+        payslips: {
+          findMany: vi.fn().mockResolvedValue([]),
+        },
       },
       insert: vi.fn().mockReturnThis(),
       values: vi.fn().mockReturnThis(),
@@ -30,6 +33,8 @@ describe('Employee Service', () => {
       where: vi.fn().mockReturnThis(),
       update: vi.fn().mockReturnThis(),
       set: vi.fn().mockReturnThis(),
+      delete: vi.fn().mockReturnThis(),
+      all: vi.fn().mockResolvedValue([]),
     };
 
     // We hack the db property directly to avoid testing Drizzle internals too heavily
@@ -43,6 +48,23 @@ describe('Employee Service', () => {
     expect(result[0].companyId).toBe('comp-1');
     expect((result[0] as any).passwordHash).toBeUndefined();
     expect((result[0] as any).passwordSalt).toBeUndefined();
+  });
+
+  it('should fetch direct reports and strip sensitive fields', async () => {
+    mockDb.query.employees.findMany.mockResolvedValue([
+      { id: 'rep-1', managerId: 'mgr-1', passwordHash: 'secret', name: 'Direct Report' },
+    ]);
+    const reports = await service.getDirectReports('comp-1', 'mgr-1');
+    expect(reports).toHaveLength(1);
+    expect((reports[0] as any).passwordHash).toBeUndefined();
+    expect(reports[0].name).toBe('Direct Report');
+  });
+
+  it('should disallow deleting an employee with historical payslips', async () => {
+    mockDb.query.payslips.findMany.mockResolvedValue([{ id: 'ps-1', employeeId: 'emp-1' }]);
+    await expect(service.deleteEmployee('comp-1', 'emp-1')).rejects.toThrow(
+      'Cannot delete an employee with historical payroll records'
+    );
   });
 
   it('should create an employee, generate temp password, and return safe details', async () => {

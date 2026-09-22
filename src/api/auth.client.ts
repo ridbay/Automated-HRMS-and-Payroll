@@ -56,3 +56,29 @@ export const useChangePassword = () => {
     },
   });
 };
+
+export const requestPasswordReset = async (email: string) => {
+  const res = await fetch(`${API_URL}/auth/forgot-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || 'Failed to request password reset');
+  }
+  return res.json();
+};
+
+export const resetPasswordWithToken = async (data: { token: string; newPassword: string }) => {
+  const res = await fetch(`${API_URL}/auth/reset-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || 'Password reset failed');
+  }
+  return res.json();
+};

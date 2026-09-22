@@ -59,6 +59,24 @@ export class EmployeeService {
     return directory;
   }
 
+  async getDirectReports(companyId: string, managerId: string) {
+    const directReports = await this.db.query.employees.findMany({
+      where: and(
+        eq(schema.employees.companyId, companyId),
+        eq(schema.employees.managerId, managerId)
+      ),
+      with: {
+        emergencyContacts: true,
+        employeeDocuments: true,
+      },
+    });
+
+    return directReports.map(emp => {
+      const { passwordHash, passwordSalt, ...safeEmployee } = emp;
+      return safeEmployee;
+    });
+  }
+
   // Keeps the legacy free-text `department` label in sync with `departmentId`
   // whenever a department is (re)assigned, regardless of entry point.
   private async resolveDepartment(companyId: string, departmentId: string) {
@@ -253,7 +271,15 @@ export class EmployeeService {
   }
 
   async deleteEmployee(companyId: string, employeeId: string) {
-    // Note: In a real system, you might do a soft delete or reassign dependencies.
+    // Guard: Prevent deleting employees with recorded payslips to preserve statutory audit compliance
+    const existingPayslips = await this.db.query.payslips.findMany({
+      where: and(eq(schema.payslips.employeeId, employeeId), eq(schema.payslips.companyId, companyId)),
+      limit: 1,
+    });
+    if (existingPayslips.length > 0) {
+      throw new Error('Cannot delete an employee with historical payroll records. Change their status to terminated or inactive instead to preserve statutory compliance records.');
+    }
+
     // Every table with a `references(() => employees.id)` FK must be cleared
     // first, or the final delete below fails with a FOREIGN KEY constraint error.
     await this.db.delete(schema.emergencyContacts).where(eq(schema.emergencyContacts.employeeId, employeeId));
@@ -264,7 +290,6 @@ export class EmployeeService {
     await this.db.delete(schema.leaveRequests).where(eq(schema.leaveRequests.employeeId, employeeId));
     await this.db.delete(schema.leaveBalances).where(eq(schema.leaveBalances.employeeId, employeeId));
     await this.db.delete(schema.employeeBenefits).where(eq(schema.employeeBenefits.employeeId, employeeId));
-    await this.db.delete(schema.payslips).where(eq(schema.payslips.employeeId, employeeId));
 
     // Loans have their own dependents (repayments), so those need clearing first too.
     const employeeLoans = await this.db.select({ id: schema.loans.id }).from(schema.loans).where(eq(schema.loans.employeeId, employeeId)).all();
@@ -291,13 +316,7 @@ export class EmployeeService {
       email: data.email,
       isPrimary: data.isPrimary || false,
     };
-    console.log("=== DEBUG SCHEMA ===", emergencyContacts);
-    if (!emergencyContacts) {
-      console.error("emergencyContacts is undefined!");
-    }
-    const insertBuilder = this.db.insert(emergencyContacts);
-    console.log("=== DEBUG INSERT BUILDER ===", Object.keys(insertBuilder), typeof insertBuilder.values);
-    await insertBuilder.values(newContact);
+    await this.db.insert(emergencyContacts).values(newContact);
     return newContact;
   }
 

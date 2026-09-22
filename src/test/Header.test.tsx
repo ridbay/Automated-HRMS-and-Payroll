@@ -67,6 +67,27 @@ describe('Header Component', () => {
     expect(mockLogout).toHaveBeenCalled();
   });
 
+  it('opens Command Palette when clicking search trigger', () => {
+    renderHeader();
+
+    const searchTrigger = screen.getByText('Global search...');
+    expect(searchTrigger).toBeInTheDocument();
+
+    fireEvent.click(searchTrigger);
+    expect(screen.getByPlaceholderText(/Type a command or search/i)).toBeInTheDocument();
+  });
+
+  it('toggles Notification Center when clicking the bell icon', () => {
+    renderHeader();
+
+    const bellButton = screen.getByTitle('Notifications');
+    expect(bellButton).toBeInTheDocument();
+
+    fireEvent.click(bellButton);
+    expect(screen.getByText('Notifications')).toBeInTheDocument();
+    expect(screen.getByText(/Payroll Batch Prepared/i)).toBeInTheDocument();
+  });
+
   it('returns null when user is not authenticated', () => {
     const { container } = renderHeader(null as any);
     expect(container.firstChild).toBeNull();

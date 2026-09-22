@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { login, changePassword, registerCompany } from '../../src/controllers/auth.controller';
+import { login, changePassword, registerCompany, forgotPassword, resetPassword } from '../../src/controllers/auth.controller';
 import { AuthService } from '../../src/services/auth.service';
 
 vi.mock('../../src/services/auth.service');
@@ -98,6 +98,51 @@ describe('Auth Controller', () => {
 
       expect(AuthService.prototype.registerCompany).toHaveBeenCalledWith(payload, 'secret');
       expect(mockContext.json).toHaveBeenCalledWith({ token: 'jwt' });
+    });
+  });
+
+  describe('forgotPassword', () => {
+    it('should return 400 if email is missing', async () => {
+      mockContext.req.json.mockResolvedValueOnce({});
+      const res = await forgotPassword(mockContext);
+      expect(mockContext.json).toHaveBeenCalledWith({ error: 'Email is required' }, 400);
+      expect(res.status).toBe(400);
+    });
+
+    it('should call AuthService.requestPasswordReset with email and secret', async () => {
+      mockContext.req.json.mockResolvedValueOnce({ email: 'user@company.com' });
+      AuthService.prototype.requestPasswordReset = vi.fn().mockResolvedValue({
+        success: true,
+        resetToken: 'test-token',
+      });
+
+      const res = await forgotPassword(mockContext);
+      expect(AuthService.prototype.requestPasswordReset).toHaveBeenCalledWith('user@company.com', 'secret');
+      expect(mockContext.json).toHaveBeenCalledWith({ success: true, resetToken: 'test-token' });
+    });
+  });
+
+  describe('resetPassword', () => {
+    it('should return 400 if token or newPassword is missing', async () => {
+      mockContext.req.json.mockResolvedValueOnce({ token: 'tok' });
+      const res = await resetPassword(mockContext);
+      expect(mockContext.json).toHaveBeenCalledWith({ error: 'Token and new password are required' }, 400);
+      expect(res.status).toBe(400);
+    });
+
+    it('should call AuthService.resetPassword and return success', async () => {
+      mockContext.req.json.mockResolvedValueOnce({ token: 'tok', newPassword: 'newpassword123' });
+      AuthService.prototype.resetPassword = vi.fn().mockResolvedValue({
+        success: true,
+        message: 'Password has been reset successfully.',
+      });
+
+      const res = await resetPassword(mockContext);
+      expect(AuthService.prototype.resetPassword).toHaveBeenCalledWith('tok', 'newpassword123', 'secret');
+      expect(mockContext.json).toHaveBeenCalledWith({
+        success: true,
+        message: 'Password has been reset successfully.',
+      });
     });
   });
 });

@@ -13,10 +13,51 @@ export const fetchWithTenant = async (url: string, options: RequestInit = {}) =>
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  return fetch(url, {
+  const res = await fetch(url, {
     ...options,
     headers,
   });
+
+  if (res.status === 401 && !url.includes('/auth/login') && !url.includes('/auth/register')) {
+    localStorage.removeItem('zenhr_token');
+    localStorage.removeItem('zenhr_user');
+    window.dispatchEvent(new Event('zenhr:unauthorized'));
+  }
+
+  return res;
+};
+
+// Downloads an authenticated protected asset (e.g. employee document or candidate resume)
+// by fetching it with the Bearer JWT and creating a temporary Object URL.
+export const downloadAuthenticatedBlob = async (url: string, defaultFilename: string = 'document') => {
+  const res = await fetchWithTenant(url);
+  if (!res.ok) {
+    let errorMsg = 'Failed to download file';
+    try {
+      const data = await res.json();
+      if (data.error) errorMsg = data.error;
+    } catch {}
+    throw new Error(errorMsg);
+  }
+
+  const blob = await res.blob();
+  const disposition = res.headers.get('content-disposition');
+  let filename = defaultFilename;
+  if (disposition && disposition.includes('filename=')) {
+    const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);
+    if (matches && matches[1]) {
+      filename = matches[1].replace(/['"]/g, '');
+    }
+  }
+
+  const blobUrl = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = blobUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  setTimeout(() => window.URL.revokeObjectURL(blobUrl), 10000);
 };
 
 // `company.logoUrl` holds one of two shapes depending on how it was set:

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Bell,
   Search,
@@ -7,43 +7,85 @@ import {
   ChevronDown,
   Settings,
   Sparkles,
+  Menu,
 } from "lucide-react";
 import { useNavigation } from "../context/NavigationContext";
 import { useAuth } from "../context/AuthContext";
 import { motion, AnimatePresence } from "framer-motion";
 import AIAssistant from "../features/core/AIAssistant";
+import CommandPalette from "../components/CommandPalette";
+import NotificationDropdown from "../components/NotificationDropdown";
 
 const Header: React.FC = () => {
-  const { activeTab, setActiveTab } = useNavigation();
+  const { activeTab, setActiveTab, toggleMobileSidebar } = useNavigation();
   const { user, logout } = useAuth();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showAssistant, setShowAssistant] = useState(false);
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+
   const formattedTitle = activeTab
     .split("-")
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
 
+  // Global ⌘+K shortcut
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setShowCommandPalette((prev) => !prev);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   if (!user) return null;
 
   return (
-    <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 shrink-0 z-40">
-      <div className="flex items-center gap-4">
-        <div className="bg-slate-50 px-4 py-1.5 rounded-xl border border-slate-100">
-          <h1 className="text-xs font-black text-slate-400 uppercase tracking-widest">
+    <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 sm:px-8 shrink-0 z-40 relative">
+      <div className="flex items-center gap-3">
+        {/* Mobile drawer toggle */}
+        <button
+          onClick={toggleMobileSidebar}
+          title="Toggle navigation"
+          className="p-2 -ml-2 text-slate-500 hover:bg-slate-100 rounded-xl md:hidden transition-colors"
+        >
+          <Menu size={20} />
+        </button>
+
+        <div className="bg-slate-50 px-3 sm:px-4 py-1.5 rounded-xl border border-slate-100">
+          <h1 className="text-xs font-black text-slate-400 uppercase tracking-widest truncate max-w-[120px] sm:max-w-none">
             {formattedTitle}
           </h1>
         </div>
-        <div className="hidden md:flex items-center relative ml-8">
-          <Search className="absolute left-4 text-slate-300" size={16} />
-          <input
-            type="text"
-            placeholder="Global search (⌘+K)"
-            className="pl-11 pr-4 py-2 bg-slate-50 border-none focus:bg-white focus:ring-4 focus:ring-indigo-500/10 rounded-2xl text-sm w-72 transition-all outline-none font-medium"
-          />
-        </div>
+
+        <button
+          type="button"
+          onClick={() => setShowCommandPalette(true)}
+          className="hidden md:flex items-center relative ml-6 px-4 py-2 bg-slate-50 hover:bg-slate-100/80 rounded-2xl text-slate-400 text-sm w-72 transition-all cursor-pointer group text-left border border-transparent hover:border-slate-200"
+        >
+          <Search className="text-slate-400 group-hover:text-indigo-600 transition-colors mr-3" size={16} />
+          <span className="font-medium text-slate-400 group-hover:text-slate-600 flex-1">
+            Global search...
+          </span>
+          <kbd className="px-1.5 py-0.5 bg-white border border-slate-200 text-slate-400 text-[10px] font-bold rounded-lg shadow-sm">
+            ⌘K
+          </kbd>
+        </button>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 sm:gap-3">
+        {/* Mobile search button */}
+        <button
+          onClick={() => setShowCommandPalette(true)}
+          title="Search"
+          className="p-2 text-slate-400 hover:bg-slate-50 hover:text-indigo-600 rounded-2xl md:hidden transition-all"
+        >
+          <Search size={20} />
+        </button>
+
         <button
           onClick={() => setShowAssistant(true)}
           title="Ask the ZenHR assistant"
@@ -52,12 +94,25 @@ const Header: React.FC = () => {
           <Sparkles size={20} />
         </button>
 
-        <button className="p-2.5 text-slate-400 hover:bg-slate-50 hover:text-indigo-600 rounded-2xl relative transition-all">
-          <Bell size={20} />
-          <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-rose-500 rounded-full border-2 border-white"></span>
-        </button>
+        <div className="relative">
+          <button
+            onClick={() => setShowNotifications(!showNotifications)}
+            title="Notifications"
+            className={`p-2.5 text-slate-400 hover:bg-slate-50 hover:text-indigo-600 rounded-2xl relative transition-all ${
+              showNotifications ? "bg-slate-50 text-indigo-600" : ""
+            }`}
+          >
+            <Bell size={20} />
+            <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-rose-500 rounded-full border-2 border-white"></span>
+          </button>
 
-        <div className="h-8 w-[1px] bg-slate-100 mx-2"></div>
+          <NotificationDropdown
+            isOpen={showNotifications}
+            onClose={() => setShowNotifications(false)}
+          />
+        </div>
+
+        <div className="h-8 w-[1px] bg-slate-100 mx-1 sm:mx-2"></div>
 
         <div className="relative">
           <div
@@ -152,6 +207,14 @@ const Header: React.FC = () => {
       </div>
 
       <AIAssistant open={showAssistant} onClose={() => setShowAssistant(false)} />
+      <CommandPalette
+        isOpen={showCommandPalette}
+        onClose={() => setShowCommandPalette(false)}
+        onOpenAssistant={() => {
+          setShowCommandPalette(false);
+          setShowAssistant(true);
+        }}
+      />
     </header>
   );
 };

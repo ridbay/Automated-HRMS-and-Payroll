@@ -96,10 +96,27 @@ export const applyToPosition = async (c: Context<AppEnv>) => {
       return c.json({ error: 'name and email are required' }, 400);
     }
     // A resume-less application is still a valid application (some
-    // candidates apply with just a LinkedIn/portfolio link) — only cap size
-    // when a file is actually attached.
-    if (file && file.size > 10 * 1024 * 1024) {
-      return c.json({ error: 'Resume must be under 10MB' }, 400);
+    // candidates apply with just a LinkedIn/portfolio link) — validate
+    // size and allowed file types when a file is actually attached.
+    if (file && file.size > 0) {
+      if (file.size > 10 * 1024 * 1024) {
+        return c.json({ error: 'Resume must be under 10MB' }, 400);
+      }
+
+      const allowedExtensions = ['.pdf', '.doc', '.docx', '.rtf', '.txt'];
+      const ext = (file.name.slice(file.name.lastIndexOf('.')) || '').toLowerCase();
+      const allowedMimes = [
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/rtf',
+        'text/plain',
+        'application/octet-stream', // Some browsers report generic octet-stream for .docx
+      ];
+
+      if (!allowedExtensions.includes(ext) || (file.type && !allowedMimes.includes(file.type))) {
+        return c.json({ error: 'Invalid resume format. Allowed formats: PDF, DOC, DOCX, RTF, TXT.' }, 400);
+      }
     }
 
     let resumeFileKey: string | null = null;

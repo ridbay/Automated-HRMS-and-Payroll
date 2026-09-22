@@ -11,7 +11,7 @@
  */
 
 // Shared HTTP primitives
-export { API_URL, fetchWithTenant, resolveCompanyLogoUrl } from './http';
+export { API_URL, fetchWithTenant, resolveCompanyLogoUrl, downloadAuthenticatedBlob } from './http';
 
 // Auth
 export {
@@ -19,6 +19,8 @@ export {
   registerCompany,
   changeUserPassword,
   useChangePassword,
+  requestPasswordReset,
+  resetPasswordWithToken,
 } from './auth.client';
 
 // Employee

@@ -131,4 +131,31 @@ describe('Attendance Service', () => {
       expect(setArgs.overtime).toBe(2); // (10 hours - 8 hour shift = 2 hrs overtime)
     });
   });
+
+  describe('Timezone & Date Handling (Africa/Lagos WAT)', () => {
+    it('correctly handles clock in evaluation using Africa/Lagos time', async () => {
+      // 08:10:00Z UTC is 09:10:00 WAT (within 09:15 grace period)
+      vi.setSystemTime(new Date('2023-10-15T08:10:00.000Z'));
+      mockDb.returning.mockResolvedValueOnce([{ id: 'ATT-WAT-1', status: 'present' }]);
+      
+      await service.clockIn('comp-1', 'emp-1', { location: 'Lagos HQ' });
+      let insertArgs = mockDb.values.mock.calls[0][0];
+      expect(insertArgs.status).toBe('present');
+
+      // 08:20:00Z UTC is 09:20:00 WAT (after 09:15 grace period -> late)
+      vi.setSystemTime(new Date('2023-10-15T08:20:00.000Z'));
+      mockDb.returning.mockResolvedValueOnce([{ id: 'ATT-WAT-2', status: 'late' }]);
+      
+      await service.clockIn('comp-1', 'emp-1', { location: 'Lagos HQ' });
+      insertArgs = mockDb.values.mock.calls[1][0];
+      expect(insertArgs.status).toBe('late');
+    });
+
+    it('correctly rolls over the calendar date in Africa/Lagos ahead of UTC', () => {
+      // At 23:30 UTC on Oct 15, it is already 00:30 on Oct 16 in Lagos (UTC+1)
+      const lateUtc = new Date('2023-10-15T23:30:00.000Z');
+      const lagosDate = service.getTodayDate(lateUtc);
+      expect(lagosDate).toBe('2023-10-16');
+    });
+  });
 });

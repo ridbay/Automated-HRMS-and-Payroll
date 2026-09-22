@@ -3,6 +3,7 @@ import { drizzle } from 'drizzle-orm/d1';
 import { eq } from 'drizzle-orm';
 import * as schema from '../db/schema';
 import { Bindings } from '../types';
+import { PayrollService } from './payroll.service';
 
 export interface MonnifyConfig {
   apiKey?: string;
@@ -61,6 +62,7 @@ export const NIGERIAN_BANK_CODES: Record<string, string> = {
 
 export class MonnifyService {
   private db;
+  private dbBinding: D1Database;
   private apiKey: string;
   private secretKey: string;
   private contractCode: string;
@@ -70,6 +72,7 @@ export class MonnifyService {
 
   constructor(dbBinding: D1Database, env: Bindings) {
     this.db = drizzle(dbBinding, { schema });
+    this.dbBinding = dbBinding;
     this.apiKey = env.MONNIFY_API_KEY || '';
     this.secretKey = env.MONNIFY_SECRET_KEY || '';
     this.contractCode = env.MONNIFY_CONTRACT_CODE || '';
@@ -184,7 +187,7 @@ export class MonnifyService {
       throw new Error('No payslips found in this payroll run.');
     }
 
-    const batchReference = `ZENHR-${companyId.slice(0, 4)}-${runId.slice(0, 6)}-${Date.now()}`;
+    const batchReference = `ZENHR__${companyId}__${runId}__${Date.now()}`;
     const transactionList = payslips.map((ps, index) => {
       const bankCode = this.resolveBankCode(ps.bankName);
       const accountNumber = ps.accountNumber || '0000000000';
@@ -203,11 +206,16 @@ export class MonnifyService {
 
     // If Monnify credentials are not provided (e.g. in demo or test environment), simulate success
     if (!this.isConfigured()) {
-      await this.db.update(schema.payrollRuns)
-        .set({
-          status: 'paid',
-        })
-        .where(eq(schema.payrollRuns.id, runId));
+      try {
+        const payrollService = new PayrollService(this.dbBinding || (this.db as any));
+        await payrollService.markRunPaid(companyId, runId);
+      } catch {
+        await this.db.update(schema.payrollRuns)
+          .set({
+            status: 'paid',
+          })
+          .where(eq(schema.payrollRuns.id, runId));
+      }
 
       return {
         success: true,
@@ -262,7 +270,7 @@ export class MonnifyService {
   }
 
   async verifyWebhookSignature(rawBody: string, signature: string): Promise<boolean> {
-    if (!this.secretKey) return true;
+    if (!this.secretKey || !signature) return false;
 
     try {
       const enc = new TextEncoder();
@@ -282,13 +290,35 @@ export class MonnifyService {
     if (eventType === 'SUCCESSFUL_DISBURSEMENT' || eventType === 'BATCH_DISBURSEMENT_COMPLETED') {
       const batchReference = details?.batchReference;
       if (batchReference) {
-        // Mark corresponding payroll run as paid
-        const runs = await this.db.query.payrollRuns.findMany();
-        const matched = runs.find((r) => r.id && batchReference.includes(r.id.slice(0, 6)));
-        if (matched) {
-          await this.db.update(schema.payrollRuns)
-            .set({ status: 'paid' })
-            .where(eq(schema.payrollRuns.id, matched.id));
+        let matchedCompanyId: string | null = null;
+        let matchedRunId: string | null = null;
+
+        if (batchReference.includes('__')) {
+          const parts = batchReference.split('__');
+          if (parts.length >= 3) {
+            matchedCompanyId = parts[1];
+            matchedRunId = parts[2];
+          }
+        }
+
+        if (!matchedRunId) {
+          const runs = await this.db.query.payrollRuns.findMany();
+          const matched = runs.find((r) => r.id && (batchReference.includes(r.id) || batchReference.includes(r.id.slice(0, 6))));
+          if (matched) {
+            matchedCompanyId = matched.companyId || (batchReference.split('-')[1] || 'comp-1');
+            matchedRunId = matched.id;
+          }
+        }
+
+        if (matchedCompanyId && matchedRunId) {
+          try {
+            const payrollService = new PayrollService(this.dbBinding || (this.db as any));
+            await payrollService.markRunPaid(matchedCompanyId, matchedRunId);
+          } catch {
+            await this.db.update(schema.payrollRuns)
+              .set({ status: 'paid' })
+              .where(eq(schema.payrollRuns.id, matchedRunId));
+          }
           return { success: true, handled: true };
         }
       }

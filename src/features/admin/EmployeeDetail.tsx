@@ -43,7 +43,7 @@ import {
   XCircle,
   KeyRound,
 } from "lucide-react";
-import { getDocumentDownloadUrl, useEmployeeLeaveBalances, useUpdateLeaveBalances, useEmployeeProfile, useEmployeeDirectReports, useAddAdminEmergencyContact, useDeleteAdminEmergencyContact, useUploadEmployeeDocument, useDeleteEmployeeDocument, useUpdateAdminEmployee, useEmployeeAssessments, useCreateAssessment, useEmployeePayslips, useEmployeeBenefits, useUpdateEmployeeBenefits, useEmployeeTrainings, useAddEmployeeTraining, useEmployeeLeaveRequests, useEmployeeAuditLogs, useEmployeeAssets, useAddEmployeeAsset, useDeleteEmployeeAsset, useReviewCycles, useResetTemporaryPassword } from "../../api/client";
+import { getDocumentDownloadUrl, downloadAuthenticatedBlob, useEmployeeLeaveBalances, useUpdateLeaveBalances, useEmployeeProfile, useEmployeeDirectReports, useAddAdminEmergencyContact, useDeleteAdminEmergencyContact, useUploadEmployeeDocument, useDeleteEmployeeDocument, useUpdateAdminEmployee, useEmployeeAssessments, useCreateAssessment, useEmployeePayslips, useEmployeeBenefits, useUpdateEmployeeBenefits, useEmployeeTrainings, useAddEmployeeTraining, useEmployeeLeaveRequests, useEmployeeAuditLogs, useEmployeeAssets, useAddEmployeeAsset, useDeleteEmployeeAsset, useReviewCycles, useResetTemporaryPassword } from "../../api/client";
 import { usePopup } from "../../components/PopupProvider";
 import { Employee } from "../../types/index";
 import {
@@ -762,18 +762,21 @@ const EmployeeDetail: React.FC<Props> = ({ employee: initialEmployee, onBack }) 
                             >
                               <Trash2 size={16} />
                             </button>
-                            <a
-                              href={getDocumentDownloadUrl(
-                                doc.id,
-                                employee.companyId,
-                                employee.id,
+                            <button
+                              type="button"
+                              onClick={() => downloadAuthenticatedBlob(
+                                getDocumentDownloadUrl(
+                                  doc.id,
+                                  employee.companyId,
+                                  employee.id,
+                                ),
+                                doc.name || 'document'
                               )}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="p-2 bg-slate-900 text-white rounded-xl shadow-lg hover:scale-110 transition-all inline-block"
+                              className="p-2 bg-slate-900 text-white rounded-xl shadow-lg hover:scale-110 transition-all inline-block cursor-pointer"
+                              title="Download document"
                             >
                               <Download size={16} />
-                            </a>
+                            </button>
                           </div>
                         </div>
                       ))}

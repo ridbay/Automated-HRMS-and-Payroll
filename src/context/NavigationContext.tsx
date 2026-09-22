@@ -6,6 +6,9 @@ interface NavigationContextType {
   setActiveTab: (tab: string) => void;
   isSidebarOpen: boolean;
   toggleSidebar: () => void;
+  isMobileOpen: boolean;
+  setIsMobileOpen: (open: boolean) => void;
+  toggleMobileSidebar: () => void;
 }
 
 const NavigationContext = createContext<NavigationContextType | undefined>(
@@ -36,6 +39,7 @@ export const NavigationProvider: React.FC<{ children: ReactNode }> = ({
 
   const [activeTab, setActiveTabState] = useState(() => pathToTab(location.pathname));
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   // Sync activeTab when user navigates via browser back/forward buttons or direct URL change
   useEffect(() => {
@@ -45,6 +49,7 @@ export const NavigationProvider: React.FC<{ children: ReactNode }> = ({
 
   const setActiveTab = (tab: string) => {
     setActiveTabState(tab);
+    setIsMobileOpen(false); // Auto close drawer on mobile selection
     const targetPath = tabToPath(tab);
     if (location.pathname !== targetPath) {
       navigate(targetPath);
@@ -55,9 +60,21 @@ export const NavigationProvider: React.FC<{ children: ReactNode }> = ({
     setIsSidebarOpen((prev) => !prev);
   };
 
+  const toggleMobileSidebar = () => {
+    setIsMobileOpen((prev) => !prev);
+  };
+
   return (
     <NavigationContext.Provider
-      value={{ activeTab, setActiveTab, isSidebarOpen, toggleSidebar }}
+      value={{
+        activeTab,
+        setActiveTab,
+        isSidebarOpen,
+        toggleSidebar,
+        isMobileOpen,
+        setIsMobileOpen,
+        toggleMobileSidebar,
+      }}
     >
       {children}
     </NavigationContext.Provider>

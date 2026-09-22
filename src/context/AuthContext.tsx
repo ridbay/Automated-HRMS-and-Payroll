@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, ReactNode } from "react";
+import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode } from "react";
 import { User } from "../types/index";
 
 const API = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8787';
@@ -62,6 +62,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
     localStorage.removeItem('zenhr_user');
     localStorage.removeItem('zenhr_token');
   }, []);
+
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      logout();
+    };
+    window.addEventListener('zenhr:unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('zenhr:unauthorized', handleUnauthorized);
+  }, [logout]);
 
   // Patch user fields (e.g. after avatar upload)
   const updateUser = useCallback((patch: Partial<User>) => {

@@ -13,6 +13,7 @@ describe('Admin Employee Controller', () => {
     vi.clearAllMocks();
 
     EmployeeService.prototype.getAllByCompany = vi.fn();
+    EmployeeService.prototype.getDirectReports = vi.fn();
     EmployeeService.prototype.getEmployeeProfile = vi.fn();
     EmployeeService.prototype.createForCompany = vi.fn();
     EmployeeService.prototype.updateEmployeeByAdmin = vi.fn();

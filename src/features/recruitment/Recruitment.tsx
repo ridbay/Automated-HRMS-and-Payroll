@@ -100,6 +100,7 @@ import {
   useSendOffer,
   useRespondToOffer,
   candidateResumeUrl,
+  downloadAuthenticatedBlob,
   useDirectory,
 } from "../../api/client";
 import { RecruitmentAnalyticsBody } from "./RecruitmentAnalytics";
@@ -1704,26 +1705,24 @@ const Recruitment: React.FC = () => {
                               Resume
                             </h3>
                             {selectedCandidate.resumeFileKey && (
-                              <a
-                                href={candidateResumeUrl(selectedCandidate.id)}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:underline flex items-center gap-1"
+                              <button
+                                type="button"
+                                onClick={() => downloadAuthenticatedBlob(candidateResumeUrl(selectedCandidate.id), `${selectedCandidate.name.replace(/\s+/g, '_')}_Resume`)}
+                                className="text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:underline flex items-center gap-1 cursor-pointer"
                               >
-                                <Download size={14} /> Open Full Document
-                              </a>
+                                <Download size={14} /> Download Document
+                              </button>
                             )}
                           </div>
                           <div className="bg-slate-50 p-10 rounded-[3rem] border border-slate-100 min-h-[200px] relative flex items-center justify-center">
                             {selectedCandidate.resumeFileKey ? (
-                              <a
-                                href={candidateResumeUrl(selectedCandidate.id)}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="px-10 py-5 bg-indigo-600 text-white rounded-[2rem] font-black text-xs uppercase tracking-widest shadow-2xl shadow-indigo-200 hover:scale-105 transition-all"
+                              <button
+                                type="button"
+                                onClick={() => downloadAuthenticatedBlob(candidateResumeUrl(selectedCandidate.id), `${selectedCandidate.name.replace(/\s+/g, '_')}_Resume`)}
+                                className="px-10 py-5 bg-indigo-600 text-white rounded-[2rem] font-black text-xs uppercase tracking-widest shadow-2xl shadow-indigo-200 hover:scale-105 transition-all cursor-pointer flex items-center gap-2"
                               >
-                                Open Resume
-                              </a>
+                                <Download size={16} /> Download Resume
+                              </button>
                             ) : (
                               <p className="text-sm font-bold text-slate-400">No resume on file for this candidate.</p>
                             )}

@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { D1Database } from '@cloudflare/workers-types';
-import { sign } from 'hono/jwt';
+import { sign, verify } from 'hono/jwt';
 import { employees } from '../models/employee.model';
 import * as schema from '../db/schema';
 
@@ -187,6 +187,92 @@ export class AuthService {
         companyId: companyId,
         status: 'active',
       }
+    };
+  }
+
+  async requestPasswordReset(email: string, jwtSecret: string) {
+    const normalizedEmail = (email || '').toLowerCase().trim();
+    if (!normalizedEmail) {
+      throw new Error('Email is required');
+    }
+
+    const employee = await this.db.query.employees.findFirst({
+      where: eq(schema.employees.email, normalizedEmail),
+    });
+
+    if (!employee) {
+      return {
+        success: true,
+        message: 'If an account exists with this email address, password reset instructions have been dispatched.',
+      };
+    }
+
+    // Sign a temporary reset token (valid for 15 minutes)
+    const payload = {
+      sub: employee.id,
+      email: employee.email,
+      purpose: 'password_reset',
+      h: (employee.passwordHash || '').slice(0, 12),
+      exp: Math.floor(Date.now() / 1000) + 15 * 60,
+    };
+
+    const resetToken = await sign(payload, jwtSecret);
+
+    return {
+      success: true,
+      message: 'Password reset token generated successfully.',
+      resetToken,
+      email: employee.email,
+    };
+  }
+
+  async resetPassword(token: string, newPassword: string, jwtSecret: string) {
+    if (!token || !newPassword) {
+      throw new Error('Reset token and new password are required');
+    }
+
+    if (newPassword.length < 6) {
+      throw new Error('Password must be at least 6 characters');
+    }
+
+    let payload: any;
+    try {
+      payload = await verify(token, jwtSecret, 'HS256');
+    } catch {
+      throw new Error('Invalid or expired password reset token');
+    }
+
+    if (!payload || payload.purpose !== 'password_reset' || !payload.sub) {
+      throw new Error('Invalid password reset token');
+    }
+
+    const employee = await this.db.query.employees.findFirst({
+      where: eq(schema.employees.id, payload.sub),
+    });
+
+    if (!employee) {
+      throw new Error('Employee account not found');
+    }
+
+    // Invalidate if token was already used (fingerprint changed)
+    if (payload.h && (employee.passwordHash || '').slice(0, 12) !== payload.h) {
+      throw new Error('This password reset token has already been used');
+    }
+
+    const newSalt = generateSalt();
+    const newHash = await hashPassword(newPassword, newSalt);
+
+    await this.db.update(schema.employees)
+      .set({
+        passwordHash: newHash,
+        passwordSalt: newSalt,
+        isPasswordChanged: true,
+      })
+      .where(eq(schema.employees.id, employee.id));
+
+    return {
+      success: true,
+      message: 'Password has been reset successfully. You may now log in.',
     };
   }
 }

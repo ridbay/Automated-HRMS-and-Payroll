@@ -39,6 +39,7 @@ import {
   useUploadDocumentMutation,
   useDeleteDocumentMutation,
   getDocumentDownloadUrl,
+  downloadAuthenticatedBlob,
   useChangePassword
 } from "../../api/client";
 import { usePopup } from "../../components/PopupProvider";
@@ -747,14 +748,14 @@ const Profile: React.FC<ProfileProps> = ({ initialTab }) => {
                             >
                               <Trash2 size={16} />
                             </button>
-                            <a 
-                              href={getDocumentDownloadUrl(doc.id)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="p-2 bg-slate-900 text-white rounded-xl shadow-lg hover:scale-110 transition-all inline-block"
+                            <button 
+                              type="button"
+                              onClick={() => downloadAuthenticatedBlob(getDocumentDownloadUrl(doc.id), doc.name || 'document')}
+                              className="p-2 bg-slate-900 text-white rounded-xl shadow-lg hover:scale-110 transition-all inline-block cursor-pointer"
+                              title="Download document"
                             >
                               <Download size={16} />
-                            </a>
+                            </button>
                           </div>
                         </div>
                       ))}

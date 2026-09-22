@@ -1,5 +1,5 @@
 import React from "react";
-import { NAV_ITEMS } from "../data/mocks";
+import { NAV_ITEMS } from "./navConfig";
 import {
   ChevronLeft,
   ChevronRight,
@@ -32,6 +32,7 @@ import {
   MessageSquare,
   Building2,
   GraduationCap,
+  X,
 } from "lucide-react";
 import { useNavigation } from "../context/NavigationContext";
 import { useAuth } from "../context/AuthContext";
@@ -42,6 +43,8 @@ const Sidebar: React.FC = () => {
     setActiveTab,
     isSidebarOpen: isOpen,
     toggleSidebar: toggle,
+    isMobileOpen,
+    setIsMobileOpen,
   } = useNavigation();
   const { user } = useAuth();
   const userRole = user?.role || "EMPLOYEE"; // Fallback or handle null user appropriately
@@ -171,68 +174,122 @@ const Sidebar: React.FC = () => {
   }
 
   return (
-    <aside
-      className={`${isOpen ? "w-64" : "w-20"} transition-all duration-300 bg-white border-r border-slate-200 flex flex-col z-50`}
-    >
-      <div className="h-16 flex items-center px-6 border-b border-slate-100 shrink-0">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white shrink-0 shadow-lg shadow-indigo-600/20">
-            <Zap size={20} fill="currentColor" />
-          </div>
-          {isOpen && (
-            <span className="font-black text-xl tracking-tighter text-slate-800 uppercase italic">
-              ZenHR
-            </span>
-          )}
-        </div>
-      </div>
+    <>
+      {/* Mobile Drawer */}
+      {isMobileOpen && (
+        <div className="fixed inset-0 z-50 md:hidden">
+          <div
+            className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200"
+            onClick={() => setIsMobileOpen(false)}
+          />
+          <aside className="fixed inset-y-0 left-0 w-72 bg-white shadow-2xl flex flex-col z-50 animate-in slide-in-from-left duration-200">
+            <div className="h-16 flex items-center justify-between px-6 border-b border-slate-100 shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white shrink-0 shadow-lg shadow-indigo-600/20">
+                  <Zap size={20} fill="currentColor" />
+                </div>
+                <span className="font-black text-xl tracking-tighter text-slate-800 uppercase italic">
+                  ZenHR
+                </span>
+              </div>
+              <button
+                onClick={() => setIsMobileOpen(false)}
+                className="p-2 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
 
-      <nav className="flex-1 overflow-y-auto py-6 px-3 space-y-1 scrollbar-hide">
-        {navToUse.map((item) => (
-          <button
-            key={item.path}
-            onClick={() => setActiveTab(item.path)}
-            className={`w-full flex items-center gap-3 px-3 py-3 rounded-2xl transition-all relative group ${
-              activeTab === item.path
-                ? "bg-indigo-600 text-white shadow-xl shadow-indigo-600/20"
-                : "text-slate-500 hover:bg-slate-50 hover:text-indigo-600"
-            }`}
-          >
-            <div
-              className={`shrink-0 ${activeTab === item.path ? "text-white" : "text-slate-400 group-hover:text-indigo-500"}`}
-            >
-              {item.icon}
+            <nav className="flex-1 overflow-y-auto py-6 px-3 space-y-1 scrollbar-hide">
+              {navToUse.map((item) => (
+                <button
+                  key={item.path}
+                  onClick={() => setActiveTab(item.path)}
+                  className={`w-full flex items-center gap-3 px-3 py-3 rounded-2xl transition-all relative group ${
+                    activeTab === item.path
+                      ? "bg-indigo-600 text-white shadow-xl shadow-indigo-600/20"
+                      : "text-slate-500 hover:bg-slate-50 hover:text-indigo-600"
+                  }`}
+                >
+                  <div
+                    className={`shrink-0 ${activeTab === item.path ? "text-white" : "text-slate-400 group-hover:text-indigo-500"}`}
+                  >
+                    {item.icon}
+                  </div>
+                  <span className="font-black text-xs uppercase tracking-widest text-left leading-tight">
+                    {item.name}
+                  </span>
+                </button>
+              ))}
+            </nav>
+          </aside>
+        </div>
+      )}
+
+      {/* Desktop Sidebar */}
+      <aside
+        className={`${isOpen ? "w-64" : "w-20"} transition-all duration-300 bg-white border-r border-slate-200 hidden md:flex flex-col z-30 shrink-0`}
+      >
+        <div className="h-16 flex items-center px-6 border-b border-slate-100 shrink-0">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white shrink-0 shadow-lg shadow-indigo-600/20">
+              <Zap size={20} fill="currentColor" />
             </div>
             {isOpen && (
-              <span className="font-black text-[10px] uppercase tracking-widest text-left leading-tight">
-                {item.name}
+              <span className="font-black text-xl tracking-tighter text-slate-800 uppercase italic">
+                ZenHR
               </span>
             )}
-            {!isOpen && (
-              <div className="absolute left-full ml-2 px-3 py-1 bg-slate-800 text-white text-[10px] font-black uppercase tracking-widest rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-[100] shadow-xl">
-                {item.name}
-              </div>
-            )}
-            {item.name === "Approvals" && isManager && (
-              <div
-                className={`absolute ${isOpen ? "right-3" : "right-1 top-1"} px-1.5 py-0.5 bg-rose-500 text-white text-[8px] font-black rounded-full`}
-              >
-                3
-              </div>
-            )}
-          </button>
-        ))}
-      </nav>
+          </div>
+        </div>
 
-      <div className="p-4 border-t border-slate-100">
-        <button
-          onClick={toggle}
-          className="w-full flex items-center justify-center p-2 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-500 transition-colors"
-        >
-          {isOpen ? <ChevronLeft size={20} /> : <ChevronRight size={20} />}
-        </button>
-      </div>
-    </aside>
+        <nav className="flex-1 overflow-y-auto py-6 px-3 space-y-1 scrollbar-hide">
+          {navToUse.map((item) => (
+            <button
+              key={item.path}
+              onClick={() => setActiveTab(item.path)}
+              className={`w-full flex items-center gap-3 px-3 py-3 rounded-2xl transition-all relative group ${
+                activeTab === item.path
+                  ? "bg-indigo-600 text-white shadow-xl shadow-indigo-600/20"
+                  : "text-slate-500 hover:bg-slate-50 hover:text-indigo-600"
+              }`}
+            >
+              <div
+                className={`shrink-0 ${activeTab === item.path ? "text-white" : "text-slate-400 group-hover:text-indigo-500"}`}
+              >
+                {item.icon}
+              </div>
+              {isOpen && (
+                <span className="font-black text-[10px] uppercase tracking-widest text-left leading-tight">
+                  {item.name}
+                </span>
+              )}
+              {!isOpen && (
+                <div className="absolute left-full ml-2 px-3 py-1 bg-slate-800 text-white text-[10px] font-black uppercase tracking-widest rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-[100] shadow-xl">
+                  {item.name}
+                </div>
+              )}
+              {item.name === "Approvals" && isManager && (
+                <div
+                  className={`absolute ${isOpen ? "right-3" : "right-1 top-1"} px-1.5 py-0.5 bg-rose-500 text-white text-[8px] font-black rounded-full`}
+                >
+                  3
+                </div>
+              )}
+            </button>
+          ))}
+        </nav>
+
+        <div className="p-4 border-t border-slate-100">
+          <button
+            onClick={toggle}
+            className="w-full flex items-center justify-center p-2 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-500 transition-colors"
+          >
+            {isOpen ? <ChevronLeft size={20} /> : <ChevronRight size={20} />}
+          </button>
+        </div>
+      </aside>
+    </>
   );
 };
 

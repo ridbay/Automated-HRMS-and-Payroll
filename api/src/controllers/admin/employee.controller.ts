@@ -29,8 +29,7 @@ export const getDirectReports = async (c: Context<AppEnv>) => {
   const employeeId = c.req.param('id') as string;
   const service = new EmployeeService(c.env.DB);
   
-  const employees = await service.getAllByCompany(companyId);
-  const directReports = employees.filter((emp: any) => emp.managerId === employeeId);
+  const directReports = await service.getDirectReports(companyId, employeeId);
   return c.json(directReports);
 };
 

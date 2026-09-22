@@ -1,42 +1,46 @@
-import React, { useEffect, useState } from "react";
-const RegisterPage = React.lazy(() => import('./features/core/RegisterPage'));
-const CareersPage = React.lazy(() => import('./features/public/CareersPage'));
+import React, { useEffect, useState, Suspense } from "react";
 import Sidebar from "./layouts/Sidebar";
 import Header from "./layouts/Header";
-import Dashboard from "./features/core/Dashboard";
-import HRDashboard from "./features/admin/HRDashboard";
-import Workforce from "./features/admin/Workforce";
-import Payroll from "./features/payroll/Payroll";
-import PayrollDashboard from "./features/payroll/PayrollDashboard";
-import Recruitment from "./features/recruitment/Recruitment";
-import RecruiterDashboard from "./features/recruitment/RecruiterDashboard";
-import RecruitmentAnalytics from "./features/recruitment/RecruitmentAnalytics";
-import Attendance from "./features/employee/Attendance";
-import Performance from "./features/employee/Performance";
-import PerformanceManagement from "./features/admin/PerformanceManagement";
-import EmployeePortal from "./features/employee/EmployeePortal";
-import ManagerDashboard from "./features/manager/ManagerDashboard";
-import TeamReports from "./features/manager/TeamReports";
-import Benefits from "./features/employee/Benefits";
-import Leave from "./features/employee/Leave";
-import MyPayroll from "./features/employee/MyPayroll";
-import Reports from "./features/admin/Reports";
-import Settings from "./features/core/Settings";
-import LoginPage from "./features/core/LoginPage";
-import Profile from "./features/employee/Profile";
-import AssetManagement from "./features/admin/AssetManagement";
-import Onboarding from "./features/admin/Onboarding";
-import Directory from "./features/core/Directory";
-import AdminLeaveRequests from "./features/admin/AdminLeaveRequests";
-import AttendanceManagement from "./features/admin/AttendanceManagement";
-import BenefitsAdmin from "./features/admin/BenefitsAdmin";
-import SurveysAdmin from "./features/admin/SurveysAdmin";
-import LMSAdmin from "./features/admin/LMSAdmin";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { NavigationProvider, useNavigation } from "./context/NavigationContext";
+import { PopupProvider } from "./components/PopupProvider";
+import ErrorBoundary from "./components/ErrorBoundary";
+import PageLoader from "./components/PageLoader";
 
-import Support from "./features/support/Support";
-import EmployeeOnboarding from "./features/employee/EmployeeOnboarding";
+// Lazy-loaded pages
+const RegisterPage = React.lazy(() => import("./features/core/RegisterPage"));
+const CareersPage = React.lazy(() => import("./features/public/CareersPage"));
+const LoginPage = React.lazy(() => import("./features/core/LoginPage"));
+const Dashboard = React.lazy(() => import("./features/core/Dashboard"));
+const HRDashboard = React.lazy(() => import("./features/admin/HRDashboard"));
+const Workforce = React.lazy(() => import("./features/admin/Workforce"));
+const Payroll = React.lazy(() => import("./features/payroll/Payroll"));
+const PayrollDashboard = React.lazy(() => import("./features/payroll/PayrollDashboard"));
+const Recruitment = React.lazy(() => import("./features/recruitment/Recruitment"));
+const RecruiterDashboard = React.lazy(() => import("./features/recruitment/RecruiterDashboard"));
+const RecruitmentAnalytics = React.lazy(() => import("./features/recruitment/RecruitmentAnalytics"));
+const Attendance = React.lazy(() => import("./features/employee/Attendance"));
+const AttendanceManagement = React.lazy(() => import("./features/admin/AttendanceManagement"));
+const Performance = React.lazy(() => import("./features/employee/Performance"));
+const PerformanceManagement = React.lazy(() => import("./features/admin/PerformanceManagement"));
+const EmployeePortal = React.lazy(() => import("./features/employee/EmployeePortal"));
+const ManagerDashboard = React.lazy(() => import("./features/manager/ManagerDashboard"));
+const TeamReports = React.lazy(() => import("./features/manager/TeamReports"));
+const Benefits = React.lazy(() => import("./features/employee/Benefits"));
+const BenefitsAdmin = React.lazy(() => import("./features/admin/BenefitsAdmin"));
+const Leave = React.lazy(() => import("./features/employee/Leave"));
+const AdminLeaveRequests = React.lazy(() => import("./features/admin/AdminLeaveRequests"));
+const MyPayroll = React.lazy(() => import("./features/employee/MyPayroll"));
+const Reports = React.lazy(() => import("./features/admin/Reports"));
+const Settings = React.lazy(() => import("./features/core/Settings"));
+const Profile = React.lazy(() => import("./features/employee/Profile"));
+const AssetManagement = React.lazy(() => import("./features/admin/AssetManagement"));
+const Onboarding = React.lazy(() => import("./features/admin/Onboarding"));
+const EmployeeOnboarding = React.lazy(() => import("./features/employee/EmployeeOnboarding"));
+const Directory = React.lazy(() => import("./features/core/Directory"));
+const SurveysAdmin = React.lazy(() => import("./features/admin/SurveysAdmin"));
+const LMSAdmin = React.lazy(() => import("./features/admin/LMSAdmin"));
+const Support = React.lazy(() => import("./features/support/Support"));
 
 // The app has no client-side router anywhere else — this is the one
 // deliberately narrow exception, letting the public careers page be reached
@@ -162,31 +166,39 @@ const AppContent: React.FC = () => {
 
   if (careersMatch) {
     return (
-      <React.Suspense fallback={<div>Loading...</div>}>
+      <Suspense fallback={<PageLoader />}>
         <CareersPage companyIdentifier={careersMatch[1]} initialRequisitionId={careersMatch[2] || null} />
-      </React.Suspense>
+      </Suspense>
     );
   }
 
   if (!isAuthenticated) {
     if (isRegistering) {
       return (
-        <React.Suspense fallback={<div>Loading...</div>}>
+        <Suspense fallback={<PageLoader />}>
           <RegisterPage 
             onLogin={login} 
             onNavigateLogin={() => setIsRegistering(false)} 
           />
-        </React.Suspense>
+        </Suspense>
       );
     }
-    return <LoginPage onLogin={login} onNavigateRegister={() => setIsRegistering(true)} />;
+    return (
+      <Suspense fallback={<PageLoader />}>
+        <LoginPage onLogin={login} onNavigateRegister={() => setIsRegistering(true)} />
+      </Suspense>
+    );
   }
 
   // Ensure user is not null here for Header and Sidebar
   if (!user) return null;
 
   if (user.status === "onboarding") {
-    return <EmployeeOnboarding />;
+    return (
+      <Suspense fallback={<PageLoader />}>
+        <EmployeeOnboarding />
+      </Suspense>
+    );
   }
 
   return (
@@ -201,24 +213,28 @@ const AppContent: React.FC = () => {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <Header activeTab={activeTab} user={user} onLogout={logout} />
         <main className="flex-1 overflow-y-auto scrollbar-hide p-4 md:p-8">
-          {renderContent()}
+          <ErrorBoundary>
+            <Suspense fallback={<PageLoader />}>
+              {renderContent()}
+            </Suspense>
+          </ErrorBoundary>
         </main>
       </div>
     </div>
   );
 };
 
-import { PopupProvider } from "./components/PopupProvider";
-
 const App: React.FC = () => {
   return (
-    <PopupProvider>
-      <AuthProvider>
-        <NavigationProvider>
-          <AppContent />
-        </NavigationProvider>
-      </AuthProvider>
-    </PopupProvider>
+    <ErrorBoundary>
+      <PopupProvider>
+        <AuthProvider>
+          <NavigationProvider>
+            <AppContent />
+          </NavigationProvider>
+        </AuthProvider>
+      </PopupProvider>
+    </ErrorBoundary>
   );
 };
 

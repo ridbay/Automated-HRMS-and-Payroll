@@ -3,6 +3,10 @@ import { AuthService, hashPassword, generateSalt } from '../../src/services/auth
 
 vi.mock('hono/jwt', () => ({
   sign: vi.fn().mockResolvedValue('mocked_jwt_token'),
+  verify: vi.fn().mockImplementation(async (token: string) => {
+    if (token === 'invalid') throw new Error('Invalid token');
+    return { sub: 'emp-1', purpose: 'password_reset', h: 'valid_hash_o' };
+  }),
 }));
 
 describe('Auth Service', () => {
@@ -168,6 +172,58 @@ describe('Auth Service', () => {
       expect(result.employee.role).toBe('SUPER_ADMIN');
       expect(result.employee.name).toBe('John');
       expect(result.employee.email).toBe('john@testcorp.com');
+    });
+  });
+
+  describe('requestPasswordReset', () => {
+    it('should throw if email is missing', async () => {
+      await expect(service.requestPasswordReset('', 'secret')).rejects.toThrow('Email is required');
+    });
+
+    it('should return safe message when employee does not exist', async () => {
+      mockDb.query.employees.findFirst.mockResolvedValueOnce(undefined);
+      const res = await service.requestPasswordReset('nonexistent@company.com', 'secret');
+      expect(res.success).toBe(true);
+      expect(res.resetToken).toBeUndefined();
+    });
+
+    it('should generate resetToken when employee exists', async () => {
+      mockDb.query.employees.findFirst.mockResolvedValueOnce({
+        id: 'emp-1',
+        email: 'john@company.com',
+        passwordHash: 'valid_hash_12345',
+      });
+
+      const res = await service.requestPasswordReset('john@company.com', 'secret');
+      expect(res.success).toBe(true);
+      expect(res.resetToken).toBe('mocked_jwt_token');
+    });
+  });
+
+  describe('resetPassword', () => {
+    it('should throw if token or new password is missing or short', async () => {
+      await expect(service.resetPassword('', 'newpassword', 'secret')).rejects.toThrow('Reset token and new password are required');
+      await expect(service.resetPassword('tok', '123', 'secret')).rejects.toThrow('Password must be at least 6 characters');
+    });
+
+    it('should throw on invalid token', async () => {
+      await expect(service.resetPassword('invalid', 'newpassword', 'secret')).rejects.toThrow('Invalid or expired password reset token');
+    });
+
+    it('should reset password and update database on valid token', async () => {
+      mockDb.query.employees.findFirst.mockResolvedValueOnce({
+        id: 'emp-1',
+        email: 'john@company.com',
+        passwordHash: 'valid_hash_old',
+      });
+
+      const res = await service.resetPassword('valid-token', 'newpassword123', 'secret');
+      expect(res.success).toBe(true);
+      expect(mockDb.update).toHaveBeenCalled();
+      expect(mockDb.set).toHaveBeenCalled();
+      const setArgs = mockDb.set.mock.calls[0][0];
+      expect(setArgs.isPasswordChanged).toBe(true);
+      expect(setArgs.passwordHash).toBeDefined();
     });
   });
 });
