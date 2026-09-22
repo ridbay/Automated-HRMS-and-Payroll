@@ -94,7 +94,7 @@ const Benefits: React.FC = () => {
   const totalRewardsValue = baseSalary + annualEmployerBenefitValue + annualRetirementContribution;
 
   const compensationData = [
-    { name: "Base Salary", value: baseSalary || 1, fill: "#4f46e5" },
+    { name: "Base Salary", value: baseSalary || 1, fill: "var(--brand-primary)" },
     { name: "Benefits (Employer Paid)", value: annualEmployerBenefitValue, fill: "#10b981" },
     { name: "Retirement Contribution", value: annualRetirementContribution, fill: "#6366f1" },
   ].filter((d) => d.value > 0);

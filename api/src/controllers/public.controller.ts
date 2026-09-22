@@ -35,7 +35,7 @@ export const listOpenPositions = async (c: Context<AppEnv>) => {
 
     return c.json({
       data: {
-        company: { id: company.id, name: company.name, logoUrl: company.logoUrl },
+        company: { id: company.id, name: company.name, logoUrl: company.logoUrl, primaryColor: company.primaryColor },
         positions: rows,
       },
     });
@@ -60,7 +60,7 @@ export const getOpenPosition = async (c: Context<AppEnv>) => {
     });
     if (!posting) return c.json({ error: 'Position not found or no longer open' }, 404);
 
-    return c.json({ data: { company: { id: company.id, name: company.name, logoUrl: company.logoUrl }, position: posting } });
+    return c.json({ data: { company: { id: company.id, name: company.name, logoUrl: company.logoUrl, primaryColor: company.primaryColor }, position: posting } });
   } catch (error: any) {
     return c.json({ error: error.message }, 500);
   }

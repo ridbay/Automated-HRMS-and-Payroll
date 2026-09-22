@@ -152,8 +152,14 @@ export const hexToShadeTokens = (hex: string): Record<string, string> => {
 /**
  * Injects CSS variables onto document.documentElement so that all Tailwind
  * utility classes (`bg-indigo-600`, `text-indigo-600`, etc.) immediately adapt.
+ *
+ * `persist` defaults to true (used by the authenticated app shell so the
+ * color survives a reload). Unauthenticated/public pages that render a
+ * specific company's branding pass `persist: false` so they don't clobber
+ * the cached color a logged-in session on the same browser relies on for
+ * its first paint.
  */
-export const applyThemeColor = (hex: string): void => {
+export const applyThemeColor = (hex: string, persist: boolean = true): void => {
   if (typeof document === 'undefined') return;
 
   const validHex = isValidHexColor(hex) ? hex : DEFAULT_PRIMARY_COLOR;
@@ -168,6 +174,8 @@ export const applyThemeColor = (hex: string): void => {
   root.style.setProperty('--brand-primary', validHex);
   const [r, g, b] = hexToRgb(validHex);
   root.style.setProperty('--brand-primary-rgb', `${r}, ${g}, ${b}`);
+
+  if (!persist) return;
 
   try {
     localStorage.setItem('zenhr_brand_color', validHex);

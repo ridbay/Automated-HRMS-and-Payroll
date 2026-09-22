@@ -734,7 +734,7 @@ const ManagerDashboard: React.FC = () => {
                   <Tooltip />
                   <Bar
                     dataKey="count"
-                    fill="#4f46e5"
+                    fill="var(--brand-primary)"
                     radius={[10, 10, 0, 0]}
                     barSize={40}
                   />

@@ -78,7 +78,7 @@ const MyPayroll: React.FC = () => {
 
   const salaryDistribution = displayedPayslip
     ? [
-        { name: "Basic Salary", value: displayedPayslip.basicSalary, color: "#4f46e5" },
+        { name: "Basic Salary", value: displayedPayslip.basicSalary, color: "var(--brand-primary)" },
         { name: "Allowances", value: displayedPayslip.allowances, color: "#10b981" },
         { name: "Bonuses", value: displayedPayslip.bonuses || 0, color: "#f59e0b" },
       ].filter((d) => d.value > 0)
@@ -426,7 +426,7 @@ const MyPayroll: React.FC = () => {
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                   <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: "bold", fill: "#94a3b8" }} />
                   <Tooltip formatter={(value: number) => formatCurrency(value)} />
-                  <Area type="monotone" dataKey="amount" stroke="#4f46e5" fill="#e0e7ff" strokeWidth={3} />
+                  <Area type="monotone" dataKey="amount" stroke="var(--brand-primary)" fill="rgb(var(--color-primary-100))" strokeWidth={3} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>

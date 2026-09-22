@@ -913,17 +913,17 @@ const Performance: React.FC = () => {
                             <Radar
                               name="Current"
                               dataKey="current"
-                              stroke="#4f46e5"
-                              fill="#4f46e5"
+                              stroke="var(--brand-primary)"
+                              fill="var(--brand-primary)"
                               fillOpacity={0.6}
-                              dot={{ fill: "#4f46e5", r: 4 }}
+                              dot={{ fill: "var(--brand-primary)", r: 4 }}
                             />
                             <Radar
                               name="Growth Target"
                               dataKey="target"
-                              stroke="#4f46e5"
+                              stroke="var(--brand-primary)"
                               strokeDasharray="4 4"
-                              fill="#4f46e5"
+                              fill="var(--brand-primary)"
                               fillOpacity={0.1}
                             />
                             <Tooltip

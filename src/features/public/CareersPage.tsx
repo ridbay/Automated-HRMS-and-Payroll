@@ -1,7 +1,8 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Briefcase, MapPin, ArrowRight, ArrowLeft, Loader2 } from "lucide-react";
 import { usePublicCareers, usePublicPosition, resolveCompanyLogoUrl } from "../../api/client";
+import { applyThemeColor, DEFAULT_PRIMARY_COLOR } from "../../utils/themeColors";
 import JobApplicationForm from "./JobApplicationForm";
 
 interface Props {
@@ -20,6 +21,16 @@ const CareersPage: React.FC<Props> = ({ companyIdentifier, initialRequisitionId 
 
   const { data: listData, isLoading: listLoading, error: listError } = usePublicCareers(companyIdentifier);
   const { data: detailData, isLoading: detailLoading } = usePublicPosition(companyIdentifier, selectedId);
+
+  // Unauthenticated visitors never go through BrandingContext, so this page
+  // applies the company's brand color itself. All bg-indigo-600/text-indigo-600
+  // classes below already resolve to the CSS vars this sets (tailwind.config.js).
+  useEffect(() => {
+    applyThemeColor(listData?.company.primaryColor || DEFAULT_PRIMARY_COLOR, false);
+    return () => {
+      applyThemeColor(DEFAULT_PRIMARY_COLOR, false);
+    };
+  }, [listData?.company.primaryColor]);
 
   if (listLoading) {
     return (

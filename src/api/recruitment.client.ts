@@ -346,7 +346,7 @@ export const usePublicCareers = (companyIdentifier: string) => {
       if (!res.ok) throw new Error('Company not found');
       const json = await res.json();
       return json.data as {
-        company: { id: string; name: string; logoUrl?: string };
+        company: { id: string; name: string; logoUrl?: string; primaryColor?: string };
         positions: JobRequisition[];
       };
     },
@@ -367,7 +367,7 @@ export const usePublicPosition = (
       if (!res.ok) throw new Error('Position not found or no longer open');
       const json = await res.json();
       return json.data as {
-        company: { id: string; name: string; logoUrl?: string };
+        company: { id: string; name: string; logoUrl?: string; primaryColor?: string };
         position: JobRequisition;
       };
     },
