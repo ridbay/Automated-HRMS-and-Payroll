@@ -21,3 +21,10 @@ global.ResizeObserver = class ResizeObserver {
   unobserve() {}
   disconnect() {}
 };
+
+// jsdom doesn't implement scrollTo/scrollIntoView — several components
+// (e.g. AIAssistant's auto-scroll-to-latest-message effect) call these on
+// mount/update, and an unpolyfilled call throws instead of silently no-oping
+// the way a headless/undersized real viewport effectively would.
+Element.prototype.scrollTo = () => {};
+Element.prototype.scrollIntoView = () => {};

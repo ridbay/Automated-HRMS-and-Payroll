@@ -1,8 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as payrollController from '../../../src/controllers/admin/payroll.controller';
 import { PayrollService } from '../../../src/services/payroll.service';
+import { MonnifyService } from '../../../src/services/monnify.service';
 
 vi.mock('../../../src/services/payroll.service');
+vi.mock('../../../src/services/monnify.service', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../src/services/monnify.service')>();
+  return { ...actual, MonnifyService: vi.fn() };
+});
 
 describe('Admin Payroll Controller', () => {
   let mockContext: any;
@@ -67,5 +72,76 @@ describe('Admin Payroll Controller', () => {
 
     await payrollController.getBankFile(mockContext);
     expect(mockContext.header).toHaveBeenCalledWith('Content-Type', 'text/csv');
+  });
+
+  describe('Monnify disbursement', () => {
+    beforeEach(() => {
+      MonnifyService.prototype.initiatePayrollDisbursement = vi.fn();
+      MonnifyService.prototype.validateBankAccount = vi.fn();
+      MonnifyService.prototype.isConfigured = vi.fn();
+      MonnifyService.prototype.getBankList = vi.fn();
+    });
+
+    it('disbursePayrollRun calls MonnifyService and returns 200 on success', async () => {
+      mockContext.get.mockReturnValue('comp-1');
+      mockContext.req.param.mockReturnValue('run-1');
+      (MonnifyService.prototype.initiatePayrollDisbursement as any).mockResolvedValue({ success: true, status: 'PAID_SIMULATED' });
+
+      const res = await payrollController.disbursePayrollRun(mockContext);
+
+      expect(MonnifyService.prototype.initiatePayrollDisbursement).toHaveBeenCalledWith('comp-1', 'run-1');
+      expect(res.status).toBe(200);
+    });
+
+    it('disbursePayrollRun returns 400 (not 500) when the service throws, e.g. a non-approved run', async () => {
+      mockContext.get.mockReturnValue('comp-1');
+      mockContext.req.param.mockReturnValue('run-1');
+      (MonnifyService.prototype.initiatePayrollDisbursement as any).mockRejectedValue(new Error("Cannot disburse payroll run in 'draft' state"));
+
+      const res = await payrollController.disbursePayrollRun(mockContext);
+
+      expect(mockContext.json).toHaveBeenCalledWith({ error: "Cannot disburse payroll run in 'draft' state" }, 400);
+      expect(res.status).toBe(400);
+    });
+
+    it('validateBankAccount requires both accountNumber and bankCode', async () => {
+      mockContext.req.query.mockImplementation((k: string) => (k === 'accountNumber' ? '0123456789' : undefined));
+
+      const res = await payrollController.validateBankAccount(mockContext);
+
+      expect(mockContext.json).toHaveBeenCalledWith({ error: 'accountNumber and bankCode are required' }, 400);
+      expect(res.status).toBe(400);
+      expect(MonnifyService.prototype.validateBankAccount).not.toHaveBeenCalled();
+    });
+
+    it('validateBankAccount returns the resolved account name on success', async () => {
+      mockContext.req.query.mockImplementation((k: string) => ({ accountNumber: '0123456789', bankCode: '058' } as any)[k]);
+      (MonnifyService.prototype.validateBankAccount as any).mockResolvedValue({ accountNumber: '0123456789', accountName: 'Ada Lovelace', bankCode: '058' });
+
+      const res = await payrollController.validateBankAccount(mockContext);
+
+      expect(MonnifyService.prototype.validateBankAccount).toHaveBeenCalledWith('0123456789', '058');
+      expect(res.status).toBe(200);
+    });
+
+    it('getMonnifyBanks falls back to the static Nigerian bank list when Monnify credentials are not configured', async () => {
+      (MonnifyService.prototype.isConfigured as any).mockReturnValue(false);
+
+      const res = await payrollController.getMonnifyBanks(mockContext);
+
+      expect(MonnifyService.prototype.getBankList).not.toHaveBeenCalled();
+      expect(res.data.data.length).toBeGreaterThan(0);
+      expect(res.data.data[0]).toEqual(expect.objectContaining({ name: expect.any(String), code: expect.any(String) }));
+    });
+
+    it('getMonnifyBanks fetches the live bank list when configured', async () => {
+      (MonnifyService.prototype.isConfigured as any).mockReturnValue(true);
+      (MonnifyService.prototype.getBankList as any).mockResolvedValue([{ name: 'GTBank', code: '058' }]);
+
+      const res = await payrollController.getMonnifyBanks(mockContext);
+
+      expect(MonnifyService.prototype.getBankList).toHaveBeenCalled();
+      expect(res.data.data).toEqual([{ name: 'GTBank', code: '058' }]);
+    });
   });
 });

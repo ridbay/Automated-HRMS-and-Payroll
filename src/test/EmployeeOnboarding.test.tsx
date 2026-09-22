@@ -13,11 +13,24 @@ vi.mock('framer-motion', () => {
   const stripMotionProps = ({
     initial, animate, exit, transition, whileHover, whileTap, layout, layoutId, variants, ...rest
   }: any) => rest;
+  // Cached per tag so the same component type is reused across renders —
+  // an uncached Proxy trap returns a brand-new forwardRef() on every access,
+  // and React remounts (rather than updates) a subtree whose component type
+  // changed identity, which silently invalidates any DOM node reference a
+  // test captured before a re-render.
+  const componentCache = new Map<string, any>();
   const motion = new Proxy(
     {},
     {
-      get: (_target, tag: string) =>
-        React.forwardRef((props: any, ref: any) => React.createElement(tag, { ...stripMotionProps(props), ref })),
+      get: (_target, tag: string) => {
+        if (!componentCache.has(tag)) {
+          componentCache.set(
+            tag,
+            React.forwardRef((props: any, ref: any) => React.createElement(tag, { ...stripMotionProps(props), ref }))
+          );
+        }
+        return componentCache.get(tag);
+      },
     }
   );
   return {

@@ -73,7 +73,7 @@ export const useDeleteJobRequisition = () => {
 export const useCreateJobRequisition = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (data: Partial<JobRequisition>) => {
+    mutationFn: async (data: Partial<JobRequisition> & { channels?: string[] }) => {
       const res = await fetchWithTenant(`${API_URL}/admin/job-requisitions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

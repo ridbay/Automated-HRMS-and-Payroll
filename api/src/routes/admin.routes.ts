@@ -19,6 +19,7 @@ import {
 import { AdminAssetController } from "../controllers/admin/asset.controller";
 import { AdminSurveyController } from "../controllers/admin/survey.controller";
 import { AdminLearningController } from "../controllers/admin/learning.controller";
+import { AdminCompanyDocumentController } from "../controllers/admin/companyDocument.controller";
 import {
   getTransitions,
   getTransition,
@@ -219,6 +220,11 @@ adminRoutes.put("/courses/:id", adminOnly, edit("company"), AdminLearningControl
 adminRoutes.delete("/courses/:id", adminOnly, edit("company"), AdminLearningController.deleteCourse);
 adminRoutes.post("/courses/:id/assign", adminOnly, edit("company"), AdminLearningController.assignCourse);
 adminRoutes.get("/courses/:id/enrollments", adminOnly, view("company"), AdminLearningController.getCourseEnrollments);
+
+// --- AI knowledge base documents (admin-uploaded, searchable by the AI assistant) ---
+adminRoutes.get("/documents", adminOnly, view("company"), AdminCompanyDocumentController.list);
+adminRoutes.post("/documents", adminOnly, edit("company"), AdminCompanyDocumentController.create);
+adminRoutes.delete("/documents/:id", adminOnly, edit("company"), AdminCompanyDocumentController.remove);
 
 // Transitions (Onboarding / Offboarding journeys) — lives under the same
 // "workforce" permission module as Employees/Assets since it's the same

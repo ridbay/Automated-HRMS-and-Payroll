@@ -32,6 +32,7 @@ import {
   MessageSquare,
   Building2,
   GraduationCap,
+  BookOpen,
   X,
 } from "lucide-react";
 import { useNavigation } from "../context/NavigationContext";
@@ -150,6 +151,7 @@ const Sidebar: React.FC = () => {
     { name: "Learning (LMS)", icon: <GraduationCap size={20} />, path: "lms" },
     { name: "Benefits Admin", icon: <Heart size={20} />, path: "benefits" },
     { name: "Assets", icon: <Box size={20} />, path: "assets" },
+    { name: "Knowledge Base", icon: <BookOpen size={20} />, path: "knowledge-base" },
     {
       name: "Reports & Analytics",
       icon: <BarChart3 size={20} />,

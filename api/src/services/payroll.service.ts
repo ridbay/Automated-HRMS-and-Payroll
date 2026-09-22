@@ -648,11 +648,14 @@ export class PayrollService {
     const pad = (n: number) => String(n).padStart(2, '0');
     const periodLabel = new Date(run.periodYear, run.periodMonth - 1, 1).toLocaleString('en-US', { month: 'long', year: 'numeric' });
 
-    // NSITF/ITF are realistically remitted quarterly/annually rather than
-    // monthly in practice, but a task is generated every run anyway to keep
-    // the Compliance tracker uniform — refining the cadence is a reasonable
-    // fast-follow, not a blocker for having the obligation tracked at all.
-    await this.db.insert(schema.complianceTasks).values([
+    // PAYE/Pension/NHF are genuinely monthly obligations, so a task is
+    // generated every run. NSITF and ITF are not: NSITF is remitted quarterly
+    // and ITF is an annual levy, so generating a task for them on every run
+    // overstated the filing calendar. Only emit those two on the run that
+    // closes out their period (quarter-end / year-end), and size the task to
+    // the accumulated contribution across that whole period rather than just
+    // the closing month's slice of it.
+    const tasksToInsert: (typeof schema.complianceTasks.$inferInsert)[] = [
       {
         id: genId('CT'),
         companyId,
@@ -683,27 +686,57 @@ export class PayrollService {
         amount: run.totalNhf || 0,
         status: 'pending',
       },
-      {
+    ];
+
+    const isQuarterEnd = run.periodMonth % 3 === 0;
+    if (isQuarterEnd) {
+      const quarterStartMonth = run.periodMonth - 2;
+      const quarterMonths = [quarterStartMonth, quarterStartMonth + 1, quarterStartMonth + 2];
+      const quarterRuns = await this.db.query.payrollRuns.findMany({
+        where: and(
+          eq(schema.payrollRuns.companyId, companyId),
+          eq(schema.payrollRuns.periodYear, run.periodYear),
+          inArray(schema.payrollRuns.periodMonth, quarterMonths),
+          eq(schema.payrollRuns.status, 'paid'),
+        ),
+      });
+      const quarterNsitf = quarterRuns.reduce((sum: number, r: any) => sum + (r.totalNsitf || 0), 0);
+      const quarterLabel = `Q${run.periodMonth / 3} ${run.periodYear}`;
+      tasksToInsert.push({
         id: genId('CT'),
         companyId,
         payrollRunId: runId,
-        title: `${periodLabel} NSITF Contribution`,
+        title: `${quarterLabel} NSITF Contribution`,
         type: 'nsitf',
         dueDate: `${np.year}-${pad(np.month)}-30`,
-        amount: run.totalNsitf || 0,
+        amount: quarterNsitf,
         status: 'pending',
-      },
-      {
+      });
+    }
+
+    const isYearEnd = run.periodMonth === 12;
+    if (isYearEnd) {
+      const yearRuns = await this.db.query.payrollRuns.findMany({
+        where: and(
+          eq(schema.payrollRuns.companyId, companyId),
+          eq(schema.payrollRuns.periodYear, run.periodYear),
+          eq(schema.payrollRuns.status, 'paid'),
+        ),
+      });
+      const yearItf = yearRuns.reduce((sum: number, r: any) => sum + (r.totalItf || 0), 0);
+      tasksToInsert.push({
         id: genId('CT'),
         companyId,
         payrollRunId: runId,
-        title: `${periodLabel} ITF Levy`,
+        title: `${run.periodYear} ITF Levy`,
         type: 'itf',
         dueDate: `${np.year}-${pad(np.month)}-30`,
-        amount: run.totalItf || 0,
+        amount: yearItf,
         status: 'pending',
-      },
-    ]);
+      });
+    }
+
+    await this.db.insert(schema.complianceTasks).values(tasksToInsert);
 
     return this.getRun(companyId, runId);
   }

@@ -48,6 +48,18 @@ describe('Auth Controller', () => {
       expect(mockContext.json).toHaveBeenCalledWith({ error: 'Invalid credentials' }, 401);
       expect(res.status).toBe(401);
     });
+
+    it('should return 503 and never sign a token when JWT_SECRET is unset, instead of falling back to a predictable key', async () => {
+      mockContext.env.JWT_SECRET = undefined;
+      mockContext.req.json.mockResolvedValueOnce({ email: 'test@test.com', password: 'password123' });
+      AuthService.prototype.login = vi.fn();
+
+      const res = await login(mockContext);
+
+      expect(AuthService.prototype.login).not.toHaveBeenCalled();
+      expect(mockContext.json).toHaveBeenCalledWith({ error: 'Server misconfiguration: authentication unavailable' }, 503);
+      expect(res.status).toBe(503);
+    });
   });
 
   describe('changePassword', () => {
@@ -99,6 +111,19 @@ describe('Auth Controller', () => {
       expect(AuthService.prototype.registerCompany).toHaveBeenCalledWith(payload, 'secret');
       expect(mockContext.json).toHaveBeenCalledWith({ token: 'jwt' });
     });
+
+    it('should return 503 when JWT_SECRET is unset', async () => {
+      mockContext.env.JWT_SECRET = undefined;
+      const payload = { companyName: 'Corp', adminFirstName: 'A', adminLastName: 'B', adminEmail: 'e@e.com', adminPassword: 'pwd' };
+      mockContext.req.json.mockResolvedValueOnce(payload);
+      AuthService.prototype.registerCompany = vi.fn();
+
+      const res = await registerCompany(mockContext);
+
+      expect(AuthService.prototype.registerCompany).not.toHaveBeenCalled();
+      expect(mockContext.json).toHaveBeenCalledWith({ error: 'Server misconfiguration: authentication unavailable' }, 503);
+      expect(res.status).toBe(503);
+    });
   });
 
   describe('forgotPassword', () => {
@@ -119,6 +144,17 @@ describe('Auth Controller', () => {
       const res = await forgotPassword(mockContext);
       expect(AuthService.prototype.requestPasswordReset).toHaveBeenCalledWith('user@company.com', 'secret');
       expect(mockContext.json).toHaveBeenCalledWith({ success: true, resetToken: 'test-token' });
+    });
+
+    it('should return 503 when JWT_SECRET is unset', async () => {
+      mockContext.env.JWT_SECRET = undefined;
+      mockContext.req.json.mockResolvedValueOnce({ email: 'user@company.com' });
+      AuthService.prototype.requestPasswordReset = vi.fn();
+
+      const res = await forgotPassword(mockContext);
+
+      expect(AuthService.prototype.requestPasswordReset).not.toHaveBeenCalled();
+      expect(res.status).toBe(503);
     });
   });
 
@@ -143,6 +179,17 @@ describe('Auth Controller', () => {
         success: true,
         message: 'Password has been reset successfully.',
       });
+    });
+
+    it('should return 503 when JWT_SECRET is unset', async () => {
+      mockContext.env.JWT_SECRET = undefined;
+      mockContext.req.json.mockResolvedValueOnce({ token: 'tok', newPassword: 'newpassword123' });
+      AuthService.prototype.resetPassword = vi.fn();
+
+      const res = await resetPassword(mockContext);
+
+      expect(AuthService.prototype.resetPassword).not.toHaveBeenCalled();
+      expect(res.status).toBe(503);
     });
   });
 });

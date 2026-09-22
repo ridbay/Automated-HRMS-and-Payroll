@@ -27,6 +27,7 @@ export interface BatchDisbursementResult {
   status: string;
   message?: string;
   rawResponse?: any;
+  skippedForMissingBankDetails?: string[];
 }
 
 // Common Nigerian bank codes mapping as fallback for when bankCode is not explicitly stored
@@ -188,19 +189,37 @@ export class MonnifyService {
     }
 
     const batchReference = `ZENHR__${companyId}__${runId}__${Date.now()}`;
-    const transactionList = payslips.map((ps, index) => {
-      const bankCode = this.resolveBankCode(ps.bankName);
-      const accountNumber = ps.accountNumber || '0000000000';
+    // The submission-time exception gate (payroll.service.ts) already blocks
+    // a run with missing bank details from ever being approved, so this
+    // should never actually trigger — but if that gate is ever bypassed or
+    // has a gap, silently substituting a placeholder account number would
+    // submit a real-money transaction to a bogus destination instead of
+    // failing. Exclude the payslip and report it instead.
+    const skippedForMissingBankDetails: string[] = [];
+    const transactionList = payslips
+      .filter((ps) => {
+        if (!ps.accountNumber) {
+          skippedForMissingBankDetails.push(ps.employeeId || ps.id);
+          return false;
+        }
+        return true;
+      })
+      .map((ps, index) => {
+        const bankCode = this.resolveBankCode(ps.bankName);
 
-      return {
-        amount: Math.round(ps.netPay),
-        reference: `PS-${ps.id || index}-${Date.now()}`,
-        narration: `ZenHR Salary ${run.periodMonth}/${run.periodYear}`,
-        destinationBankCode: bankCode,
-        destinationAccountNumber: accountNumber,
-        currency: 'NGN',
-      };
-    });
+        return {
+          amount: Math.round(ps.netPay),
+          reference: `PS-${ps.id || index}-${Date.now()}`,
+          narration: `ZenHR Salary ${run.periodMonth}/${run.periodYear}`,
+          destinationBankCode: bankCode,
+          destinationAccountNumber: ps.accountNumber,
+          currency: 'NGN',
+        };
+      });
+
+    if (!transactionList.length) {
+      throw new Error('No payslips in this run have bank account details on file — nothing to disburse.');
+    }
 
     const totalAmount = transactionList.reduce((acc, t) => acc + t.amount, 0);
 
@@ -224,6 +243,7 @@ export class MonnifyService {
         totalRecipients: transactionList.length,
         status: 'PAID_SIMULATED',
         message: 'Simulated disbursement successful (Monnify credentials not configured).',
+        skippedForMissingBankDetails,
       };
     }
 
@@ -266,6 +286,7 @@ export class MonnifyService {
       totalRecipients: transactionList.length,
       status: 'PROCESSING',
       rawResponse: data.responseBody,
+      skippedForMissingBankDetails,
     };
   }
 

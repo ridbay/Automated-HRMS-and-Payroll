@@ -145,6 +145,18 @@ export class AtsService {
     return { ...existing, rating };
   }
 
+  // Records an outbound email to a candidate on their timeline. The actual
+  // send (Mailgun) happens in the controller, same split as sendOffer — this
+  // just validates the candidate exists and leaves an audit trail.
+  async logCandidateMessage(companyId: string, actor: AtsActor | undefined, candidateId: string, subject: string, body: string) {
+    const candidate = await this.db.query.candidates.findFirst({
+      where: and(eq(schema.candidates.id, candidateId), eq(schema.candidates.companyId, companyId)),
+    });
+    if (!candidate) throw new Error('Candidate not found');
+    await this.logTimeline(companyId, candidateId, actor, `Email sent: "${subject}"`, body);
+    return candidate;
+  }
+
   // ---------------- Interviews ----------------
   async listInterviews(companyId: string, filters: { candidateId?: string } = {}) {
     const conditions = [eq(schema.interviews.companyId, companyId)];

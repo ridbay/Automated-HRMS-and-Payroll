@@ -118,6 +118,7 @@ export class RequisitionService {
         reviewedById: autoApprove ? requester.id : null,
         reviewedByName: autoApprove ? requester.name : null,
         reviewedAt: autoApprove ? nowIso : null,
+        isPubliclyListed: data.isPubliclyListed === false ? false : true,
       })
       .returning();
 

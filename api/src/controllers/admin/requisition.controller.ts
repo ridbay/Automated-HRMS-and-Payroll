@@ -64,6 +64,15 @@ export const createRequisition = async (c: Context<AppEnv>) => {
     const requester = await getActor(c);
     const service = new RequisitionService(c.env.DB);
     const created = await service.create(companyId, requester, payload);
+
+    if (created.status === 'Open' && Array.isArray(payload.channels) && payload.channels.includes('Internal Board')) {
+      await new NotificationService(c.env.DB).notify(
+        companyId,
+        'requisition.created',
+        `🆕 New role opened: *${created.title}* (${created.department})`
+      );
+    }
+
     return c.json(created, 201);
   } catch (err: any) {
     return c.json({ error: err.message }, 500);

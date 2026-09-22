@@ -112,6 +112,30 @@ export const rateCandidate = async (c: Context<AppEnv>) => {
   }
 };
 
+export const sendCandidateMessage = async (c: Context<AppEnv>) => {
+  try {
+    const companyId = c.get('companyId') as string;
+    const actor = await getActor(c);
+    const { subject, body } = await c.req.json();
+    if (!subject?.trim() || !body?.trim()) return c.json({ error: 'subject and body are required' }, 400);
+
+    const service = new AtsService(c.env.DB);
+    const candidate = await service.logCandidateMessage(companyId, actor, (c.req.param('id') as string), subject.trim(), body.trim());
+
+    const result = await new MailgunService(c.env.DB, c.env).sendEmail({
+      companyId,
+      to: candidate.email,
+      subject: subject.trim(),
+      text: body.trim(),
+      eventType: 'candidate.message_sent',
+    });
+
+    return c.json({ data: { sent: result.success, simulated: !!result.simulated } }, 201);
+  } catch (error: any) {
+    return c.json({ error: error.message }, error.message?.includes('not found') ? 404 : 500);
+  }
+};
+
 export const getCandidateResume = async (c: Context<AppEnv>) => {
   try {
     const companyId = c.get('companyId') as string;
@@ -151,6 +175,22 @@ export const scheduleInterview = async (c: Context<AppEnv>) => {
     const payload = await c.req.json();
     const service = new AtsService(c.env.DB);
     const created = await service.scheduleInterview(companyId, actor, payload);
+
+    // Optional invite email — the wizard's "Invites" step composes subject/body;
+    // omitted fields (or a candidate with no email) just skip the send.
+    if (payload.emailSubject?.trim() && payload.emailBody?.trim()) {
+      const candidate = await service.getCandidate(companyId, created.candidateId);
+      if (candidate?.email) {
+        new MailgunService(c.env.DB, c.env).sendEmail({
+          companyId,
+          to: candidate.email,
+          subject: payload.emailSubject.trim(),
+          text: payload.emailBody.trim(),
+          eventType: 'ats.interview_invite',
+        }).catch(() => {});
+      }
+    }
+
     return c.json({ data: created }, 201);
   } catch (error: any) {
     return c.json({ error: error.message }, error.message?.includes('required') || error.message?.includes('not found') ? 400 : 500);

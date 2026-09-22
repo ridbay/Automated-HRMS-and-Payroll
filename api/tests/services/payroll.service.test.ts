@@ -227,11 +227,11 @@ describe('Payroll Service', () => {
       expect(ps.itfContribution).toBe(0);
     });
 
-    it('markRunPaid generates NHF/NSITF/ITF compliance tasks alongside PAYE/Pension', async () => {
+    it('markRunPaid generates PAYE/Pension/NHF compliance tasks every run, but not NSITF/ITF for a mid-quarter month', async () => {
       mockDb.query.payrollRuns.findFirst.mockResolvedValueOnce({
         id: 'RUN-1',
         status: 'approved',
-        periodMonth: 10,
+        periodMonth: 10, // October: not a quarter-end (Mar/Jun/Sep/Dec) and not year-end
         periodYear: 2023,
         totalTaxes: 5000,
         totalPension: 3000,
@@ -246,9 +246,76 @@ describe('Payroll Service', () => {
       const insertedTasks = mockDb.values.mock.calls.find((call: any) => Array.isArray(call[0]) && call[0][0]?.title?.includes('PAYE Filing'))?.[0];
       expect(insertedTasks).toBeDefined();
       const types = insertedTasks.map((t: any) => t.type);
-      expect(types).toEqual(expect.arrayContaining(['tax', 'pension', 'nhf', 'nsitf', 'itf']));
+      expect(types).toEqual(expect.arrayContaining(['tax', 'pension', 'nhf']));
+      expect(types).not.toContain('nsitf');
+      expect(types).not.toContain('itf');
       const nhfTask = insertedTasks.find((t: any) => t.type === 'nhf');
       expect(nhfTask.amount).toBe(1000);
+    });
+
+    it('generates an NSITF task only on a quarter-ending run, sized to the whole quarter\'s accumulated contribution', async () => {
+      mockDb.query.payrollRuns.findFirst.mockResolvedValueOnce({
+        id: 'RUN-1',
+        status: 'approved',
+        periodMonth: 9, // Q3 close
+        periodYear: 2023,
+        totalTaxes: 5000,
+        totalPension: 3000,
+        totalNhf: 1000,
+        totalNsitf: 1200,
+        totalItf: 1000,
+        payslips: [],
+      });
+      // Jul/Aug/Sep paid runs feeding the Q3 total; this includes the current run's own row.
+      mockDb.query.payrollRuns.findMany.mockResolvedValueOnce([
+        { periodMonth: 7, totalNsitf: 1000 },
+        { periodMonth: 8, totalNsitf: 1100 },
+        { periodMonth: 9, totalNsitf: 1200 },
+      ]);
+
+      await service.markRunPaid('comp-1', 'RUN-1');
+
+      const insertedTasks = mockDb.values.mock.calls.find((call: any) => Array.isArray(call[0]) && call[0][0]?.title?.includes('PAYE Filing'))?.[0];
+      const types = insertedTasks.map((t: any) => t.type);
+      expect(types).toContain('nsitf');
+      expect(types).not.toContain('itf'); // September isn't year-end
+      const nsitfTask = insertedTasks.find((t: any) => t.type === 'nsitf');
+      expect(nsitfTask.title).toBe('Q3 2023 NSITF Contribution');
+      expect(nsitfTask.amount).toBe(1000 + 1100 + 1200);
+    });
+
+    it('generates an ITF task only on the December run, sized to the whole year\'s accumulated levy', async () => {
+      mockDb.query.payrollRuns.findFirst.mockResolvedValueOnce({
+        id: 'RUN-1',
+        status: 'approved',
+        periodMonth: 12,
+        periodYear: 2023,
+        totalTaxes: 5000,
+        totalPension: 3000,
+        totalNhf: 1000,
+        totalNsitf: 1200,
+        totalItf: 900,
+        payslips: [],
+      });
+      // First call inside markRunPaid resolves the Q4 (NSITF) window, second the full year (ITF).
+      mockDb.query.payrollRuns.findMany
+        .mockResolvedValueOnce([
+          { periodMonth: 10, totalNsitf: 1000 },
+          { periodMonth: 11, totalNsitf: 1100 },
+          { periodMonth: 12, totalNsitf: 1200 },
+        ])
+        .mockResolvedValueOnce(
+          Array.from({ length: 12 }, (_, i) => ({ periodMonth: i + 1, totalItf: 800 }))
+        );
+
+      await service.markRunPaid('comp-1', 'RUN-1');
+
+      const insertedTasks = mockDb.values.mock.calls.find((call: any) => Array.isArray(call[0]) && call[0][0]?.title?.includes('PAYE Filing'))?.[0];
+      const types = insertedTasks.map((t: any) => t.type);
+      expect(types).toEqual(expect.arrayContaining(['nsitf', 'itf']));
+      const itfTask = insertedTasks.find((t: any) => t.type === 'itf');
+      expect(itfTask.title).toBe('2023 ITF Levy');
+      expect(itfTask.amount).toBe(800 * 12);
     });
   });
 

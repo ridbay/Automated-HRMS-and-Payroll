@@ -37,6 +37,7 @@ describe('Ai Service', () => {
         payrollRuns: { findFirst: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
         payslips: { findMany: vi.fn().mockResolvedValue([]) },
         loans: { findMany: vi.fn().mockResolvedValue([]) },
+        companyDocuments: { findMany: vi.fn().mockResolvedValue([]) },
       },
     };
     mockAi = { run: vi.fn() };
@@ -128,6 +129,44 @@ describe('Ai Service', () => {
       const result = await service.ask(admin, 'What compliance tasks are due?');
       expect(result.answer).toBe('One task due.');
       expect(mockDb.query.complianceTasks.findMany).toHaveBeenCalled();
+    });
+  });
+
+  describe('searchCompanyDocuments', () => {
+    it('is available to a regular employee, not just admins', async () => {
+      mockDb.query.companyDocuments.findMany.mockResolvedValueOnce([
+        { id: 'DOC-1', title: 'Remote Work Policy', content: 'Employees may work remotely up to 3 days a week.', companyId: 'comp-1' },
+      ]);
+      mockAi.run = mockAiRun(
+        [{ name: 'searchCompanyDocuments', arguments: { query: 'remote work' } }],
+        'You can work remotely up to 3 days a week, per the Remote Work Policy.'
+      );
+
+      const result = await service.ask(employee, 'How many days can I work remotely?');
+
+      expect(result.toolsUsed).toEqual(['searchCompanyDocuments']);
+      expect(mockDb.query.companyDocuments.findMany).toHaveBeenCalled();
+    });
+
+    it('requires a non-empty query and never hits the DB without one', async () => {
+      mockAi.run = mockAiRun([{ name: 'searchCompanyDocuments', arguments: {} }], "I need more detail to search for that.");
+
+      await service.ask(employee, 'Tell me about the company');
+
+      expect(mockDb.query.companyDocuments.findMany).not.toHaveBeenCalled();
+    });
+
+    it('reports no matches plainly instead of the model inventing an answer', async () => {
+      mockDb.query.companyDocuments.findMany.mockResolvedValueOnce([
+        { id: 'DOC-1', title: 'Remote Work Policy', content: 'Employees may work remotely.', companyId: 'comp-1' },
+      ]);
+      mockAi.run = mockAiRun(
+        [{ name: 'searchCompanyDocuments', arguments: { query: 'parking allowance' } }],
+        "Nothing in the company's documents covers parking allowances."
+      );
+
+      const result = await service.ask(employee, 'Is there a parking allowance?');
+      expect(result.answer).toContain("Nothing in the company's documents");
     });
   });
 

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Star,
@@ -38,7 +38,6 @@ import {
   LayoutGrid,
   Check,
   History,
-  Paperclip,
   Share2,
   Zap,
   Rocket,
@@ -90,11 +89,17 @@ import {
   useRejectJobRequisition,
   useDeleteJobRequisition,
   useDepartments,
+  useCreateDepartment,
   useLocations,
+  useCreateLocation,
   useCandidates,
+  useCandidate,
+  useCreateCandidate,
   useUpdateCandidateStatus,
+  useSendCandidateMessage,
   useInterviews,
   useScheduleInterview,
+  useSubmitScorecard,
   useOffers,
   useCreateOffer,
   useSendOffer,
@@ -113,6 +118,12 @@ const daysAgoLabel = (dateStr?: string) => {
   if (days <= 0) return "Applied today";
   if (days === 1) return "Applied 1d ago";
   return `Applied ${days}d ago`;
+};
+
+const openExternalUrl = (url?: string) => {
+  if (!url) return;
+  const href = /^https?:\/\//i.test(url) ? url : `https://${url}`;
+  window.open(href, "_blank", "noopener,noreferrer");
 };
 
 const Recruitment: React.FC = () => {
@@ -175,6 +186,49 @@ const Recruitment: React.FC = () => {
   const [reqForm, setReqForm] = useState(emptyReqForm);
   const [reqFormError, setReqFormError] = useState<string | null>(null);
 
+  const [showAddDept, setShowAddDept] = useState(false);
+  const [newDeptName, setNewDeptName] = useState("");
+  const [showAddLoc, setShowAddLoc] = useState(false);
+  const [newLocName, setNewLocName] = useState("");
+  const [newLocAddress, setNewLocAddress] = useState("");
+
+  const [showAddCandidateModal, setShowAddCandidateModal] = useState(false);
+  const emptyCandidateForm = {
+    name: "",
+    email: "",
+    phone: "",
+    currentTitle: "",
+    source: "Career Page" as Candidate["source"],
+  };
+  const [candidateForm, setCandidateForm] = useState(emptyCandidateForm);
+  const [candidateFormError, setCandidateFormError] = useState<string | null>(null);
+
+  // Reused across the "Publish To Channels" checkboxes — only the channels
+  // this app can actually act on (see the requisition submit handler).
+  const [reqChannels, setReqChannels] = useState<string[]>(["Career Page"]);
+
+  const [messageSubject, setMessageSubject] = useState("");
+  const [messageBody, setMessageBody] = useState("");
+  const [messageError, setMessageError] = useState<string | null>(null);
+
+  const [scoringInterviewId, setScoringInterviewId] = useState<string | null>(null);
+  const emptyScorecardForm = {
+    technical: 3,
+    communication: 3,
+    cultural: 3,
+    notes: "",
+    recommendation: "Maybe" as "Hire" | "Maybe" | "No Hire",
+  };
+  const [scorecardForm, setScorecardForm] = useState(emptyScorecardForm);
+
+  const [teamSearchQuery, setTeamSearchQuery] = useState("");
+  const [scheduleCalendarCursor, setScheduleCalendarCursor] = useState(() => new Date());
+  const [inviteEmailSubject, setInviteEmailSubject] = useState("");
+  const [inviteEmailBody, setInviteEmailBody] = useState("");
+
+  const [calendarCursor, setCalendarCursor] = useState(() => new Date());
+  const [selectedCalendarDay, setSelectedCalendarDay] = useState<string | null>(null);
+
   const { user } = useAuth();
   // Only HR Admin / Super Admin can open a requisition directly or review one
   // sitting in "Pending Approval"; Recruiters get read-only visibility here.
@@ -182,7 +236,9 @@ const Recruitment: React.FC = () => {
 
   const { data: requisitions = [], isLoading: requisitionsLoading } = useJobRequisitions();
   const { data: departments = [] } = useDepartments();
+  const createDepartment = useCreateDepartment();
   const { data: locations = [] } = useLocations();
+  const createLocation = useCreateLocation();
   const { data: directory = [] } = useDirectory();
   const createRequisition = useCreateJobRequisition();
   const approveRequisition = useApproveJobRequisition();
@@ -190,18 +246,130 @@ const Recruitment: React.FC = () => {
   const deleteRequisitionMutation = useDeleteJobRequisition();
 
   const { data: candidates = [] } = useCandidates();
+  const createCandidate = useCreateCandidate();
   const updateCandidateStatus = useUpdateCandidateStatus();
+  const sendCandidateMessage = useSendCandidateMessage();
   const { data: interviews = [] } = useInterviews();
   const scheduleInterview = useScheduleInterview();
+  const submitScorecard = useSubmitScorecard();
   const { data: offers = [] } = useOffers();
   const createOffer = useCreateOffer();
   const sendOffer = useSendOffer();
   const respondToOffer = useRespondToOffer();
+
+  // The candidate list only carries base fields — timeline/interviews/scorecards
+  // are joined server-side per candidate, so hydrate the full record once one
+  // is selected. `candidateDetail` falls back to the lightweight list row
+  // while this is in flight so the header renders immediately.
+  const { data: fullSelectedCandidate } = useCandidate(selectedCandidate?.id ?? null);
+  const candidateDetail: Candidate | null = selectedCandidate
+    ? { ...selectedCandidate, ...(fullSelectedCandidate || {}) }
+    : null;
   const { data: recruitmentReport } = useRecruitmentReport();
+
+  const scorecardSummary = useMemo(() => {
+    const entries = (candidateDetail?.interviews || []).flatMap((i: any) => i.scorecards || []);
+    const avg = (key: "technical" | "communication" | "cultural") => {
+      const vals = entries.map((s: any) => s[key]).filter((v: any) => v != null) as number[];
+      return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+    };
+    const recCounts: Record<string, number> = {};
+    for (const s of entries) {
+      if (s.recommendation === "Hire" || s.recommendation === "Maybe" || s.recommendation === "No Hire") {
+        recCounts[s.recommendation] = (recCounts[s.recommendation] || 0) + 1;
+      }
+    }
+    const overallRecommendation =
+      Object.entries(recCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+    return {
+      entries,
+      count: entries.length,
+      technical: avg("technical"),
+      communication: avg("communication"),
+      cultural: avg("cultural"),
+      overallRecommendation,
+    };
+  }, [candidateDetail]);
+
   const candidatesById = useMemo(
     () => new Map(candidates.map((c: Candidate) => [c.id, c])),
     [candidates],
   );
+
+  const todayIso = new Date().toISOString().slice(0, 10);
+
+  const calendarDays = useMemo(() => {
+    const year = calendarCursor.getFullYear();
+    const month = calendarCursor.getMonth();
+    const firstOfMonth = new Date(year, month, 1);
+    const startOffset = (firstOfMonth.getDay() + 6) % 7; // Monday-first grid
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const days: { date: Date | null; iso: string | null; interviewCount: number }[] = [];
+    for (let i = 0; i < startOffset; i++) days.push({ date: null, iso: null, interviewCount: 0 });
+    for (let d = 1; d <= daysInMonth; d++) {
+      const date = new Date(year, month, d);
+      const iso = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+      const interviewCount = interviews.filter((it: Interview) => it.dateTime?.slice(0, 10) === iso).length;
+      days.push({ date, iso, interviewCount });
+    }
+    return days;
+  }, [calendarCursor, interviews]);
+
+  const interviewerConflicts = useMemo(() => {
+    if (!scheduleForm.dateTime || scheduleForm.interviewerIds.length === 0) return [];
+    const start = new Date(scheduleForm.dateTime).getTime();
+    if (!Number.isFinite(start)) return [];
+    const end = start + scheduleForm.durationMinutes * 60000;
+    const conflicts: { name: string; time: string }[] = [];
+    const seen = new Set<string>();
+    for (const it of interviews) {
+      if (it.status === "Cancelled" || !it.dateTime) continue;
+      const itStart = new Date(it.dateTime).getTime();
+      const itEnd = itStart + (it.durationMinutes || 60) * 60000;
+      if (start >= itEnd || end <= itStart) continue;
+      for (const iid of it.interviewerIds || []) {
+        if (!scheduleForm.interviewerIds.includes(iid)) continue;
+        const person = directory.find((d: any) => d.id === iid);
+        const time = new Date(it.dateTime).toLocaleString("en-NG", { dateStyle: "medium", timeStyle: "short" });
+        const key = `${iid}-${it.id}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        conflicts.push({ name: person?.name || "An interviewer", time });
+      }
+    }
+    return conflicts;
+  }, [scheduleForm.dateTime, scheduleForm.durationMinutes, scheduleForm.interviewerIds, interviews, directory]);
+
+  const timeSlotOptions = useMemo(() => {
+    const slots = ["09:00", "11:00", "14:00", "16:00"];
+    const day = scheduleForm.dateTime ? scheduleForm.dateTime.slice(0, 10) : null;
+    if (!day) return [];
+    return slots.map((time) => {
+      const start = new Date(`${day}T${time}`).getTime();
+      const end = start + scheduleForm.durationMinutes * 60000;
+      const busy = interviews.some((it: Interview) => {
+        if (it.status === "Cancelled" || !it.dateTime) return false;
+        if (!(it.interviewerIds || []).some((id) => scheduleForm.interviewerIds.includes(id))) return false;
+        const itStart = new Date(it.dateTime).getTime();
+        const itEnd = itStart + (it.durationMinutes || 60) * 60000;
+        return start < itEnd && end > itStart;
+      });
+      const label = new Date(`${day}T${time}`).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+      return { time, label, busy };
+    });
+  }, [scheduleForm.dateTime, scheduleForm.durationMinutes, scheduleForm.interviewerIds, interviews]);
+
+  const calendarPanelInterviews = useMemo(() => {
+    if (selectedCalendarDay) {
+      return interviews
+        .filter((it: Interview) => it.dateTime?.slice(0, 10) === selectedCalendarDay)
+        .sort((a: Interview, b: Interview) => (a.dateTime || "").localeCompare(b.dateTime || ""));
+    }
+    return interviews
+      .filter((it: Interview) => it.status === "Scheduled")
+      .sort((a: Interview, b: Interview) => (a.dateTime || "").localeCompare(b.dateTime || ""))
+      .slice(0, 5);
+  }, [interviews, selectedCalendarDay]);
 
   const dashboardStats = useMemo(() => {
     const now = new Date();
@@ -283,7 +451,26 @@ const Recruitment: React.FC = () => {
     setScheduleForm({ ...emptyScheduleForm, candidateId: selectedCandidate?.id || "" });
     setScheduleFormError(null);
     setScheduleStep(1);
+    setInviteEmailSubject("");
+    setInviteEmailBody("");
     setShowScheduleModal(true);
+  };
+
+  const buildDefaultInviteEmail = (kind: "Standard Invite" | "Technical Prep" | "Casual Chat" = "Standard Invite") => {
+    const candidate = candidates.find((c: Candidate) => c.id === scheduleForm.candidateId);
+    const firstName = candidate?.name?.split(" ")[0] || "there";
+    const roleTitle = currentJob?.title || "the role";
+    const when = scheduleForm.dateTime
+      ? new Date(scheduleForm.dateTime).toLocaleString("en-NG", { dateStyle: "full", timeStyle: "short" })
+      : "a time we'll confirm shortly";
+    const where = scheduleForm.meetingLink ? `\n\nDetails: ${scheduleForm.meetingLink}` : "";
+    const intros: Record<string, string> = {
+      "Standard Invite": `We'd like to schedule a ${scheduleForm.stage} interview with you for ${roleTitle} on ${when}.`,
+      "Technical Prep": `Ahead of your ${scheduleForm.stage} interview for ${roleTitle} on ${when}, please come ready to walk through your recent work — no need to prepare slides.`,
+      "Casual Chat": `Let's find some time to chat about ${roleTitle}. We've set up a relaxed ${scheduleForm.stage.toLowerCase()} conversation for ${when}.`,
+    };
+    setInviteEmailSubject(`Interview Invitation: ${roleTitle}`);
+    setInviteEmailBody(`Hi ${firstName},\n\n${intros[kind]}${where}\n\nLooking forward to speaking with you.`);
   };
 
   const handleSendInvites = () => {
@@ -296,11 +483,21 @@ const Recruitment: React.FC = () => {
       return;
     }
     setScheduleFormError(null);
-    scheduleInterview.mutate(scheduleForm, {
-      onSuccess: () => setShowScheduleModal(false),
-      onError: (err: any) => setScheduleFormError(err.message || "Failed to schedule interview."),
-    });
+    scheduleInterview.mutate(
+      { ...scheduleForm, emailSubject: inviteEmailSubject, emailBody: inviteEmailBody },
+      {
+        onSuccess: () => setShowScheduleModal(false),
+        onError: (err: any) => setScheduleFormError(err.message || "Failed to schedule interview."),
+      },
+    );
   };
+
+  useEffect(() => {
+    if (scheduleStep === 5 && !inviteEmailSubject && !inviteEmailBody) {
+      buildDefaultInviteEmail();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scheduleStep]);
 
   const openOfferModal = () => {
     setOfferForm({
@@ -362,18 +559,129 @@ const Recruitment: React.FC = () => {
         targetHireDate: reqForm.targetHireDate || undefined,
         justification: reqForm.justification.trim() || undefined,
         budgetRange,
+        isPubliclyListed: reqChannels.includes("Career Page"),
+        channels: reqChannels,
       },
       {
         onSuccess: () => {
           setShowJobPostingModal(false);
           setReqForm(emptyReqForm);
+          setShowAddDept(false);
+          setShowAddLoc(false);
+          setReqChannels(["Career Page"]);
         },
         onError: (err: any) => setReqFormError(err.message || "Failed to submit requisition."),
       },
     );
   };
 
+  const handleAddDepartment = () => {
+    if (!newDeptName.trim()) return;
+    createDepartment.mutate(
+      { name: newDeptName.trim() },
+      {
+        onSuccess: (created: any) => {
+          setReqForm((f) => ({ ...f, department: created?.name || newDeptName.trim() }));
+          setNewDeptName("");
+          setShowAddDept(false);
+        },
+      },
+    );
+  };
+
+  const handleAddLocation = () => {
+    if (!newLocName.trim() || !newLocAddress.trim()) return;
+    createLocation.mutate(
+      { name: newLocName.trim(), address: newLocAddress.trim() },
+      {
+        onSuccess: (created: any) => {
+          setReqForm((f) => ({ ...f, location: created?.name || newLocName.trim() }));
+          setNewLocName("");
+          setNewLocAddress("");
+          setShowAddLoc(false);
+        },
+      },
+    );
+  };
+
+  const candidateStageOrder = ["applied", "screening", "interview", "offer", "hired"] as const;
+
+  const advanceCandidateStage = (candidate: Candidate) => {
+    const idx = candidateStageOrder.indexOf(candidate.status as any);
+    const next = candidateStageOrder[idx + 1];
+    if (next) updateCandidateStatus.mutate({ id: candidate.id, status: next });
+  };
+
+  const openAddCandidateModal = () => {
+    setCandidateForm(emptyCandidateForm);
+    setCandidateFormError(null);
+    setShowAddCandidateModal(true);
+  };
+
+  const handleAddCandidate = () => {
+    if (!candidateForm.name.trim() || !candidateForm.email.trim()) {
+      setCandidateFormError("Name and email are required.");
+      return;
+    }
+    setCandidateFormError(null);
+    createCandidate.mutate(
+      {
+        name: candidateForm.name.trim(),
+        email: candidateForm.email.trim(),
+        phone: candidateForm.phone.trim() || undefined,
+        currentTitle: candidateForm.currentTitle.trim() || undefined,
+        source: candidateForm.source,
+        requisitionId: currentJob?.id || undefined,
+      },
+      {
+        onSuccess: () => {
+          setShowAddCandidateModal(false);
+          setCandidateForm(emptyCandidateForm);
+        },
+        onError: (err: any) => setCandidateFormError(err.message || "Failed to add candidate."),
+      },
+    );
+  };
+
+  const handleSendMessage = () => {
+    if (!candidateDetail) return;
+    if (!messageSubject.trim() || !messageBody.trim()) {
+      setMessageError("Subject and message are required.");
+      return;
+    }
+    setMessageError(null);
+    sendCandidateMessage.mutate(
+      { id: candidateDetail.id, subject: messageSubject.trim(), body: messageBody.trim() },
+      {
+        onSuccess: () => {
+          setMessageSubject("");
+          setMessageBody("");
+        },
+        onError: (err: any) => setMessageError(err.message || "Failed to send message."),
+      },
+    );
+  };
+
+  const handleSubmitScorecard = (interviewId: string) => {
+    submitScorecard.mutate(
+      { interviewId, ...scorecardForm },
+      {
+        onSuccess: () => {
+          setScoringInterviewId(null);
+          setScorecardForm(emptyScorecardForm);
+        },
+      },
+    );
+  };
+
   const teamMembers = directory.slice(0, 3);
+  const filteredTeamMembers = useMemo(
+    () =>
+      directory
+        .filter((m: any) => m.name.toLowerCase().includes(teamSearchQuery.toLowerCase()))
+        .slice(0, 9),
+    [directory, teamSearchQuery],
+  );
   const currentJob = requisitions.find((r) => r.id === activeJobId) || requisitions[0];
 
   const formatCurrency = (val: number | string) => {
@@ -738,7 +1046,14 @@ const Recruitment: React.FC = () => {
                         >
                           {req.priority}
                         </span>
-                        <button className="text-slate-300 hover:text-indigo-600">
+                        <button
+                          onClick={() => {
+                            setActiveJobId(req.id);
+                            setActiveTab("pipeline");
+                          }}
+                          className="text-slate-300 hover:text-indigo-600"
+                          title="View pipeline"
+                        >
                           <MoreHorizontal size={16} />
                         </button>
                       </div>
@@ -861,7 +1176,14 @@ const Recruitment: React.FC = () => {
                   >
                     {req.status}
                   </span>
-                  <button className="p-2 text-slate-300 hover:text-indigo-600 transition-colors">
+                  <button
+                    onClick={() => {
+                      setActiveJobId(req.id);
+                      setActiveTab("pipeline");
+                    }}
+                    className="p-2 text-slate-300 hover:text-indigo-600 transition-colors"
+                    title="View pipeline"
+                  >
                     <MoreHorizontal size={20} />
                   </button>
                 </div>
@@ -1158,10 +1480,6 @@ const Recruitment: React.FC = () => {
                 </div>
               )}
             </div>
-            <div className="h-8 w-px bg-slate-200 mx-2" />
-            <button className="px-6 py-2.5 bg-slate-50 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-50 hover:text-indigo-600 transition-all flex items-center gap-2">
-              <Settings size={14} /> Pipeline Setup
-            </button>
           </div>
         </div>
 
@@ -1279,23 +1597,39 @@ const Recruitment: React.FC = () => {
                         className="flex gap-1 relative z-10"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <button className="p-2 bg-slate-50 text-slate-300 group-hover:text-indigo-600 rounded-lg hover:bg-indigo-50 transition-all">
+                        <button
+                          onClick={() => {
+                            window.location.href = `mailto:${cand.email}`;
+                          }}
+                          className="p-2 bg-slate-50 text-slate-300 group-hover:text-indigo-600 rounded-lg hover:bg-indigo-50 transition-all"
+                          title={`Email ${cand.name}`}
+                        >
                           <Mail size={12} />
                         </button>
-                        <button className="p-2 bg-slate-50 text-slate-300 group-hover:text-amber-500 rounded-lg hover:bg-amber-50 transition-all">
+                        <button
+                          onClick={() => advanceCandidateStage(cand)}
+                          disabled={cand.status === "hired" || cand.status === "rejected"}
+                          className="p-2 bg-slate-50 text-slate-300 group-hover:text-amber-500 rounded-lg hover:bg-amber-50 transition-all disabled:opacity-30 disabled:pointer-events-none"
+                          title="Advance to next stage"
+                        >
                           <ArrowRight size={12} />
                         </button>
                       </div>
                     </div>
                   </motion.div>
                 ))}
-                <button className="w-full py-6 border-2 border-dashed border-slate-200 text-slate-300 hover:border-indigo-200 hover:text-indigo-600 rounded-[2rem] font-black text-[10px] uppercase tracking-widest transition-all flex flex-col items-center justify-center gap-2 group">
-                  <Plus
-                    size={20}
-                    className="group-hover:scale-110 transition-transform"
-                  />
-                  Add to {col.label}
-                </button>
+                {col.id === "applied" && (
+                  <button
+                    onClick={openAddCandidateModal}
+                    className="w-full py-6 border-2 border-dashed border-slate-200 text-slate-300 hover:border-indigo-200 hover:text-indigo-600 rounded-[2rem] font-black text-[10px] uppercase tracking-widest transition-all flex flex-col items-center justify-center gap-2 group"
+                  >
+                    <Plus
+                      size={20}
+                      className="group-hover:scale-110 transition-transform"
+                    />
+                    Add Candidate
+                  </button>
+                )}
               </div>
             </div>
           ))}
@@ -1494,18 +1828,23 @@ const Recruitment: React.FC = () => {
                     Global Interview Calendar
                   </h3>
                   <div className="flex gap-2">
-                    <button className="p-3 bg-slate-50 text-slate-400 rounded-xl hover:bg-slate-100 transition-colors">
+                    <button
+                      onClick={() => setCalendarCursor((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1))}
+                      className="p-3 bg-slate-50 text-slate-400 rounded-xl hover:bg-slate-100 transition-colors"
+                    >
                       <ChevronLeft size={20} />
                     </button>
                     <span className="px-8 py-3 bg-slate-900 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-lg">
-                      May 2024
+                      {calendarCursor.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
                     </span>
-                    <button className="p-3 bg-slate-50 text-slate-400 rounded-xl hover:bg-slate-100 transition-colors">
+                    <button
+                      onClick={() => setCalendarCursor((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1))}
+                      className="p-3 bg-slate-50 text-slate-400 rounded-xl hover:bg-slate-100 transition-colors"
+                    >
                       <ChevronRight size={20} />
                     </button>
                   </div>
                 </div>
-                {/* Mock Calendar Grid */}
                 <div className="grid grid-cols-7 gap-4">
                   {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(
                     (d) => (
@@ -1517,42 +1856,58 @@ const Recruitment: React.FC = () => {
                       </div>
                     ),
                   )}
-                  {Array.from({ length: 31 }).map((_, i) => (
-                    <div
-                      key={i}
-                      className={`h-24 rounded-2xl border flex flex-col p-3 transition-all relative group ${i === 24 ? "border-indigo-600 bg-indigo-50/20 ring-4 ring-indigo-500/5 shadow-xl" : "border-slate-100 hover:bg-slate-50 cursor-pointer"}`}
-                    >
-                      <span className="text-xs font-black text-slate-400">
-                        {i + 1}
-                      </span>
-                      {i === 24 && (
-                        <div className="mt-auto space-y-1">
-                          <div className="px-2 py-1 bg-indigo-600 text-white rounded-lg text-[8px] font-black uppercase truncate shadow-sm">
-                            Interview (4)
-                          </div>
-                          <div className="px-2 py-1 bg-emerald-500 text-white rounded-lg text-[8px] font-black uppercase truncate shadow-sm">
-                            Offer (1)
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                  {calendarDays.map((day, i) => {
+                    const isToday = day.iso === todayIso;
+                    const isSelected = day.iso && day.iso === selectedCalendarDay;
+                    return (
+                      <div
+                        key={i}
+                        onClick={() => day.iso && setSelectedCalendarDay(isSelected ? null : day.iso)}
+                        className={`h-24 rounded-2xl border flex flex-col p-3 transition-all relative group ${
+                          !day.iso
+                            ? "border-transparent"
+                            : isSelected
+                              ? "border-indigo-600 bg-indigo-50 ring-4 ring-indigo-500/10 shadow-xl cursor-pointer"
+                              : isToday
+                                ? "border-indigo-600 bg-indigo-50/20 ring-4 ring-indigo-500/5 shadow-xl cursor-pointer"
+                                : "border-slate-100 hover:bg-slate-50 cursor-pointer"
+                        }`}
+                      >
+                        {day.date && (
+                          <>
+                            <span className="text-xs font-black text-slate-400">
+                              {day.date.getDate()}
+                            </span>
+                            {day.interviewCount > 0 && (
+                              <div className="mt-auto space-y-1">
+                                <div className="px-2 py-1 bg-indigo-600 text-white rounded-lg text-[8px] font-black uppercase truncate shadow-sm">
+                                  Interview ({day.interviewCount})
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
               <div className="space-y-10">
                 <section className="bg-slate-900 rounded-[3rem] p-10 text-white shadow-2xl relative overflow-hidden">
                   <Clock className="absolute -bottom-8 -right-8 w-40 h-40 text-indigo-500/10 rotate-12" />
                   <h4 className="text-xl font-black mb-8 text-indigo-400 flex items-center gap-3">
-                    <Video size={20} /> Today's Syncs
+                    <Video size={20} />{" "}
+                    {selectedCalendarDay
+                      ? new Date(selectedCalendarDay).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+                      : "Upcoming Syncs"}
                   </h4>
                   <div className="space-y-6">
-                    {interviews.length === 0 && (
-                      <p className="text-xs text-white/40 font-bold">No interviews scheduled yet.</p>
+                    {calendarPanelInterviews.length === 0 && (
+                      <p className="text-xs text-white/40 font-bold">
+                        {selectedCalendarDay ? "No interviews on this day." : "No interviews scheduled yet."}
+                      </p>
                     )}
-                    {interviews
-                      .filter((it: Interview) => it.status === "Scheduled")
-                      .slice(0, 5)
-                      .map((it: Interview) => (
+                    {calendarPanelInterviews.map((it: Interview) => (
                       <div
                         key={it.id}
                         className="p-6 bg-white/5 border border-white/10 rounded-3xl backdrop-blur-sm group hover:bg-white/10 transition-all cursor-pointer"
@@ -1596,7 +1951,7 @@ const Recruitment: React.FC = () => {
 
       {/* Candidate Detail Slide-over */}
       <AnimatePresence>
-        {selectedCandidate && (
+        {candidateDetail && (
           <div className="fixed inset-0 z-[150] overflow-hidden">
             <motion.div
               initial={{ opacity: 0 }}
@@ -1617,39 +1972,50 @@ const Recruitment: React.FC = () => {
                   <div className="relative">
                     <img
                       src={
-                        selectedCandidate.avatar ||
-                        `https://ui-avatars.com/api/?name=${selectedCandidate.name}`
+                        candidateDetail.avatar ||
+                        `https://ui-avatars.com/api/?name=${candidateDetail.name}`
                       }
                       className="w-24 h-24 rounded-[2.5rem] object-cover border-8 border-white shadow-2xl"
                     />
                     <div className="absolute -bottom-1 -right-1 w-10 h-10 bg-white rounded-2xl flex items-center justify-center shadow-lg border-2 border-indigo-50 ring-4 ring-white">
                       <span className="text-[10px] font-black text-indigo-600">
-                        {selectedCandidate.rating}
+                        {candidateDetail.rating}
                       </span>
                     </div>
                   </div>
                   <div>
                     <h2 className="text-3xl font-black text-slate-800 tracking-tighter">
-                      {selectedCandidate.name}
+                      {candidateDetail.name}
                     </h2>
                     <p className="text-sm font-black text-indigo-600 uppercase tracking-[0.2em]">
-                      {selectedCandidate.currentTitle} •{" "}
-                      {selectedCandidate.experienceYears || 0}y Experience
+                      {candidateDetail.currentTitle} •{" "}
+                      {candidateDetail.experienceYears || 0}y Experience
                     </p>
                     <div className="flex items-center gap-3 mt-4">
                       <span className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-lg text-[9px] font-black uppercase tracking-widest">
-                        {selectedCandidate.status}
+                        {candidateDetail.status}
                       </span>
                       <span className="px-3 py-1 bg-slate-100 text-slate-400 rounded-lg text-[9px] font-black uppercase tracking-widest">
-                        {selectedCandidate.source}
+                        {candidateDetail.source}
                       </span>
                     </div>
                   </div>
                 </div>
                 <div className="flex gap-3">
-                  <button className="p-4 bg-white border border-slate-200 text-slate-400 hover:text-indigo-600 rounded-2xl transition-all shadow-sm">
-                    <Download size={20} />
-                  </button>
+                  {candidateDetail.resumeFileKey && (
+                    <button
+                      onClick={() =>
+                        downloadAuthenticatedBlob(
+                          candidateResumeUrl(candidateDetail.id),
+                          `${candidateDetail.name.replace(/\s+/g, "_")}_Resume`,
+                        )
+                      }
+                      className="p-4 bg-white border border-slate-200 text-slate-400 hover:text-indigo-600 rounded-2xl transition-all shadow-sm"
+                      title="Download resume"
+                    >
+                      <Download size={20} />
+                    </button>
+                  )}
                   <button
                     onClick={() => setSelectedCandidate(null)}
                     className="p-4 bg-white border border-slate-200 text-slate-400 hover:text-rose-500 rounded-2xl transition-all shadow-sm"
@@ -1724,7 +2090,7 @@ const Recruitment: React.FC = () => {
                                   <Mail size={20} />
                                 </div>
                                 <span className="text-sm font-bold text-slate-700">
-                                  {selectedCandidate.email}
+                                  {candidateDetail.email}
                                 </span>
                               </div>
                               <div className="flex items-center gap-5">
@@ -1732,7 +2098,7 @@ const Recruitment: React.FC = () => {
                                   <Phone size={20} />
                                 </div>
                                 <span className="text-sm font-bold text-slate-700">
-                                  {selectedCandidate.phone}
+                                  {candidateDetail.phone}
                                 </span>
                               </div>
                               <div className="flex items-center gap-5">
@@ -1740,7 +2106,7 @@ const Recruitment: React.FC = () => {
                                   <MapPin size={20} />
                                 </div>
                                 <span className="text-sm font-bold text-slate-700">
-                                  {selectedCandidate.location}
+                                  {candidateDetail.location}
                                 </span>
                               </div>
                             </div>
@@ -1750,7 +2116,11 @@ const Recruitment: React.FC = () => {
                               Social Footprint
                             </h3>
                             <div className="grid grid-cols-3 gap-4">
-                              <button className="p-8 bg-slate-50 border border-slate-100 rounded-[2.5rem] hover:border-indigo-200 transition-all group text-center">
+                              <button
+                                onClick={() => openExternalUrl(candidateDetail.linkedinUrl)}
+                                disabled={!candidateDetail.linkedinUrl}
+                                className="p-8 bg-slate-50 border border-slate-100 rounded-[2.5rem] hover:border-indigo-200 transition-all group text-center disabled:opacity-30 disabled:pointer-events-none"
+                              >
                                 <Linkedin
                                   size={28}
                                   className="mx-auto mb-3 text-slate-300 group-hover:text-indigo-600"
@@ -1759,7 +2129,11 @@ const Recruitment: React.FC = () => {
                                   LinkedIn
                                 </span>
                               </button>
-                              <button className="p-8 bg-slate-50 border border-slate-100 rounded-[2.5rem] hover:border-indigo-200 transition-all group text-center">
+                              <button
+                                onClick={() => openExternalUrl(candidateDetail.githubUrl)}
+                                disabled={!candidateDetail.githubUrl}
+                                className="p-8 bg-slate-50 border border-slate-100 rounded-[2.5rem] hover:border-indigo-200 transition-all group text-center disabled:opacity-30 disabled:pointer-events-none"
+                              >
                                 <Github
                                   size={28}
                                   className="mx-auto mb-3 text-slate-300 group-hover:text-slate-900"
@@ -1768,7 +2142,11 @@ const Recruitment: React.FC = () => {
                                   GitHub
                                 </span>
                               </button>
-                              <button className="p-8 bg-slate-50 border border-slate-100 rounded-[2.5rem] hover:border-indigo-200 transition-all group text-center">
+                              <button
+                                onClick={() => openExternalUrl(candidateDetail.portfolioUrl)}
+                                disabled={!candidateDetail.portfolioUrl}
+                                className="p-8 bg-slate-50 border border-slate-100 rounded-[2.5rem] hover:border-indigo-200 transition-all group text-center disabled:opacity-30 disabled:pointer-events-none"
+                              >
                                 <Globe
                                   size={28}
                                   className="mx-auto mb-3 text-slate-300 group-hover:text-emerald-500"
@@ -1789,7 +2167,7 @@ const Recruitment: React.FC = () => {
                             Technical Skill Match
                           </h3>
                           <div className="flex flex-wrap gap-4 relative z-10">
-                            {selectedCandidate.skills.map((s) => (
+                            {candidateDetail.skills.map((s) => (
                               <span
                                 key={s}
                                 className="px-6 py-3 bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl text-xs font-black uppercase tracking-widest shadow-xl"
@@ -1808,10 +2186,10 @@ const Recruitment: React.FC = () => {
                             <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">
                               Resume
                             </h3>
-                            {selectedCandidate.resumeFileKey && (
+                            {candidateDetail.resumeFileKey && (
                               <button
                                 type="button"
-                                onClick={() => downloadAuthenticatedBlob(candidateResumeUrl(selectedCandidate.id), `${selectedCandidate.name.replace(/\s+/g, '_')}_Resume`)}
+                                onClick={() => downloadAuthenticatedBlob(candidateResumeUrl(candidateDetail.id), `${candidateDetail.name.replace(/\s+/g, '_')}_Resume`)}
                                 className="text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:underline flex items-center gap-1 cursor-pointer"
                               >
                                 <Download size={14} /> Download Document
@@ -1819,10 +2197,10 @@ const Recruitment: React.FC = () => {
                             )}
                           </div>
                           <div className="bg-slate-50 p-10 rounded-[3rem] border border-slate-100 min-h-[200px] relative flex items-center justify-center">
-                            {selectedCandidate.resumeFileKey ? (
+                            {candidateDetail.resumeFileKey ? (
                               <button
                                 type="button"
-                                onClick={() => downloadAuthenticatedBlob(candidateResumeUrl(selectedCandidate.id), `${selectedCandidate.name.replace(/\s+/g, '_')}_Resume`)}
+                                onClick={() => downloadAuthenticatedBlob(candidateResumeUrl(candidateDetail.id), `${candidateDetail.name.replace(/\s+/g, '_')}_Resume`)}
                                 className="px-10 py-5 bg-indigo-600 text-white rounded-[2rem] font-black text-xs uppercase tracking-widest shadow-2xl shadow-indigo-200 hover:scale-105 transition-all cursor-pointer flex items-center gap-2"
                               >
                                 <Download size={16} /> Download Resume
@@ -1842,100 +2220,97 @@ const Recruitment: React.FC = () => {
                             <h3 className="text-xl font-black text-slate-800">
                               Recruiter Scorecard
                             </h3>
-                            <button className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl hover:bg-indigo-100 transition-all">
+                            <button
+                              onClick={() => setCandidateDetailTab("interviews")}
+                              className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl hover:bg-indigo-100 transition-all"
+                              title="Log feedback for an interview"
+                            >
                               <Edit3 size={20} />
                             </button>
                           </div>
-                          <div className="space-y-10">
-                            {[
-                              { l: "Technical Skill Set", v: 4.8, c: "indigo" },
-                              {
-                                l: "System Design Aptitude",
-                                v: 4.5,
-                                c: "emerald",
-                              },
-                              {
-                                l: "Cultural Contribution",
-                                v: 4.2,
-                                c: "violet",
-                              },
-                              { l: "Project Ownership", v: 4.9, c: "amber" },
-                            ].map((m, i) => (
-                              <div key={i} className="space-y-4">
-                                <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-[0.2em]">
-                                  <span className="text-slate-400">{m.l}</span>
-                                  <span className={`text-${m.c}-600 font-mono`}>
-                                    {m.v} / 5.0
-                                  </span>
+                          {scorecardSummary.count === 0 ? (
+                            <p className="text-sm text-slate-400 font-bold">
+                              No scorecards submitted yet. Log feedback from the Interviews tab once a round is complete.
+                            </p>
+                          ) : (
+                            <div className="space-y-10">
+                              {[
+                                { l: "Technical", v: scorecardSummary.technical, c: "indigo" },
+                                { l: "Communication", v: scorecardSummary.communication, c: "emerald" },
+                                { l: "Cultural Fit", v: scorecardSummary.cultural, c: "violet" },
+                              ].map((m, i) => (
+                                <div key={i} className="space-y-4">
+                                  <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-[0.2em]">
+                                    <span className="text-slate-400">{m.l}</span>
+                                    <span className={`text-${m.c}-600 font-mono`}>
+                                      {m.v != null ? `${m.v.toFixed(1)} / 5.0` : "No ratings yet"}
+                                    </span>
+                                  </div>
+                                  <div className="h-3 bg-slate-50 rounded-full overflow-hidden p-0.5">
+                                    <motion.div
+                                      initial={{ width: 0 }}
+                                      animate={{ width: `${((m.v || 0) / 5) * 100}%` }}
+                                      className={`h-full rounded-full bg-${m.c}-500 shadow-sm`}
+                                    />
+                                  </div>
                                 </div>
-                                <div className="h-3 bg-slate-50 rounded-full overflow-hidden p-0.5">
-                                  <motion.div
-                                    initial={{ width: 0 }}
-                                    animate={{ width: `${(m.v / 5) * 100}%` }}
-                                    className={`h-full rounded-full bg-${m.c}-500 shadow-sm`}
-                                  />
-                                </div>
-                              </div>
-                            ))}
-                          </div>
+                              ))}
+                            </div>
+                          )}
                         </section>
 
-                        <section className="grid grid-cols-2 gap-10">
-                          <div className="p-10 bg-emerald-50 rounded-[3rem] border border-emerald-100 space-y-6">
-                            <h4 className="text-[11px] font-black text-emerald-600 uppercase tracking-[0.2em]">
-                              Identified Strengths
+                        {scorecardSummary.count > 0 && (
+                          <section className="space-y-6">
+                            <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">
+                              Interviewer Feedback
                             </h4>
-                            <ul className="space-y-5">
-                              {[
-                                "Exceptional architecture vision",
-                                "Active mentor in OSS",
-                                "Strong product mindset",
-                              ].map((s) => (
-                                <li
-                                  key={s}
-                                  className="flex items-center gap-4 text-xs font-black text-emerald-800"
-                                >
-                                  <CheckCircle2
-                                    size={18}
-                                    className="shrink-0"
-                                  />{" "}
-                                  {s}
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                          <div className="p-10 bg-rose-50 rounded-[3rem] border border-rose-100 space-y-6">
-                            <h4 className="text-[11px] font-black text-rose-600 uppercase tracking-[0.2em]">
-                              Potential Concerns
-                            </h4>
-                            <ul className="space-y-5">
-                              {[
-                                "Notice period over 60 days",
-                                "Upper bracket salary expectation",
-                              ].map((c) => (
-                                <li
-                                  key={c}
-                                  className="flex items-center gap-4 text-xs font-black text-rose-800"
-                                >
-                                  <AlertCircle size={18} className="shrink-0" />{" "}
-                                  {c}
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        </section>
+                            {scorecardSummary.entries.map((sc: any) => (
+                              <div
+                                key={sc.id}
+                                className="p-8 bg-white rounded-[2.5rem] border border-slate-200 shadow-sm space-y-3"
+                              >
+                                <div className="flex justify-between items-center">
+                                  <span className="text-sm font-black text-slate-800">
+                                    {sc.interviewerName || "Unknown interviewer"}
+                                  </span>
+                                  {sc.recommendation && (
+                                    <span
+                                      className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${
+                                        sc.recommendation === "Hire"
+                                          ? "bg-emerald-50 text-emerald-600"
+                                          : sc.recommendation === "No Hire"
+                                            ? "bg-rose-50 text-rose-600"
+                                            : "bg-amber-50 text-amber-600"
+                                      }`}
+                                    >
+                                      {sc.recommendation}
+                                    </span>
+                                  )}
+                                </div>
+                                {sc.notes && (
+                                  <p className="text-xs text-slate-500 font-medium italic leading-relaxed">
+                                    "{sc.notes}"
+                                  </p>
+                                )}
+                              </div>
+                            ))}
+                          </section>
+                        )}
 
                         <div className="bg-slate-900 p-12 rounded-[4rem] text-white shadow-2xl text-center relative overflow-hidden group">
                           <Award
                             size={64}
-                            className="mx-auto mb-6 text-amber-400 animate-bounce"
+                            className="mx-auto mb-6 text-amber-400"
                           />
                           <h3 className="text-2xl font-black mb-2 tracking-tighter">
-                            Recommendation: Strong Hire
+                            {scorecardSummary.overallRecommendation
+                              ? `Recommendation: ${scorecardSummary.overallRecommendation}`
+                              : "No recommendation yet"}
                           </h3>
-                          <p className="text-indigo-200 text-sm font-medium mb-12 max-w-sm mx-auto leading-relaxed italic">
-                            "Candidate demonstrated top 1% proficiency during
-                            the architecture deep dive sessions."
+                          <p className="text-indigo-200 text-sm font-medium mb-12 max-w-sm mx-auto leading-relaxed">
+                            {scorecardSummary.count > 0
+                              ? `Based on ${scorecardSummary.count} interviewer scorecard${scorecardSummary.count === 1 ? "" : "s"}.`
+                              : "Log interview feedback to build a recommendation."}
                           </p>
                           <div className="flex gap-4 max-w-md mx-auto">
                             <button
@@ -1944,7 +2319,10 @@ const Recruitment: React.FC = () => {
                             >
                               Extend Offer (₦)
                             </button>
-                            <button className="flex-1 py-5 bg-white/10 border border-white/20 text-white rounded-[1.8rem] font-black text-xs uppercase tracking-widest hover:bg-white/20">
+                            <button
+                              onClick={() => setSelectedCandidate(null)}
+                              className="flex-1 py-5 bg-white/10 border border-white/20 text-white rounded-[1.8rem] font-black text-xs uppercase tracking-widest hover:bg-white/20"
+                            >
                               Keep in Pool
                             </button>
                           </div>
@@ -1955,63 +2333,69 @@ const Recruitment: React.FC = () => {
                     {candidateDetailTab === "message" && (
                       <div className="space-y-8">
                         <div className="bg-white rounded-[3.5rem] border border-slate-200 shadow-sm overflow-hidden flex flex-col h-[550px]">
-                          <div className="p-8 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
+                          <div className="p-8 bg-slate-50 border-b border-slate-100">
                             <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">
-                              Communication Ledger
+                              Email Log
                             </h3>
-                            <div className="flex gap-2">
-                              <button className="px-5 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-100 transition-all">
-                                Slash Commands
-                              </button>
-                            </div>
+                            <p className="text-[10px] text-slate-400 font-bold mt-1">
+                              Outbound only — sent via {candidateDetail.email}'s inbox has no reply channel here yet.
+                            </p>
                           </div>
-                          <div className="flex-1 p-10 space-y-10 overflow-y-auto scrollbar-hide">
-                            <div className="flex flex-col items-end">
-                              <div className="bg-indigo-600 text-white p-8 rounded-[2.5rem] rounded-tr-none max-w-[85%] shadow-2xl shadow-indigo-100">
-                                <p className="text-sm font-medium leading-relaxed">
-                                  Hello Alex, we were impressed by your
-                                  technical screen results! We'd like to
-                                  schedule a final round with our VP of
-                                  Engineering, Diana Prince.
-                                </p>
-                                <div className="flex items-center gap-2 mt-4 pt-4 border-t border-white/10">
-                                  <p className="text-[9px] font-black uppercase opacity-60">
-                                    Recruiter • May 22, 10:42 AM
+                          <div className="flex-1 p-10 space-y-6 overflow-y-auto scrollbar-hide">
+                            {(candidateDetail.timeline || []).filter((t) => t.event.startsWith("Email sent:")).length === 0 && (
+                              <p className="text-sm text-slate-400 font-bold text-center py-10">
+                                No emails sent to this candidate yet.
+                              </p>
+                            )}
+                            {(candidateDetail.timeline || [])
+                              .filter((t) => t.event.startsWith("Email sent:"))
+                              .map((t, i) => (
+                                <div
+                                  key={t.id || i}
+                                  className="bg-slate-50 border border-slate-100 p-8 rounded-[2.5rem]"
+                                >
+                                  <p className="text-sm font-black text-slate-800 mb-2">
+                                    {t.event.replace(/^Email sent:\s*/, "").replace(/^"|"$/g, "")}
                                   </p>
-                                  <CheckCircle2
-                                    size={12}
-                                    className="opacity-60"
-                                  />
+                                  {t.note && (
+                                    <p className="text-sm font-medium text-slate-600 leading-relaxed whitespace-pre-wrap">
+                                      {t.note}
+                                    </p>
+                                  )}
+                                  <p className="text-[9px] font-black uppercase text-slate-400 mt-4 pt-4 border-t border-slate-200">
+                                    {t.actorName || "System"} •{" "}
+                                    {t.createdAt ? new Date(t.createdAt).toLocaleString("en-NG", { dateStyle: "medium", timeStyle: "short" }) : ""}
+                                  </p>
                                 </div>
-                              </div>
-                            </div>
-                            <div className="flex flex-col items-start">
-                              <div className="bg-slate-50 border border-slate-100 p-8 rounded-[2.5rem] rounded-tl-none max-w-[85%]">
-                                <p className="text-sm font-medium text-slate-800 leading-relaxed">
-                                  Hi Marcus, that sounds great. I am available
-                                  this Friday afternoon or any time next
-                                  Tuesday. Looking forward to meeting Diana!
-                                </p>
-                                <p className="text-[9px] font-black uppercase text-slate-400 mt-4 pt-4 border-t border-slate-100">
-                                  Alex Rivera • May 22, 02:15 PM
-                                </p>
-                              </div>
-                            </div>
+                              ))}
                           </div>
-                          <div className="p-8 bg-slate-50 border-t border-slate-100 flex gap-4">
-                            <div className="relative flex-1">
-                              <input
-                                type="text"
-                                placeholder="Type a message or use slash commands..."
-                                className="w-full pl-6 pr-12 py-5 bg-white border-none rounded-[2rem] outline-none focus:ring-4 focus:ring-indigo-500/10 font-medium text-sm shadow-inner"
+                          <div className="p-8 bg-slate-50 border-t border-slate-100 space-y-3">
+                            {messageError && (
+                              <p className="text-xs font-bold text-rose-500">{messageError}</p>
+                            )}
+                            <input
+                              type="text"
+                              value={messageSubject}
+                              onChange={(e) => setMessageSubject(e.target.value)}
+                              placeholder="Subject"
+                              className="w-full px-6 py-3 bg-white border-none rounded-2xl outline-none focus:ring-4 focus:ring-indigo-500/10 font-bold text-sm shadow-inner"
+                            />
+                            <div className="flex gap-4">
+                              <textarea
+                                rows={2}
+                                value={messageBody}
+                                onChange={(e) => setMessageBody(e.target.value)}
+                                placeholder="Write your message…"
+                                className="flex-1 px-6 py-4 bg-white border-none rounded-[1.5rem] outline-none focus:ring-4 focus:ring-indigo-500/10 font-medium text-sm shadow-inner resize-none"
                               />
-                              <button className="absolute right-4 top-1/2 -translate-y-1/2 p-2 text-slate-300 hover:text-indigo-600">
-                                <Paperclip size={20} />
+                              <button
+                                onClick={handleSendMessage}
+                                disabled={sendCandidateMessage.isPending}
+                                className="p-5 bg-indigo-600 text-white rounded-[1.8rem] shadow-2xl shadow-indigo-100 hover:scale-110 active:scale-95 transition-all disabled:opacity-50"
+                              >
+                                <Send size={24} fill="currentColor" />
                               </button>
                             </div>
-                            <button className="p-5 bg-indigo-600 text-white rounded-[1.8rem] shadow-2xl shadow-indigo-100 hover:scale-110 active:scale-95 transition-all">
-                              <Send size={24} fill="currentColor" />
-                            </button>
                           </div>
                         </div>
                       </div>
@@ -2019,10 +2403,13 @@ const Recruitment: React.FC = () => {
 
                     {candidateDetailTab === "timeline" && (
                       <div className="space-y-10 relative">
+                        {(candidateDetail.timeline || []).length === 0 && (
+                          <p className="text-sm text-slate-400 font-bold">No activity logged yet.</p>
+                        )}
                         <div className="absolute left-10 top-0 bottom-0 w-1 bg-slate-50" />
-                        {selectedCandidate.timeline.map((item, i) => (
+                        {(candidateDetail.timeline || []).map((item, i) => (
                           <motion.div
-                            key={i}
+                            key={item.id || i}
                             initial={{ opacity: 0, x: -20 }}
                             animate={{ opacity: 1, x: 0 }}
                             transition={{ delay: i * 0.1 }}
@@ -2040,12 +2427,17 @@ const Recruitment: React.FC = () => {
                                   {item.event}
                                 </h4>
                                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                  {item.date}
+                                  {item.createdAt ? new Date(item.createdAt).toLocaleString("en-NG", { dateStyle: "medium", timeStyle: "short" }) : ""}
                                 </p>
                               </div>
                               {item.note && (
                                 <p className="text-sm text-slate-500 font-medium italic leading-relaxed">
                                   "{item.note}"
+                                </p>
+                              )}
+                              {item.actorName && (
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-3">
+                                  — {item.actorName}
                                 </p>
                               )}
                             </div>
@@ -2056,91 +2448,177 @@ const Recruitment: React.FC = () => {
 
                     {candidateDetailTab === "interviews" && (
                       <div className="space-y-10">
-                        <div className="flex justify-between items-center">
-                          <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">
-                            Interview History
-                          </h3>
-                          <button className="px-6 py-3 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg">
-                            + Log Internal Feedback
-                          </button>
-                        </div>
+                        <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">
+                          Interview History
+                        </h3>
                         <div className="space-y-6">
-                          {interviews.filter((it: Interview) => it.candidateId === selectedCandidate.id).length === 0 && (
+                          {(candidateDetail.interviews || []).length === 0 && (
                             <p className="text-sm text-slate-400 font-bold">No interviews logged yet.</p>
                           )}
-                          {interviews
-                            .filter((it: Interview) => it.candidateId === selectedCandidate.id)
-                            .map((it: Interview) => (
+                          {(candidateDetail.interviews || []).map((it: Interview) => (
                             <div
                               key={it.id}
-                              className="bg-white p-10 rounded-[3rem] border border-slate-200 shadow-sm flex flex-col md:flex-row gap-10"
+                              className="bg-white p-10 rounded-[3rem] border border-slate-200 shadow-sm"
                             >
-                              <div className="flex-1 space-y-8">
-                                <div className="flex justify-between items-start">
-                                  <div>
-                                    <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-1">
-                                      {it.stage} Round
-                                    </p>
-                                    <h4 className="text-2xl font-black text-slate-800">
-                                      {it.type} Interview
-                                    </h4>
+                              <div className="flex flex-col md:flex-row gap-10">
+                                <div className="flex-1 space-y-8">
+                                  <div className="flex justify-between items-start">
+                                    <div>
+                                      <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-1">
+                                        {it.stage} Round
+                                      </p>
+                                      <h4 className="text-2xl font-black text-slate-800">
+                                        {it.type} Interview
+                                      </h4>
+                                    </div>
+                                    <span
+                                      className={`px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border ${
+                                        it.status === "Completed"
+                                          ? "bg-emerald-50 text-emerald-600 border-emerald-100"
+                                          : it.status === "Cancelled"
+                                            ? "bg-rose-50 text-rose-600 border-rose-100"
+                                            : "bg-amber-50 text-amber-600 border-amber-100"
+                                      }`}
+                                    >
+                                      {it.status}
+                                    </span>
                                   </div>
-                                  <span
-                                    className={`px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border ${
-                                      it.status === "Completed"
-                                        ? "bg-emerald-50 text-emerald-600 border-emerald-100"
-                                        : it.status === "Cancelled"
-                                          ? "bg-rose-50 text-rose-600 border-rose-100"
-                                          : "bg-amber-50 text-amber-600 border-amber-100"
-                                    }`}
-                                  >
-                                    {it.status}
+                                  <div className="grid grid-cols-2 gap-8">
+                                    <div className="flex items-center gap-4">
+                                      <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400">
+                                        <Calendar size={20} />
+                                      </div>
+                                      <div>
+                                        <p className="text-[9px] font-black text-slate-400 uppercase">
+                                          Date & Time
+                                        </p>
+                                        <p className="text-sm font-bold text-slate-700">
+                                          {it.dateTime ? new Date(it.dateTime).toLocaleString() : "TBD"}
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-4">
+                                      <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400">
+                                        <Users size={20} />
+                                      </div>
+                                      <div>
+                                        <p className="text-[9px] font-black text-slate-400 uppercase">
+                                          Interviewers
+                                        </p>
+                                        <p className="text-sm font-bold text-slate-700">
+                                          {(it.interviewerIds || []).length} assigned
+                                        </p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                                <button
+                                  onClick={() => {
+                                    if (scoringInterviewId === it.id) {
+                                      setScoringInterviewId(null);
+                                    } else {
+                                      setScoringInterviewId(it.id);
+                                      setScorecardForm(emptyScorecardForm);
+                                    }
+                                  }}
+                                  className="w-full md:w-64 p-8 bg-slate-50 rounded-[2.5rem] border border-slate-100 flex flex-col items-center justify-center text-center hover:border-indigo-200 transition-all"
+                                >
+                                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">
+                                    Internal Scorecard
+                                  </p>
+                                  <div className="w-20 h-20 bg-white rounded-[1.5rem] shadow-xl flex items-center justify-center mb-4">
+                                    {(it.scorecards || []).length > 0 ? (
+                                      <CheckCircle2 size={32} className="text-emerald-500" />
+                                    ) : (
+                                      <Clock size={32} className="text-slate-300" />
+                                    )}
+                                  </div>
+                                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                    {(it.scorecards || []).length > 0
+                                      ? `${it.scorecards!.length} scorecard${it.scorecards!.length === 1 ? "" : "s"} — add yours`
+                                      : "Log feedback"}
                                   </span>
-                                </div>
-                                <div className="grid grid-cols-2 gap-8">
-                                  <div className="flex items-center gap-4">
-                                    <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400">
-                                      <Calendar size={20} />
+                                </button>
+                              </div>
+
+                              {scoringInterviewId === it.id && (
+                                <div className="mt-8 pt-8 border-t border-slate-100 space-y-6">
+                                  {(
+                                    [
+                                      ["technical", "Technical"],
+                                      ["communication", "Communication"],
+                                      ["cultural", "Cultural Fit"],
+                                    ] as const
+                                  ).map(([key, label]) => (
+                                    <div key={key} className="space-y-2">
+                                      <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                        <span>{label}</span>
+                                        <span>{scorecardForm[key]} / 5</span>
+                                      </div>
+                                      <input
+                                        type="range"
+                                        min={1}
+                                        max={5}
+                                        value={scorecardForm[key]}
+                                        onChange={(e) =>
+                                          setScorecardForm((f) => ({ ...f, [key]: Number(e.target.value) }))
+                                        }
+                                        className="w-full accent-indigo-600"
+                                      />
                                     </div>
-                                    <div>
-                                      <p className="text-[9px] font-black text-slate-400 uppercase">
-                                        Date & Time
-                                      </p>
-                                      <p className="text-sm font-bold text-slate-700">
-                                        {it.dateTime ? new Date(it.dateTime).toLocaleString() : "TBD"}
-                                      </p>
+                                  ))}
+                                  <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                      Recommendation
+                                    </label>
+                                    <div className="flex gap-3">
+                                      {(["Hire", "Maybe", "No Hire"] as const).map((r) => (
+                                        <button
+                                          key={r}
+                                          type="button"
+                                          onClick={() => setScorecardForm((f) => ({ ...f, recommendation: r }))}
+                                          className={`flex-1 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+                                            scorecardForm.recommendation === r
+                                              ? "bg-indigo-600 text-white"
+                                              : "bg-slate-50 text-slate-500 hover:bg-slate-100"
+                                          }`}
+                                        >
+                                          {r}
+                                        </button>
+                                      ))}
                                     </div>
                                   </div>
-                                  <div className="flex items-center gap-4">
-                                    <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400">
-                                      <Users size={20} />
-                                    </div>
-                                    <div>
-                                      <p className="text-[9px] font-black text-slate-400 uppercase">
-                                        Interviewers
-                                      </p>
-                                      <p className="text-sm font-bold text-slate-700">
-                                        {(it.interviewerIds || []).length} assigned
-                                      </p>
-                                    </div>
+                                  <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                      Notes
+                                    </label>
+                                    <textarea
+                                      rows={3}
+                                      value={scorecardForm.notes}
+                                      onChange={(e) => setScorecardForm((f) => ({ ...f, notes: e.target.value }))}
+                                      placeholder="What stood out in this round?"
+                                      className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-medium text-sm resize-none"
+                                    />
+                                  </div>
+                                  <div className="flex justify-end gap-3">
+                                    <button
+                                      type="button"
+                                      onClick={() => setScoringInterviewId(null)}
+                                      className="px-6 py-3 bg-slate-50 text-slate-500 rounded-xl text-[10px] font-black uppercase tracking-widest"
+                                    >
+                                      Cancel
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={submitScorecard.isPending}
+                                      onClick={() => handleSubmitScorecard(it.id)}
+                                      className="px-8 py-3 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg disabled:opacity-50"
+                                    >
+                                      {submitScorecard.isPending ? "Submitting…" : "Submit Scorecard"}
+                                    </button>
                                   </div>
                                 </div>
-                              </div>
-                              <div className="w-full md:w-64 p-8 bg-slate-50 rounded-[2.5rem] border border-slate-100 flex flex-col items-center justify-center text-center">
-                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">
-                                  Internal Scorecard
-                                </p>
-                                <div className="w-20 h-20 bg-white rounded-[1.5rem] shadow-xl flex items-center justify-center mb-4">
-                                  {it.status === "Completed" ? (
-                                    <CheckCircle2 size={32} className="text-emerald-500" />
-                                  ) : (
-                                    <Clock size={32} className="text-slate-300" />
-                                  )}
-                                </div>
-                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                  {it.status === "Completed" ? "Feedback submitted" : "Pending"}
-                                </span>
-                              </div>
+                              )}
                             </div>
                           ))}
                         </div>
@@ -2154,7 +2632,7 @@ const Recruitment: React.FC = () => {
               <div className="p-10 border-t border-slate-100 bg-white flex gap-4 shrink-0 shadow-[0_-20px_40px_-20px_rgba(0,0,0,0.1)]">
                 <button
                   onClick={() => {
-                    updateCandidateStatus.mutate({ id: selectedCandidate.id, status: "rejected" });
+                    updateCandidateStatus.mutate({ id: candidateDetail.id, status: "rejected" });
                     setSelectedCandidate(null);
                   }}
                   className="px-10 py-5 bg-white border border-slate-200 text-rose-500 rounded-[2rem] font-black text-xs uppercase tracking-widest shadow-sm hover:bg-rose-50 transition-all flex items-center gap-2"
@@ -2169,13 +2647,8 @@ const Recruitment: React.FC = () => {
                   <Calendar size={18} /> Schedule
                 </button>
                 <button
-                  onClick={() => {
-                    const order = ["applied", "screening", "interview", "offer", "hired"];
-                    const idx = order.indexOf(selectedCandidate.status);
-                    const next = order[idx + 1];
-                    if (next) updateCandidateStatus.mutate({ id: selectedCandidate.id, status: next });
-                  }}
-                  disabled={selectedCandidate.status === "hired" || selectedCandidate.status === "rejected"}
+                  onClick={() => advanceCandidateStage(candidateDetail)}
+                  disabled={candidateDetail.status === "hired" || candidateDetail.status === "rejected"}
                   className="px-14 py-5 bg-indigo-600 text-white rounded-[2rem] font-black text-xs uppercase tracking-widest shadow-2xl shadow-indigo-100 hover:scale-105 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-40 disabled:hover:scale-100"
                 >
                   Advance Stage <ArrowRight size={18} />
@@ -2248,11 +2721,48 @@ const Recruitment: React.FC = () => {
                       onChange={(e) => setReqForm({ ...reqForm, department: e.target.value })}
                       className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-800"
                     >
-                      <option value="">Select department</option>
+                      <option value="">
+                        {departments.length === 0 ? "No departments yet" : "Select department"}
+                      </option>
                       {departments.map((d: any) => (
                         <option key={d.id} value={d.name}>{d.name}</option>
                       ))}
                     </select>
+                    {showAddDept ? (
+                      <div className="flex gap-2 pt-1">
+                        <input
+                          type="text"
+                          autoFocus
+                          value={newDeptName}
+                          onChange={(e) => setNewDeptName(e.target.value)}
+                          placeholder="New department name"
+                          className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none text-sm font-bold text-slate-800"
+                        />
+                        <button
+                          type="button"
+                          disabled={createDepartment.isPending || !newDeptName.trim()}
+                          onClick={handleAddDepartment}
+                          className="px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-50"
+                        >
+                          {createDepartment.isPending ? "Adding…" : "Add"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setShowAddDept(false); setNewDeptName(""); }}
+                          className="px-3 py-2.5 bg-slate-50 text-slate-400 rounded-xl"
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setShowAddDept(true)}
+                        className="text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:underline"
+                      >
+                        + Add new department
+                      </button>
+                    )}
                   </div>
                 </section>
 
@@ -2266,11 +2776,57 @@ const Recruitment: React.FC = () => {
                       onChange={(e) => setReqForm({ ...reqForm, location: e.target.value })}
                       className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-800"
                     >
-                      <option value="">Select location</option>
+                      <option value="">
+                        {locations.length === 0 ? "No locations yet" : "Select location"}
+                      </option>
                       {locations.map((l: any) => (
                         <option key={l.id} value={l.name}>{l.name}</option>
                       ))}
                     </select>
+                    {showAddLoc ? (
+                      <div className="space-y-2 pt-1">
+                        <input
+                          type="text"
+                          autoFocus
+                          value={newLocName}
+                          onChange={(e) => setNewLocName(e.target.value)}
+                          placeholder="Location name (e.g. Lagos HQ)"
+                          className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none text-sm font-bold text-slate-800"
+                        />
+                        <input
+                          type="text"
+                          value={newLocAddress}
+                          onChange={(e) => setNewLocAddress(e.target.value)}
+                          placeholder="Address"
+                          className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none text-sm font-bold text-slate-800"
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            disabled={createLocation.isPending || !newLocName.trim() || !newLocAddress.trim()}
+                            onClick={handleAddLocation}
+                            className="flex-1 px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-50"
+                          >
+                            {createLocation.isPending ? "Adding…" : "Add Location"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setShowAddLoc(false); setNewLocName(""); setNewLocAddress(""); }}
+                            className="px-3 py-2.5 bg-slate-50 text-slate-400 rounded-xl"
+                          >
+                            <X size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setShowAddLoc(true)}
+                        className="text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:underline"
+                      >
+                        + Add new location
+                      </button>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
@@ -2335,23 +2891,26 @@ const Recruitment: React.FC = () => {
                 </section>
 
                 <section className="p-8 bg-slate-50 rounded-[2.5rem] border border-slate-100">
-                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
                     Publish To Channels
                   </h4>
-                  <div className="grid grid-cols-3 gap-4">
-                    {[
-                      "Career Page",
-                      "LinkedIn",
-                      "Indeed",
-                      "Internal Board",
-                      "Glassdoor",
-                    ].map((channel) => (
+                  <p className="text-[10px] text-slate-400 font-bold mb-6">
+                    Career Page lists it on your public careers site; Internal Board posts an announcement to Slack, if connected.
+                  </p>
+                  <div className="grid grid-cols-2 gap-4">
+                    {["Career Page", "Internal Board"].map((channel) => (
                       <label
                         key={channel}
                         className="flex items-center gap-3 p-4 bg-white rounded-2xl border border-slate-100 cursor-pointer hover:border-indigo-300 transition-all"
                       >
                         <input
                           type="checkbox"
+                          checked={reqChannels.includes(channel)}
+                          onChange={(e) =>
+                            setReqChannels((chs) =>
+                              e.target.checked ? [...chs, channel] : chs.filter((c) => c !== channel),
+                            )
+                          }
                           className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/20"
                         />
                         <span className="text-xs font-black text-slate-700">
@@ -2369,6 +2928,11 @@ const Recruitment: React.FC = () => {
                     setShowJobPostingModal(false);
                     setReqForm(emptyReqForm);
                     setReqFormError(null);
+                    setShowAddDept(false);
+                    setNewDeptName("");
+                    setShowAddLoc(false);
+                    setNewLocName("");
+                    setNewLocAddress("");
                   }}
                   className="px-8 py-4 bg-white border border-slate-200 text-slate-500 rounded-2xl font-black text-xs uppercase tracking-widest"
                 >
@@ -2386,6 +2950,134 @@ const Recruitment: React.FC = () => {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Add Candidate Modal */}
+      <AnimatePresence>
+        {showAddCandidateModal && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-6">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowAddCandidateModal(false)}
+              className="absolute inset-0 bg-slate-900/80 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="relative bg-white w-full max-w-lg rounded-[3rem] shadow-2xl overflow-hidden flex flex-col"
+            >
+              <div className="bg-indigo-600 p-10 text-white flex justify-between items-start shrink-0">
+                <div>
+                  <h2 className="text-2xl font-black mb-1 tracking-tighter">
+                    Add Candidate
+                  </h2>
+                  <p className="text-indigo-100 text-sm font-medium">
+                    {currentJob ? `Adding to ${currentJob.title}` : "Adding to the talent pool"}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowAddCandidateModal(false)}
+                  className="p-3 bg-white/10 hover:bg-white/20 rounded-2xl transition-all"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+
+              <div className="p-10 space-y-6">
+                {candidateFormError && (
+                  <div className="p-4 bg-rose-50 border border-rose-100 text-rose-600 rounded-2xl text-xs font-bold">
+                    {candidateFormError}
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    Full Name
+                  </label>
+                  <input
+                    type="text"
+                    value={candidateForm.name}
+                    onChange={(e) => setCandidateForm({ ...candidateForm, name: e.target.value })}
+                    placeholder="e.g. Amaka Obi"
+                    className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-800"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    value={candidateForm.email}
+                    onChange={(e) => setCandidateForm({ ...candidateForm, email: e.target.value })}
+                    placeholder="candidate@example.com"
+                    className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-800"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                      Phone
+                    </label>
+                    <input
+                      type="text"
+                      value={candidateForm.phone}
+                      onChange={(e) => setCandidateForm({ ...candidateForm, phone: e.target.value })}
+                      placeholder="Optional"
+                      className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-800"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                      Current Title
+                    </label>
+                    <input
+                      type="text"
+                      value={candidateForm.currentTitle}
+                      onChange={(e) => setCandidateForm({ ...candidateForm, currentTitle: e.target.value })}
+                      placeholder="Optional"
+                      className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-800"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    Source
+                  </label>
+                  <select
+                    value={candidateForm.source}
+                    onChange={(e) => setCandidateForm({ ...candidateForm, source: e.target.value as Candidate["source"] })}
+                    className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-800"
+                  >
+                    <option value="Career Page">Career Page</option>
+                    <option value="LinkedIn">LinkedIn</option>
+                    <option value="Referral">Referral</option>
+                    <option value="Job Board">Job Board</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="p-10 bg-slate-50 border-t border-slate-100 flex justify-end gap-4 shrink-0">
+                <button
+                  onClick={() => setShowAddCandidateModal(false)}
+                  className="px-8 py-4 bg-white border border-slate-200 text-slate-500 rounded-2xl font-black text-xs uppercase tracking-widest"
+                >
+                  Cancel
+                </button>
+                <button
+                  disabled={createCandidate.isPending}
+                  onClick={handleAddCandidate}
+                  className="px-12 py-4 bg-indigo-600 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-xl shadow-indigo-100 hover:scale-105 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-50 disabled:hover:scale-100"
+                >
+                  <Plus size={16} /> {createCandidate.isPending ? "Adding…" : "Add Candidate"}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Interview Scheduling Wizard Modal */}
       <AnimatePresence>
         {showScheduleModal && (
@@ -2572,12 +3264,19 @@ const Recruitment: React.FC = () => {
                           />
                           <input
                             type="text"
+                            value={teamSearchQuery}
+                            onChange={(e) => setTeamSearchQuery(e.target.value)}
                             placeholder="Search team members..."
                             className="w-full pl-16 pr-6 py-5 bg-slate-50 border-none rounded-[2rem] outline-none font-bold text-slate-800"
                           />
                         </div>
                         <div className="grid grid-cols-3 gap-6">
-                          {teamMembers.map((m) => (
+                          {filteredTeamMembers.length === 0 && (
+                            <p className="col-span-3 text-sm text-slate-400 font-bold text-center py-6">
+                              No team members match "{teamSearchQuery}".
+                            </p>
+                          )}
+                          {filteredTeamMembers.map((m: any) => (
                             <label
                               key={m.id}
                               className="flex items-center gap-4 p-4 bg-white border border-slate-100 rounded-[2rem] cursor-pointer hover:border-indigo-200 transition-all group"
@@ -2610,21 +3309,24 @@ const Recruitment: React.FC = () => {
                             </label>
                           ))}
                         </div>
-                        <div className="p-6 bg-amber-50 rounded-3xl border border-amber-100 flex items-start gap-4">
-                          <AlertCircle
-                            className="text-amber-500 shrink-0 mt-1"
-                            size={20}
-                          />
-                          <div>
-                            <h4 className="text-sm font-black text-amber-800 mb-1">
-                              Availability Conflict
-                            </h4>
-                            <p className="text-xs text-amber-700 font-medium">
-                              Tunde Bakare has a conflict between 2:00 PM - 3:00
-                              PM on selected dates.
-                            </p>
+                        {interviewerConflicts.length > 0 && (
+                          <div className="p-6 bg-amber-50 rounded-3xl border border-amber-100 flex items-start gap-4">
+                            <AlertCircle
+                              className="text-amber-500 shrink-0 mt-1"
+                              size={20}
+                            />
+                            <div className="space-y-1">
+                              <h4 className="text-sm font-black text-amber-800 mb-1">
+                                Availability Conflict
+                              </h4>
+                              {interviewerConflicts.map((c, i) => (
+                                <p key={i} className="text-xs text-amber-700 font-medium">
+                                  {c.name} already has an interview around {c.time}.
+                                </p>
+                              ))}
+                            </div>
                           </div>
-                        </div>
+                        )}
                       </section>
                     )}
 
@@ -2633,13 +3335,21 @@ const Recruitment: React.FC = () => {
                         <div className="bg-slate-50 p-8 rounded-[2.5rem] border border-slate-100">
                           <div className="flex justify-between items-center mb-6">
                             <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest">
-                              May 2024
+                              {scheduleCalendarCursor.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
                             </h4>
                             <div className="flex gap-2">
-                              <button className="p-2 bg-white rounded-lg shadow-sm">
+                              <button
+                                type="button"
+                                onClick={() => setScheduleCalendarCursor((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1))}
+                                className="p-2 bg-white rounded-lg shadow-sm"
+                              >
                                 <ChevronLeft size={16} />
                               </button>
-                              <button className="p-2 bg-white rounded-lg shadow-sm">
+                              <button
+                                type="button"
+                                onClick={() => setScheduleCalendarCursor((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1))}
+                                className="p-2 bg-white rounded-lg shadow-sm"
+                              >
                                 <ChevronRight size={16} />
                               </button>
                             </div>
@@ -2650,37 +3360,63 @@ const Recruitment: React.FC = () => {
                             ))}
                           </div>
                           <div className="grid grid-cols-7 gap-2">
-                            {Array.from({ length: 31 }).map((_, i) => (
-                              <button
-                                key={i}
-                                className={`h-10 w-10 rounded-xl flex items-center justify-center text-xs font-bold transition-all ${i === 23 ? "bg-indigo-600 text-white shadow-lg" : "hover:bg-white hover:shadow-sm text-slate-600"}`}
-                              >
-                                {i + 1}
-                              </button>
-                            ))}
+                            {(() => {
+                              const year = scheduleCalendarCursor.getFullYear();
+                              const month = scheduleCalendarCursor.getMonth();
+                              const startOffset = new Date(year, month, 1).getDay();
+                              const daysInMonth = new Date(year, month + 1, 0).getDate();
+                              const selectedIso = scheduleForm.dateTime ? scheduleForm.dateTime.slice(0, 10) : null;
+                              const cells: React.ReactNode[] = [];
+                              for (let i = 0; i < startOffset; i++) cells.push(<div key={`pad-${i}`} />);
+                              for (let d = 1; d <= daysInMonth; d++) {
+                                const iso = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+                                const isSelected = iso === selectedIso;
+                                cells.push(
+                                  <button
+                                    key={iso}
+                                    type="button"
+                                    onClick={() => {
+                                      const time = scheduleForm.dateTime ? scheduleForm.dateTime.slice(11, 16) : "09:00";
+                                      setScheduleForm((f) => ({ ...f, dateTime: `${iso}T${time}` }));
+                                    }}
+                                    className={`h-10 w-10 rounded-xl flex items-center justify-center text-xs font-bold transition-all ${isSelected ? "bg-indigo-600 text-white shadow-lg" : "hover:bg-white hover:shadow-sm text-slate-600"}`}
+                                  >
+                                    {d}
+                                  </button>,
+                                );
+                              }
+                              return cells;
+                            })()}
                           </div>
                         </div>
                         <div className="space-y-4">
                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                            Best Available Slots
+                            {scheduleForm.dateTime ? "Time" : "Pick a day first"}
                           </label>
-                          {[
-                            "09:00 AM - 10:00 AM",
-                            "02:00 PM - 03:00 PM",
-                            "04:30 PM - 05:30 PM",
-                          ].map((slot) => (
-                            <button
-                              key={slot}
-                              className="w-full p-5 bg-white border border-slate-200 rounded-2xl text-left hover:border-indigo-500 hover:ring-1 hover:ring-indigo-500 transition-all flex justify-between items-center group"
-                            >
-                              <span className="font-black text-sm text-slate-700">
-                                {slot}
-                              </span>
-                              <span className="px-3 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-[9px] font-black uppercase tracking-widest">
-                                All Free
-                              </span>
-                            </button>
-                          ))}
+                          {scheduleForm.dateTime &&
+                            timeSlotOptions.map((slot) => (
+                              <button
+                                key={slot.time}
+                                type="button"
+                                onClick={() =>
+                                  setScheduleForm((f) => ({ ...f, dateTime: `${f.dateTime.slice(0, 10)}T${slot.time}` }))
+                                }
+                                className={`w-full p-5 border rounded-2xl text-left transition-all flex justify-between items-center group ${
+                                  scheduleForm.dateTime.slice(11, 16) === slot.time
+                                    ? "bg-indigo-50 border-indigo-500 ring-1 ring-indigo-500"
+                                    : "bg-white border-slate-200 hover:border-indigo-500 hover:ring-1 hover:ring-indigo-500"
+                                }`}
+                              >
+                                <span className="font-black text-sm text-slate-700">{slot.label}</span>
+                                <span
+                                  className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${
+                                    slot.busy ? "bg-rose-50 text-rose-600" : "bg-emerald-50 text-emerald-600"
+                                  }`}
+                                >
+                                  {slot.busy ? "Conflict" : "Free"}
+                                </span>
+                              </button>
+                            ))}
                         </div>
                       </section>
                     )}
@@ -2693,15 +3429,13 @@ const Recruitment: React.FC = () => {
                           </div>
                           <div className="flex-1">
                             <h4 className="text-lg font-black text-indigo-900 mb-1">
-                              Auto-Generated Link
+                              {scheduleForm.type === "In-person" ? "Location" : "Meeting Link"}
                             </h4>
                             <p className="text-sm font-medium text-indigo-700">
-                              A secure Google Meet link will be created and
-                              sent.
+                              {scheduleForm.type === "In-person"
+                                ? "Add the room or office address below."
+                                : "Paste your video call link below — it'll be included in the invite."}
                             </p>
-                          </div>
-                          <div className="px-6 py-3 bg-white/50 rounded-xl text-xs font-mono font-bold text-indigo-800 border border-indigo-200">
-                            meet.google.com/abc-xyz
                           </div>
                         </div>
                         <div className="space-y-4">
@@ -2722,13 +3456,11 @@ const Recruitment: React.FC = () => {
                     {scheduleStep === 5 && (
                       <section className="space-y-8">
                         <div className="flex gap-4 overflow-x-auto pb-4">
-                          {[
-                            "Standard Invite",
-                            "Technical Prep",
-                            "Casual Chat",
-                          ].map((t) => (
+                          {(["Standard Invite", "Technical Prep", "Casual Chat"] as const).map((t) => (
                             <button
                               key={t}
+                              type="button"
+                              onClick={() => buildDefaultInviteEmail(t)}
                               className="px-6 py-3 bg-white border border-slate-200 rounded-xl text-xs font-black text-slate-600 whitespace-nowrap hover:bg-slate-50"
                             >
                               {t}
@@ -2736,26 +3468,29 @@ const Recruitment: React.FC = () => {
                           ))}
                         </div>
                         <div className="bg-slate-50 p-8 rounded-[2.5rem] border border-slate-100 space-y-4">
-                          <div className="flex gap-4 border-b border-slate-200 pb-4">
+                          <div className="flex gap-4 border-b border-slate-200 pb-4 items-center">
                             <span className="text-xs font-black text-slate-400 w-16">
                               To:
                             </span>
                             <span className="text-sm font-bold text-slate-800">
-                              alex.rivera@example.com
+                              {candidates.find((c: Candidate) => c.id === scheduleForm.candidateId)?.email || "No candidate selected"}
                             </span>
                           </div>
-                          <div className="flex gap-4 border-b border-slate-200 pb-4">
+                          <div className="flex gap-4 border-b border-slate-200 pb-4 items-center">
                             <span className="text-xs font-black text-slate-400 w-16">
                               Subject:
                             </span>
-                            <span className="text-sm font-bold text-slate-800">
-                              Interview Invitation: Senior React Developer @
-                              ZenHR
-                            </span>
+                            <input
+                              type="text"
+                              value={inviteEmailSubject}
+                              onChange={(e) => setInviteEmailSubject(e.target.value)}
+                              className="flex-1 bg-transparent border-none outline-none text-sm font-bold text-slate-800"
+                            />
                           </div>
                           <textarea
+                            value={inviteEmailBody}
+                            onChange={(e) => setInviteEmailBody(e.target.value)}
                             className="w-full h-40 bg-transparent border-none outline-none font-medium text-sm text-slate-600 resize-none leading-relaxed"
-                            defaultValue={`Hi Alex,\n\nWe are excited to move forward! As discussed, we would like to schedule a Technical Deep Dive with our engineering team.\n\nPlease find the details attached.`}
                           />
                         </div>
                       </section>

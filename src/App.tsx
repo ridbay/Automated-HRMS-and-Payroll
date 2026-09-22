@@ -44,6 +44,7 @@ const LMSAdmin = React.lazy(() => import("./features/admin/LMSAdmin"));
 const EmployeeSurveys = React.lazy(() => import("./features/employee/EmployeeSurveys"));
 const EmployeeLMS = React.lazy(() => import("./features/employee/EmployeeLMS"));
 const Support = React.lazy(() => import("./features/support/Support"));
+const CompanyDocuments = React.lazy(() => import("./features/admin/CompanyDocuments"));
 
 // The app has no client-side router anywhere else — this is the one
 // deliberately narrow exception, letting the public careers page be reached
@@ -160,6 +161,8 @@ const AppContent: React.FC = () => {
         return <Profile initialTab="documents" />;
       case "help":
         return <Support />;
+      case "knowledge-base":
+        return <CompanyDocuments />;
       case "settings":
         return <Settings />;
       default:

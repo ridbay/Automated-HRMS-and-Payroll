@@ -86,6 +86,7 @@ export {
   useCreateCandidate,
   useUpdateCandidateStatus,
   useRateCandidate,
+  useSendCandidateMessage,
   candidateResumeUrl,
   useInterviews,
   useScheduleInterview,

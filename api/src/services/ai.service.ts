@@ -3,6 +3,7 @@ import { drizzle } from 'drizzle-orm/d1';
 import { eq, and, like } from 'drizzle-orm';
 import * as schema from '../db/schema';
 import { PayrollService } from './payroll.service';
+import { CompanyDocumentService } from './companyDocument.service';
 
 const genId = (prefix: string) => `${prefix}-${crypto.randomUUID().split('-')[0].toUpperCase()}`;
 
@@ -78,11 +79,23 @@ const TOOL_SCHEMAS = [
     description: 'List pending statutory compliance/remittance tasks (PAYE, pension, NHF, NSITF, ITF) with due dates and amounts. HR Admin / Super Admin only.',
     parameters: { type: 'object', properties: {} },
   },
+  {
+    name: 'searchCompanyDocuments',
+    description:
+      "Search the company's knowledge base — policy documents, the employee handbook, FAQs, and any other reference material HR/Admin has uploaded. Use this for any question about company policy, process, or general information that isn't covered by another tool. Available to every role.",
+    parameters: {
+      type: 'object',
+      properties: { query: { type: 'string', description: 'Keywords from the question to search for.' } },
+      required: ['query'],
+    },
+  },
 ] as const;
 
 const SYSTEM_PROMPT = (caller: AiCaller) =>
   `You are the ZenHR assistant, embedded in a Nigerian HRMS & payroll platform. The person asking is employee ${caller.employeeId} with role ${caller.role}. ` +
   `Answer using the provided tools — never invent numbers or facts about employees, leave, payroll, or compliance. ` +
+  `For questions about company policy, process, or "how does X work here", use searchCompanyDocuments before answering from general knowledge — this company's own documents take priority over anything you already know. ` +
+  `If searchCompanyDocuments returns no matches, say plainly that nothing in the company's uploaded documents covers it rather than guessing. When you do answer from a document, name which document it came from. ` +
   `If a tool result contains an "error" field, that means the question is outside what this person is allowed to see — explain that plainly and don't try another tool to work around it. ` +
   `Keep answers concise and concrete.`;
 
@@ -244,6 +257,21 @@ export class AiService {
     return (rows as any[]).map((t) => ({ title: t.title, type: t.type, dueDate: t.dueDate, amount: t.amount }));
   }
 
+  // No role check — every employee (the whole point of this tool) can search
+  // the company knowledge base. Tenant scoping is still enforced: search()
+  // only ever queries documents belonging to caller.companyId.
+  private async searchCompanyDocuments(caller: AiCaller, args: { query?: string }) {
+    if (!args.query || !args.query.trim()) return { error: 'A search query is required.' };
+    // Same "borrow the existing drizzle instance" pattern as getPayrollSummary
+    // above — the binding passed to the constructor is never used once .db
+    // is overwritten, so every query goes through this exact schema/instance.
+    const documents = new CompanyDocumentService({} as any);
+    (documents as any).db = this.db;
+    const results = await documents.search(caller.companyId, args.query);
+    if (!results.length) return { results: [], message: 'No matching documents found.' };
+    return { results };
+  }
+
   private readonly tools: Record<string, (caller: AiCaller, args: any) => Promise<any>> = {
     getEmployee: this.getEmployee.bind(this),
     searchEmployees: this.searchEmployees.bind(this),
@@ -253,6 +281,7 @@ export class AiService {
     getPayrollSummary: this.getPayrollSummary.bind(this),
     getOpenRequisitions: (caller) => this.getOpenRequisitions(caller),
     getComplianceTasksDue: (caller) => this.getComplianceTasksDue(caller),
+    searchCompanyDocuments: this.searchCompanyDocuments.bind(this),
   };
 
   private async logQuery(caller: AiCaller, question: string, toolsUsed: string[]) {

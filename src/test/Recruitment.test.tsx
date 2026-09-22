@@ -12,11 +12,24 @@ vi.mock('framer-motion', () => {
   const stripMotionProps = ({
     initial, animate, exit, transition, whileHover, whileTap, layout, layoutId, variants, ...rest
   }: any) => rest;
+  // Cached per tag so the same component type is reused across renders —
+  // an uncached Proxy trap returns a brand-new forwardRef() on every access,
+  // and React remounts (rather than updates) a subtree whose component type
+  // changed identity, which silently invalidates any DOM node reference a
+  // test captured before a re-render.
+  const componentCache = new Map<string, any>();
   const motion = new Proxy(
     {},
     {
-      get: (_target, tag: string) =>
-        React.forwardRef((props: any, ref: any) => React.createElement(tag, { ...stripMotionProps(props), ref })),
+      get: (_target, tag: string) => {
+        if (!componentCache.has(tag)) {
+          componentCache.set(
+            tag,
+            React.forwardRef((props: any, ref: any) => React.createElement(tag, { ...stripMotionProps(props), ref }))
+          );
+        }
+        return componentCache.get(tag);
+      },
     }
   );
   return {
@@ -34,6 +47,7 @@ vi.mock('../context/AuthContext', () => ({
 const {
   mockApproveReq, mockRejectReq, mockDeleteReq, mockCreateReq,
   mockScheduleInterview, mockCreateOffer, mockSendOffer, mockRespondToOffer, mockUpdateCandidateStatus,
+  mockCreateDepartment, mockCreateLocation, mockCreateCandidate,
 } = vi.hoisted(() => ({
   mockApproveReq: vi.fn(),
   mockRejectReq: vi.fn(),
@@ -44,6 +58,9 @@ const {
   mockSendOffer: vi.fn(),
   mockRespondToOffer: vi.fn(),
   mockUpdateCandidateStatus: vi.fn(),
+  mockCreateDepartment: vi.fn(),
+  mockCreateLocation: vi.fn(),
+  mockCreateCandidate: vi.fn(),
 }));
 
 vi.mock('../api/client', () => ({
@@ -53,9 +70,13 @@ vi.mock('../api/client', () => ({
   useRejectJobRequisition: vi.fn(() => ({ mutate: mockRejectReq, isPending: false })),
   useDeleteJobRequisition: vi.fn(() => ({ mutate: mockDeleteReq, isPending: false })),
   useDepartments: vi.fn(() => ({ data: [{ id: 'D1', name: 'Engineering' }] })),
+  useCreateDepartment: vi.fn(() => ({ mutate: mockCreateDepartment, isPending: false })),
   useLocations: vi.fn(() => ({ data: [{ id: 'L1', name: 'Lagos' }] })),
+  useCreateLocation: vi.fn(() => ({ mutate: mockCreateLocation, isPending: false })),
   useDirectory: vi.fn(() => ({ data: [{ id: 'EMP-1', name: 'Tunde Bakare', avatar: '', role: 'Engineer' }] })),
   useCandidates: vi.fn(() => ({ data: [] })),
+  useCandidate: vi.fn(() => ({ data: undefined })),
+  useCreateCandidate: vi.fn(() => ({ mutate: mockCreateCandidate, isPending: false })),
   useUpdateCandidateStatus: vi.fn(() => ({ mutate: mockUpdateCandidateStatus, isPending: false })),
   useInterviews: vi.fn(() => ({ data: [] })),
   useScheduleInterview: vi.fn(() => ({ mutate: mockScheduleInterview, isPending: false })),
@@ -64,6 +85,8 @@ vi.mock('../api/client', () => ({
   useCreateOffer: vi.fn(() => ({ mutate: mockCreateOffer, isPending: false })),
   useSendOffer: vi.fn(() => ({ mutate: mockSendOffer, isPending: false })),
   useRespondToOffer: vi.fn(() => ({ mutate: mockRespondToOffer, isPending: false })),
+  useSendCandidateMessage: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useSubmitScorecard: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   candidateResumeUrl: vi.fn(() => ''),
   downloadAuthenticatedBlob: vi.fn(),
 }));
@@ -102,6 +125,9 @@ describe('Recruitment', () => {
     mockSendOffer.mockClear();
     mockRespondToOffer.mockClear();
     mockUpdateCandidateStatus.mockClear();
+    mockCreateDepartment.mockClear();
+    mockCreateLocation.mockClear();
+    mockCreateCandidate.mockClear();
     mockUser.role = 'HR_ADMIN';
     vi.mocked(client.useJobRequisitions).mockReturnValue({ data: [], isLoading: false } as any);
     vi.mocked(client.useCandidates).mockReturnValue({ data: [] } as any);

@@ -5,6 +5,7 @@ import {
   createCandidate,
   updateCandidateStatus,
   rateCandidate,
+  sendCandidateMessage,
   getCandidateResume,
   listInterviews,
   scheduleInterview,
@@ -34,6 +35,7 @@ atsRoutes.get('/candidates/:id/resume', viewers, getCandidateResume);
 atsRoutes.post('/candidates', mutators, createCandidate);
 atsRoutes.patch('/candidates/:id/status', mutators, updateCandidateStatus);
 atsRoutes.patch('/candidates/:id/rating', mutators, rateCandidate);
+atsRoutes.post('/candidates/:id/message', mutators, sendCandidateMessage);
 
 // Interviews
 atsRoutes.get('/interviews', viewers, listInterviews);

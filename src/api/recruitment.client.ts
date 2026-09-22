@@ -118,6 +118,26 @@ export const useRateCandidate = () => {
   });
 };
 
+export const useSendCandidateMessage = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, subject, body }: { id: string; subject: string; body: string }) => {
+      const res = await fetchWithTenant(`${API_URL}/admin/ats/candidates/${id}/message`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subject, body }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to send message');
+      }
+      const json = await res.json();
+      return json.data;
+    },
+    onSuccess: (_, variables) => invalidateAts(queryClient, variables.id),
+  });
+};
+
 export const candidateResumeUrl = (candidateId: string) =>
   `${API_URL}/admin/ats/candidates/${candidateId}/resume`;
 
@@ -147,6 +167,8 @@ export const useScheduleInterview = () => {
       durationMinutes?: number;
       interviewerIds?: string[];
       meetingLink?: string;
+      emailSubject?: string;
+      emailBody?: string;
     }) => {
       const res = await fetchWithTenant(`${API_URL}/admin/ats/interviews`, {
         method: 'POST',

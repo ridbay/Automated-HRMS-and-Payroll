@@ -73,6 +73,7 @@ export interface Candidate {
   status: 'applied' | 'screening' | 'interview' | 'offer' | 'hired' | 'rejected';
   appliedDate: string;
   timeline?: {
+    id?: string;
     event: string;
     note?: string;
     actorName?: string;
