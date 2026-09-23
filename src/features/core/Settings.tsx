@@ -216,6 +216,8 @@ const Settings: React.FC = () => {
     }, {
       onSuccess: () => {
         popupAlert('Company identity and branding saved successfully!', 'Settings Saved');
+        // Notify BrandingContext to re-fetch and apply the new primary color
+        window.dispatchEvent(new Event('zenhr:branding_updated'));
       },
       onError: (err: any) => {
         popupAlert(err.message || 'Failed to update company settings', 'Error');
