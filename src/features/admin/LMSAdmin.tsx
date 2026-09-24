@@ -792,19 +792,23 @@ const LMSAdmin: React.FC = () => {
 
       <AssignCourseModal course={assigningCourse} onClose={() => setAssigningCourse(null)} />
 
-      <CourseDetailModal
-        isOpen={!!selectedDetailCourse}
-        onClose={() => setSelectedDetailCourse(null)}
-        course={selectedDetailCourse}
-        onOpenAssign={(c) => setAssigningCourse(c)}
-        onViewCertificate={(cert) => setViewingCertificate(cert)}
-      />
+      {selectedDetailCourse && (
+        <CourseDetailModal
+          isOpen={true}
+          onClose={() => setSelectedDetailCourse(null)}
+          course={selectedDetailCourse}
+          onOpenAssign={(c) => setAssigningCourse(c)}
+          onViewCertificate={(cert) => setViewingCertificate(cert)}
+        />
+      )}
 
-      <CertificateModal
-        isOpen={!!viewingCertificate}
-        onClose={() => setViewingCertificate(null)}
-        certificate={viewingCertificate}
-      />
+      {viewingCertificate && (
+        <CertificateModal
+          isOpen={true}
+          onClose={() => setViewingCertificate(null)}
+          certificate={viewingCertificate}
+        />
+      )}
     </div>
   );
 };
