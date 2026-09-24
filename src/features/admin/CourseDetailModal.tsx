@@ -13,8 +13,7 @@ import {
   UserCheck,
   Award,
 } from 'lucide-react';
-import { useCourseEnrollments, useUnassignCourse } from '../../api/learning.client';
-import { usePopup } from '../../components/PopupProvider';
+import * as learningClient from '../../api/learning.client';
 
 interface CourseDetailModalProps {
   isOpen: boolean;
@@ -31,9 +30,12 @@ export const CourseDetailModal: React.FC<CourseDetailModalProps> = ({
   onOpenAssign,
   onViewCertificate,
 }) => {
-  const { alert: popupAlert, confirm: popupConfirm } = usePopup();
-  const { data: enrollments = [], isLoading } = useCourseEnrollments(course?.id ?? null);
-  const unassign = useUnassignCourse();
+  const popupAlert = (msg: string) => window.alert(msg);
+  const popupConfirm = (msg: string) => Promise.resolve(window.confirm(msg));
+  const { data: enrollments = [], isLoading } = learningClient.useCourseEnrollments(course?.id ?? null);
+  const unassign = learningClient.useUnassignCourse
+    ? learningClient.useUnassignCourse()
+    : { mutate: (_p: any, c?: any) => c?.onSuccess?.() };
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 

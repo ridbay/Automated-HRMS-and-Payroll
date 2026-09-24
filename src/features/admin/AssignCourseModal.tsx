@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { X, Search, CheckCircle2, UserCheck, Trash2 } from 'lucide-react';
-import { useAssignCourse, useCourseEnrollments, useUnassignCourse } from '../../api/learning.client';
+import { useAssignCourse, useCourseEnrollments } from '../../api/learning.client';
 import { useDirectory } from '../../api/client';
 import { usePopup } from '../../components/PopupProvider';
 
@@ -14,7 +14,6 @@ export const AssignCourseModal: React.FC<AssignCourseModalProps> = ({ course, on
   const { data: employees = [], isLoading: isDirectoryLoading } = useDirectory();
   const { data: enrollments = [], isLoading: isEnrollmentsLoading } = useCourseEnrollments(course?.id ?? null);
   const assignCourse = useAssignCourse();
-  const unassign = useUnassignCourse();
 
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<string[]>([]);
@@ -45,20 +44,6 @@ export const AssignCourseModal: React.FC<AssignCourseModalProps> = ({ course, on
     } else {
       setSelected(filtered.map((e: any) => e.id));
     }
-  };
-
-  const handleUnassign = async (enrollmentId: string, employeeName: string) => {
-    if (popupConfirm) {
-      const ok = await popupConfirm(`Remove ${employeeName} from this course?`, 'Unassign Course');
-      if (!ok) return;
-    }
-    unassign.mutate(
-      { courseId: course.id, enrollmentId },
-      {
-        onSuccess: () => popupAlert(`Removed ${employeeName} from ${course.title}.`, 'Unassigned'),
-        onError: (err: any) => popupAlert(err.message || 'Failed to unassign.', 'Error'),
-      }
-    );
   };
 
   const handleAssign = () => {
@@ -93,19 +78,9 @@ export const AssignCourseModal: React.FC<AssignCourseModalProps> = ({ course, on
               {enrollments.map((e: any) => (
                 <span
                   key={e.enrollment.id}
-                  className="px-3 py-1 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-bold flex items-center gap-1.5 group"
+                  className="px-3 py-1 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-bold flex items-center gap-1.5"
                 >
                   <CheckCircle2 size={12} /> {e.employee?.name} {e.employee?.lastName}
-                  {e.enrollment?.id && (
-                    <button
-                      type="button"
-                      onClick={() => handleUnassign(e.enrollment.id, `${e.employee?.name} ${e.employee?.lastName}`)}
-                      className="text-emerald-500 hover:text-red-500 ml-1 transition-colors"
-                      title="Unassign"
-                    >
-                      <X size={11} />
-                    </button>
-                  )}
                 </span>
               ))}
             </div>
