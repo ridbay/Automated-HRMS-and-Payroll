@@ -57,12 +57,22 @@ describe('CompanyDocuments (admin knowledge base)', () => {
     expect(screen.getByText('handbook.pdf')).toBeInTheDocument();
   });
 
-  it('blocks submission when title or content is missing', () => {
+  it('blocks submission when the title is missing', () => {
     render(<CompanyDocuments />);
     fireEvent.click(screen.getByText('New Document'));
     fireEvent.click(screen.getByText('Add Document'));
 
-    expect(screen.getByText('Title and content are required.')).toBeInTheDocument();
+    expect(screen.getByText('Title is required.')).toBeInTheDocument();
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('blocks submission when there is a title but no content and no attached file', () => {
+    render(<CompanyDocuments />);
+    fireEvent.click(screen.getByText('New Document'));
+    fireEvent.change(screen.getByPlaceholderText('e.g. Remote Work Policy'), { target: { value: 'Dress Code' } });
+    fireEvent.click(screen.getByText('Add Document'));
+
+    expect(screen.getByText('Add content or attach a file for the AI assistant to read.')).toBeInTheDocument();
     expect(mockCreate).not.toHaveBeenCalled();
   });
 
@@ -72,7 +82,7 @@ describe('CompanyDocuments (admin knowledge base)', () => {
     render(<CompanyDocuments />);
     fireEvent.click(screen.getByText('New Document'));
     fireEvent.change(screen.getByPlaceholderText('e.g. Remote Work Policy'), { target: { value: 'Dress Code' } });
-    fireEvent.change(screen.getByPlaceholderText('Paste or type the policy text here...'), { target: { value: 'Business casual.' } });
+    fireEvent.change(screen.getByPlaceholderText('Paste or type the policy text here, or skip this if you attached a file...'), { target: { value: 'Business casual.' } });
     fireEvent.click(screen.getByText('Add Document'));
 
     expect(mockCreate).toHaveBeenCalledWith(

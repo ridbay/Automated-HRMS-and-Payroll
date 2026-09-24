@@ -28,7 +28,7 @@ export const askAi = async (c: Context<AppEnv>) => {
       return c.json({ error: 'The AI assistant is not configured for this environment yet.' }, 503);
     }
 
-    const service = new AiService(c.env.DB, c.env.AI);
+    const service = new AiService(c.env.DB, c.env.AI, c.env.AI_SEARCH);
     const result = await service.ask({ companyId, employeeId, role }, question.trim());
     return c.json({ data: result });
   } catch (error: any) {

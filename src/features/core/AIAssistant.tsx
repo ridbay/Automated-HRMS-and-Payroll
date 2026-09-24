@@ -12,13 +12,15 @@ interface Message {
 interface Props {
   open: boolean;
   onClose: () => void;
+  initialQuestion?: string;
+  onClearInitialQuestion?: () => void;
 }
 
 // Global chat panel — the model's actual data access is role-scoped
 // server-side (api/src/services/ai.service.ts), so what any given user can
 // ask about narrows automatically; this component doesn't need to know the
 // rules, just show whatever answer (or permission-denied explanation) comes back.
-const AIAssistant: React.FC<Props> = ({ open, onClose }) => {
+const AIAssistant: React.FC<Props> = ({ open, onClose, initialQuestion, onClearInitialQuestion }) => {
   const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -28,6 +30,18 @@ const AIAssistant: React.FC<Props> = ({ open, onClose }) => {
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, ask.isPending]);
+
+  useEffect(() => {
+    if (open && initialQuestion && initialQuestion.trim()) {
+      const question = initialQuestion.trim();
+      onClearInitialQuestion?.();
+      setMessages((m) => [...m, { role: "user", content: question }]);
+      ask.mutate(question, {
+        onSuccess: (result) => setMessages((m) => [...m, { role: "assistant", content: result.answer }]),
+        onError: (err: any) => setMessages((m) => [...m, { role: "assistant", content: `⚠️ ${err.message}` }]),
+      });
+    }
+  }, [open, initialQuestion, onClearInitialQuestion]);
 
   const handleSend = () => {
     const question = input.trim();
@@ -85,7 +99,7 @@ const AIAssistant: React.FC<Props> = ({ open, onClose }) => {
                       ? "As " + user.role.replace("_", " ") + ", you can ask about anyone or company-wide data."
                       : user?.role === "MANAGER"
                         ? "As a manager, you can ask about your own team."
-                        : "You can ask about your own profile, leave, and open roles."}
+                        : "You can ask about your own profile, leave, and open roles — plus public directory info (title, department, manager) for any coworker."}
                   </p>
                 </div>
               )}

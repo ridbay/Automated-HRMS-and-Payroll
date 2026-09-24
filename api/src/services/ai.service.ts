@@ -1,9 +1,11 @@
-import { D1Database, Ai } from '@cloudflare/workers-types';
+import { D1Database, Ai, AiSearchInstance } from '@cloudflare/workers-types';
 import { drizzle } from 'drizzle-orm/d1';
 import { eq, and, like } from 'drizzle-orm';
 import * as schema from '../db/schema';
 import { PayrollService } from './payroll.service';
 import { CompanyDocumentService } from './companyDocument.service';
+import { EmployeeService } from './employee.service';
+import { AiSearchService } from './aiSearch.service';
 
 const genId = (prefix: string) => `${prefix}-${crypto.randomUUID().split('-')[0].toUpperCase()}`;
 
@@ -26,7 +28,7 @@ const TOOL_SCHEMAS = [
   {
     name: 'getEmployee',
     description:
-      "Look up a single employee's profile (title, department, manager, hire date, status). Admins/HR can look up anyone; managers can look up themselves or their direct reports; everyone else can only look up themselves.",
+      "Look up a single employee. Admins/HR get the full profile (title, department, manager, hire date, status) for anyone; managers get the full profile for themselves or their direct reports. For anyone else, this returns only public directory info (name, title, department, manager, work email, location) — the same info visible to every employee on the Team Directory page — never salary, leave, performance, or other classified data.",
     parameters: {
       type: 'object',
       properties: { employeeId: { type: 'string', description: 'The employee id to look up. Omit to mean "me".' } },
@@ -34,7 +36,8 @@ const TOOL_SCHEMAS = [
   },
   {
     name: 'searchEmployees',
-    description: 'Search employees company-wide by name, optionally filtered by department. HR Admin / Super Admin only.',
+    description:
+      "Search employees company-wide by name, optionally filtered by department. HR Admin / Super Admin get full results; every other role gets public directory info only (name, title, department, manager) — available to everyone, not just admins.",
     parameters: {
       type: 'object',
       properties: {
@@ -94,6 +97,7 @@ const TOOL_SCHEMAS = [
 const SYSTEM_PROMPT = (caller: AiCaller) =>
   `You are the ZenHR assistant, embedded in a Nigerian HRMS & payroll platform. The person asking is employee ${caller.employeeId} with role ${caller.role}. ` +
   `Answer using the provided tools — never invent numbers or facts about employees, leave, payroll, or compliance. ` +
+  `Every employee, regardless of role, can ask about a coworker's public directory info (title, department, manager, work email) via getEmployee/searchEmployees — that's not privileged data. ` +
   `For questions about company policy, process, or "how does X work here", use searchCompanyDocuments before answering from general knowledge — this company's own documents take priority over anything you already know. ` +
   `If searchCompanyDocuments returns no matches, say plainly that nothing in the company's uploaded documents covers it rather than guessing. When you do answer from a document, name which document it came from. ` +
   `If a tool result contains an "error" field, that means the question is outside what this person is allowed to see — explain that plainly and don't try another tool to work around it. ` +
@@ -102,10 +106,34 @@ const SYSTEM_PROMPT = (caller: AiCaller) =>
 export class AiService {
   private db;
   private ai: Ai;
+  private aiSearch?: AiSearchInstance;
 
-  constructor(dbBinding: D1Database, aiBinding: Ai) {
+  constructor(dbBinding: D1Database, aiBinding: Ai, aiSearchBinding?: AiSearchInstance) {
     this.db = drizzle(dbBinding, { schema });
     this.ai = aiBinding;
+    this.aiSearch = aiSearchBinding;
+  }
+
+  // Reuses the exact field set already shown to every employee on the Team
+  // Directory page (EmployeeService.getDirectory) — this is the definition of
+  // "public/unclassified" employee info used throughout this file. Exposing
+  // it via chat introduces no new data access beyond what that page already
+  // grants the same audience.
+  private async getDirectoryEntry(caller: AiCaller, targetId: string) {
+    const employees = new EmployeeService({} as any);
+    (employees as any).db = this.db;
+    const directory = await employees.getDirectory(caller.companyId);
+    const match = (directory as any[]).find((e) => e.id === targetId);
+    if (!match) return { error: 'Employee not found.' };
+    return {
+      id: match.id,
+      name: `${match.name} ${match.lastName || ''}`.trim(),
+      title: match.role,
+      department: match.department,
+      location: match.location,
+      email: match.email,
+      managerName: match.managerName,
+    };
   }
 
   // ---------------- Role-scoping helpers ----------------
@@ -123,12 +151,15 @@ export class AiService {
     const targetId = args.employeeId || caller.employeeId;
 
     if (!isPrivileged(caller.role) && targetId !== caller.employeeId) {
+      let hasFullAccess = false;
       if (caller.role === 'MANAGER') {
         const reports = await this.getManagedEmployeeIds(caller.employeeId);
-        if (!reports.has(targetId)) return { error: "You can only look up your own profile or your direct reports'." };
-      } else {
-        return { error: 'You can only look up your own profile.' };
+        hasFullAccess = reports.has(targetId);
       }
+      // Not privileged and not a manager-of-this-person: fall back to the
+      // same public directory info everyone can already see on the Team
+      // Directory page, rather than refusing outright.
+      if (!hasFullAccess) return this.getDirectoryEntry(caller, targetId);
     }
 
     const emp = await this.db.query.employees.findFirst({
@@ -147,7 +178,25 @@ export class AiService {
   }
 
   private async searchEmployees(caller: AiCaller, args: { query?: string; departmentId?: string }) {
-    if (!isPrivileged(caller.role)) return { error: 'Only HR Admin/Super Admin can search across all employees.' };
+    if (!isPrivileged(caller.role)) {
+      // Public directory search, open to every role — same field set as
+      // getDirectoryEntry/the Team Directory page, not the full employee table.
+      const employees = new EmployeeService({} as any);
+      (employees as any).db = this.db;
+      let directory = (await employees.getDirectory(caller.companyId)) as any[];
+      if (args.query) {
+        const q = args.query.toLowerCase();
+        directory = directory.filter((e) => `${e.name} ${e.lastName || ''}`.toLowerCase().includes(q));
+      }
+      if (args.departmentId) directory = directory.filter((e) => e.department === args.departmentId);
+      return directory.slice(0, 10).map((e) => ({
+        id: e.id,
+        name: `${e.name} ${e.lastName || ''}`.trim(),
+        title: e.role,
+        department: e.department,
+        managerName: e.managerName,
+      }));
+    }
 
     const conditions = [eq(schema.employees.companyId, caller.companyId)];
     if (args.query) conditions.push(like(schema.employees.name, `%${args.query}%`));
@@ -258,10 +307,22 @@ export class AiService {
   }
 
   // No role check — every employee (the whole point of this tool) can search
-  // the company knowledge base. Tenant scoping is still enforced: search()
+  // the company knowledge base. Tenant scoping is still enforced: AiSearchService
+  // filters by the caller's companyId folder, and the keyword fallback below
   // only ever queries documents belonging to caller.companyId.
   private async searchCompanyDocuments(caller: AiCaller, args: { query?: string }) {
     if (!args.query || !args.query.trim()) return { error: 'A search query is required.' };
+
+    if (this.aiSearch) {
+      try {
+        const results = await new AiSearchService(this.aiSearch).search(caller.companyId, args.query);
+        if (results.length) return { results };
+      } catch (err) {
+        // Fall through to the keyword-search fallback below (e.g. instance
+        // not yet provisioned/indexed) rather than failing the whole answer.
+      }
+    }
+
     // Same "borrow the existing drizzle instance" pattern as getPayrollSummary
     // above — the binding passed to the constructor is never used once .db
     // is overwritten, so every query goes through this exact schema/instance.

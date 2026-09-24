@@ -12,7 +12,7 @@ export class StorageService {
   /**
    * Uploads a file to Cloudflare R2 under a given key prefix.
    */
-  async uploadFile(keyPrefix: string, file: File, customFileName?: string): Promise<string> {
+  async uploadFile(keyPrefix: string, file: File, customFileName?: string, customMetadata?: Record<string, string>): Promise<string> {
     const cleanPrefix = keyPrefix.replace(/\/+$/, '');
     const fileName = customFileName || `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9_.-]/g, '_')}`;
     const key = `${cleanPrefix}/${fileName}`;
@@ -25,6 +25,7 @@ export class StorageService {
     const buffer = await file.arrayBuffer();
     await this.bucket.put(key, buffer, {
       httpMetadata: { contentType: file.type || 'application/octet-stream' },
+      ...(customMetadata ? { customMetadata } : {}),
     });
 
     return key;

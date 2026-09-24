@@ -22,10 +22,22 @@ describe('Ai Service', () => {
   const manager = { companyId: 'comp-1', employeeId: 'mgr-1', role: 'MANAGER' };
   const employee = { companyId: 'comp-1', employeeId: 'emp-1', role: 'EMPLOYEE' };
 
+  // EmployeeService.getDirectory() (the public-info source for getEmployee/
+  // searchEmployees fallbacks) runs a raw `.select().from().where()` query,
+  // not `db.query.employees.*` — mocked separately so tests can set the rows
+  // a directory lookup should see without touching the privileged-path mocks.
+  let directoryRows: any[];
+
   beforeEach(() => {
+    directoryRows = [];
     mockDb = {
       insert: vi.fn().mockReturnThis(),
       values: vi.fn().mockResolvedValue(undefined),
+      select: vi.fn(() => ({
+        from: vi.fn(() => ({
+          where: vi.fn(() => Promise.resolve(directoryRows)),
+        })),
+      })),
       query: {
         employees: { findFirst: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
         leaveBalances: { findMany: vi.fn().mockResolvedValue([]) },
@@ -47,6 +59,14 @@ describe('Ai Service', () => {
     (service as any).ai = mockAi;
   });
 
+  // Pulls the JSON a tool actually returned to the model out of the second
+  // (post-tool-result) ai.run() call, so tests can assert on the exact field
+  // shape rather than just on which DB methods fired.
+  const getToolOutput = () => {
+    const toolMessage = mockAi.run.mock.calls[1][1].messages.find((m: any) => m.role === 'tool');
+    return JSON.parse(toolMessage.content);
+  };
+
   describe('getEmployee (via ask)', () => {
     it('lets an admin look up any employee', async () => {
       mockDb.query.employees.findFirst.mockResolvedValueOnce({
@@ -60,11 +80,31 @@ describe('Ai Service', () => {
       expect(mockDb.query.employees.findFirst).toHaveBeenCalled();
     });
 
-    it('blocks a regular employee from looking up someone else, without querying the DB', async () => {
-      mockAi.run = mockAiRun([{ name: 'getEmployee', arguments: { employeeId: 'someone-else' } }], "You can only look up your own profile.");
+    it('gives a regular employee only public directory info about someone else, never the full profile', async () => {
+      directoryRows = [
+        {
+          id: 'someone-else', name: 'Sam', lastName: 'Iyke', email: 'sam@co.com', phone: '0801-555-0100', role: 'Designer',
+          department: 'Design', location: 'Lagos', avatar: null, managerId: 'mgr-1', managerName: 'Manager Mike',
+        },
+      ];
+      mockAi.run = mockAiRun([{ name: 'getEmployee', arguments: { employeeId: 'someone-else' } }], 'Sam is a Designer in Design.');
 
-      await service.ask(employee, "What's someone-else's title?");
+      const result = await service.ask(employee, "What's someone-else's title?");
+
       expect(mockDb.query.employees.findFirst).not.toHaveBeenCalled();
+      expect(result.answer).toBe('Sam is a Designer in Design.');
+      expect(getToolOutput()).toEqual({
+        id: 'someone-else', name: 'Sam Iyke', title: 'Designer', department: 'Design',
+        location: 'Lagos', email: 'sam@co.com', managerName: 'Manager Mike',
+      });
+    });
+
+    it('returns an error, not a full profile, when the looked-up employee is not in the directory', async () => {
+      directoryRows = [];
+      mockAi.run = mockAiRun([{ name: 'getEmployee', arguments: { employeeId: 'ghost' } }], "Couldn't find that employee.");
+
+      await service.ask(employee, "What's ghost's title?");
+      expect(getToolOutput()).toEqual({ error: 'Employee not found.' });
     });
 
     it("lets a manager look up their own direct report", async () => {
@@ -77,12 +117,17 @@ describe('Ai Service', () => {
       expect(mockDb.query.employees.findFirst).toHaveBeenCalled();
     });
 
-    it("blocks a manager from looking up someone outside their team", async () => {
+    it("gives a manager only public directory info for someone outside their team, not the full profile", async () => {
       mockDb.query.employees.findMany.mockResolvedValueOnce([{ id: 'report-1' }]); // manager's reports don't include 'stranger'
-      mockAi.run = mockAiRun([{ name: 'getEmployee', arguments: { employeeId: 'stranger' } }], "You can't see that.");
+      directoryRows = [{ id: 'stranger', name: 'Stranger', lastName: 'Danger', email: 's@co.com', phone: '000', role: 'Analyst', department: 'Finance', location: 'Abuja', avatar: null, managerId: 'mgr-2', managerName: 'Other Manager' }];
+      mockAi.run = mockAiRun([{ name: 'getEmployee', arguments: { employeeId: 'stranger' } }], "Stranger is an Analyst in Finance.");
 
       await service.ask(manager, "What department is stranger in?");
       expect(mockDb.query.employees.findFirst).not.toHaveBeenCalled();
+      expect(getToolOutput()).toEqual({
+        id: 'stranger', name: 'Stranger Danger', title: 'Analyst', department: 'Finance',
+        location: 'Abuja', email: 's@co.com', managerName: 'Other Manager',
+      });
     });
 
     it('defaults employeeId to "self" when the model omits it', async () => {
@@ -96,13 +141,23 @@ describe('Ai Service', () => {
   });
 
   describe('searchEmployees', () => {
-    it('is blocked entirely for non-admins', async () => {
-      mockAi.run = mockAiRun([{ name: 'searchEmployees', arguments: { query: 'Ada' } }], "Can't search.");
-      await service.ask(manager, 'Find everyone named Ada');
+    it('returns public directory results for non-admins instead of the full employee table', async () => {
+      directoryRows = [
+        { id: 'emp-99', name: 'Ada', lastName: 'Lovelace', email: 'ada@co.com', phone: '000', role: 'Engineer', department: 'Engineering', location: 'Lagos', avatar: null, managerId: 'mgr-1', managerName: 'Manager Mike' },
+        { id: 'emp-50', name: 'Zed', lastName: 'Okafor', email: 'zed@co.com', phone: '000', role: 'Sales Rep', department: 'Sales', location: 'Lagos', avatar: null, managerId: 'mgr-2', managerName: 'Other Manager' },
+      ];
+      mockAi.run = mockAiRun([{ name: 'searchEmployees', arguments: { query: 'Ada' } }], 'Found Ada, an Engineer.');
+
+      const result = await service.ask(manager, 'Find everyone named Ada');
+
       expect(mockDb.query.employees.findMany).not.toHaveBeenCalled();
+      expect(result.answer).toBe('Found Ada, an Engineer.');
+      expect(getToolOutput()).toEqual([
+        { id: 'emp-99', name: 'Ada Lovelace', title: 'Engineer', department: 'Engineering', managerName: 'Manager Mike' },
+      ]);
     });
 
-    it('is allowed for HR Admin', async () => {
+    it('is allowed for HR Admin, returning the full employee table', async () => {
       mockAi.run = mockAiRun([{ name: 'searchEmployees', arguments: { query: 'Ada' } }], 'Found Ada.');
       await service.ask(admin, 'Find everyone named Ada');
       expect(mockDb.query.employees.findMany).toHaveBeenCalled();
@@ -167,6 +222,65 @@ describe('Ai Service', () => {
 
       const result = await service.ask(employee, 'Is there a parking allowance?');
       expect(result.answer).toContain("Nothing in the company's documents");
+    });
+
+    describe('with an AI_SEARCH binding configured', () => {
+      let mockAiSearchInstance: any;
+      let searchService: AiService;
+
+      beforeEach(() => {
+        mockAiSearchInstance = { search: vi.fn() };
+        searchService = new AiService({} as any, {} as any, mockAiSearchInstance);
+        (searchService as any).db = mockDb;
+        (searchService as any).ai = mockAi;
+      });
+
+      it('answers from AI Search results, scoped to the caller\'s company folder, without touching the keyword-search table', async () => {
+        mockAiSearchInstance.search.mockResolvedValueOnce({
+          search_query: 'remote work',
+          chunks: [{ id: 'c1', type: 'text', score: 0.9, text: 'Up to 3 days remote per week.', item: { key: 'companies/comp-1/documents/DOC-1-handbook.pdf', metadata: { title: 'Remote Work Policy' } } }],
+        });
+        mockAi.run = mockAiRun(
+          [{ name: 'searchCompanyDocuments', arguments: { query: 'remote work' } }],
+          'Up to 3 days remote per week, per the Remote Work Policy.'
+        );
+
+        const result = await searchService.ask(employee, 'How many days can I work remotely?');
+
+        expect(mockAiSearchInstance.search).toHaveBeenCalledWith(
+          expect.objectContaining({ query: 'remote work', ai_search_options: expect.objectContaining({ retrieval: expect.objectContaining({ filters: { folder: 'companies/comp-1/documents/' } }) }) })
+        );
+        expect(mockDb.query.companyDocuments.findMany).not.toHaveBeenCalled();
+        expect(result.answer).toBe('Up to 3 days remote per week, per the Remote Work Policy.');
+      });
+
+      it('falls back to the keyword-search table when AI Search throws', async () => {
+        mockAiSearchInstance.search.mockRejectedValueOnce(new Error('instance not indexed yet'));
+        mockDb.query.companyDocuments.findMany.mockResolvedValueOnce([
+          { id: 'DOC-1', title: 'Remote Work Policy', content: 'Employees may work remotely up to 3 days a week.' },
+        ]);
+        mockAi.run = mockAiRun(
+          [{ name: 'searchCompanyDocuments', arguments: { query: 'remote work' } }],
+          'Up to 3 days remote per week.'
+        );
+
+        const result = await searchService.ask(employee, 'How many days can I work remotely?');
+
+        expect(mockDb.query.companyDocuments.findMany).toHaveBeenCalled();
+        expect(result.answer).toBe('Up to 3 days remote per week.');
+      });
+
+      it('falls back to the keyword-search table when AI Search returns no chunks', async () => {
+        mockAiSearchInstance.search.mockResolvedValueOnce({ search_query: 'parking', chunks: [] });
+        mockDb.query.companyDocuments.findMany.mockResolvedValueOnce([]);
+        mockAi.run = mockAiRun(
+          [{ name: 'searchCompanyDocuments', arguments: { query: 'parking' } }],
+          "Nothing in the company's documents covers parking."
+        );
+
+        await searchService.ask(employee, 'Is there parking?');
+        expect(mockDb.query.companyDocuments.findMany).toHaveBeenCalled();
+      });
     });
   });
 

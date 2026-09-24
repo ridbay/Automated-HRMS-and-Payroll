@@ -12,10 +12,12 @@ export interface DocumentActor {
 }
 
 // Company-wide knowledge base the AI assistant searches (searchCompanyDocuments
-// tool in ai.service.ts). There is no PDF/DOCX text-extraction pipeline in
-// this Worker, so `content` is plain text supplied directly by the admin —
-// an optional attached file is stored in R2 purely for reference/download
-// and is never itself parsed or searched.
+// tool in ai.service.ts). When an admin attaches a file, Cloudflare AI Search
+// (bound as AI_SEARCH — see aiSearch.service.ts) indexes it directly out of
+// R2 under `companies/{companyId}/documents/`, extracting and chunking PDFs,
+// DOCX, etc. automatically, so `content` is only required when there's no
+// file to index (a manually pasted/typed policy) — CompanyDocumentService.search()
+// (keyword scoring) remains a fallback for when AI Search isn't configured.
 export class CompanyDocumentService {
   private db;
 
@@ -26,13 +28,13 @@ export class CompanyDocumentService {
   async create(
     companyId: string,
     actor: DocumentActor,
-    data: { title: string; content: string; file?: File | null },
+    data: { title: string; content?: string; file?: File | null },
     bucket?: R2Bucket
   ) {
     const title = data.title?.trim();
     const content = data.content?.trim();
-    if (!title || !content) {
-      throw new Error('Title and content are required.');
+    if (!title || (!content && !data.file)) {
+      throw new Error('Title and either content or an attached file are required.');
     }
 
     const id = genId();
@@ -41,7 +43,7 @@ export class CompanyDocumentService {
 
     if (data.file) {
       const storage = new StorageService(bucket);
-      fileKey = await storage.uploadFile(`companies/${companyId}/documents`, data.file, `${id}-${data.file.name}`);
+      fileKey = await storage.uploadFile(`companies/${companyId}/documents`, data.file, `${id}-${data.file.name}`, { title });
       fileName = data.file.name;
     }
 
@@ -49,7 +51,7 @@ export class CompanyDocumentService {
       id,
       companyId,
       title,
-      content,
+      content: content || 'Content indexed automatically from the attached file.',
       fileKey,
       fileName,
       uploadedById: actor.id,

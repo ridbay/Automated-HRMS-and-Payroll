@@ -34,17 +34,15 @@ const CompanyDocuments: React.FC = () => {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0] || null;
     setFile(selected);
-    // Plain-text/markdown files are the one case we can read for the admin
-    // automatically — anything else (PDF, DOCX) still needs the content
-    // typed/pasted in, since there's no text-extraction pipeline for those.
-    if (selected && /\.(txt|md)$/i.test(selected.name)) {
-      selected.text().then((text) => setContent((prev) => prev || text));
-    }
   };
 
   const handleSubmit = () => {
-    if (!title.trim() || !content.trim()) {
-      setFormError("Title and content are required.");
+    if (!title.trim()) {
+      setFormError("Title is required.");
+      return;
+    }
+    if (!content.trim() && !file) {
+      setFormError("Add content or attach a file for the AI assistant to read.");
       return;
     }
     setFormError(null);
@@ -170,19 +168,7 @@ const CompanyDocuments: React.FC = () => {
               </div>
               <div>
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">
-                  Content <span className="normal-case font-medium text-slate-400">— what the AI assistant will search and quote from</span>
-                </label>
-                <textarea
-                  value={content}
-                  onChange={(e) => setContent(e.target.value)}
-                  rows={8}
-                  placeholder="Paste or type the policy text here..."
-                  className="w-full px-5 py-3.5 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-medium outline-none focus:border-indigo-500 focus:bg-white transition-all resize-none"
-                />
-              </div>
-              <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">
-                  Attach original file (optional)
+                  Attach document <span className="normal-case font-medium text-slate-400">— PDF, DOCX, TXT, etc.</span>
                 </label>
                 <input
                   type="file"
@@ -190,8 +176,20 @@ const CompanyDocuments: React.FC = () => {
                   className="w-full text-xs font-bold text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-black file:uppercase file:bg-indigo-50 file:text-indigo-600 hover:file:bg-indigo-100"
                 />
                 <p className="text-[10px] text-slate-400 font-medium mt-2">
-                  Kept for reference/download only — the AI only reads the Content field above, so make sure it's filled in for PDFs and other non-text files.
+                  The AI assistant automatically extracts and indexes the file's contents — no need to retype anything. New uploads can take a few minutes to become searchable.
                 </p>
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">
+                  Content <span className="normal-case font-medium text-slate-400">— optional if you attached a file above</span>
+                </label>
+                <textarea
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  rows={8}
+                  placeholder="Paste or type the policy text here, or skip this if you attached a file..."
+                  className="w-full px-5 py-3.5 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-medium outline-none focus:border-indigo-500 focus:bg-white transition-all resize-none"
+                />
               </div>
             </div>
 

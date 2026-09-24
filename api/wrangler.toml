@@ -24,3 +24,15 @@ bucket_name = "zenhr-storage"
 
 [ai]
 binding = "AI"
+
+# Cloudflare AI Search (formerly AutoRAG) — indexes uploaded company
+# knowledge-base documents straight out of the zenhr-storage R2 bucket
+# (PDF/DOCX/etc extracted and chunked automatically). Scoped at instance
+# creation to "companies/*/documents/**" only, so it never sees candidate
+# resumes or branding assets living under other prefixes in the same bucket.
+# `remote = true` because there's no local emulation of the vector index —
+# `wrangler dev` always hits the real hosted instance.
+[[ai_search]]
+binding = "AI_SEARCH"
+instance_name = "zenhr-company-docs"
+remote = true

@@ -35,7 +35,7 @@ describe('AIAssistant', () => {
 
   it('shows a role-specific hint in the empty state', () => {
     render(<AIAssistant open onClose={vi.fn()} />);
-    expect(screen.getByText('You can ask about your own profile, leave, and open roles.')).toBeInTheDocument();
+    expect(screen.getByText('You can ask about your own profile, leave, and open roles — plus public directory info (title, department, manager) for any coworker.')).toBeInTheDocument();
 
     mockUser.role = 'MANAGER';
     const { unmount } = render(<AIAssistant open onClose={vi.fn()} />);

@@ -8,6 +8,7 @@ import {
   Settings,
   Sparkles,
   Menu,
+  ArrowRight,
 } from "lucide-react";
 import { useNavigation } from "../context/NavigationContext";
 import { useAuth } from "../context/AuthContext";
@@ -16,13 +17,43 @@ import AIAssistant from "../features/core/AIAssistant";
 import CommandPalette from "../components/CommandPalette";
 import NotificationDropdown from "../components/NotificationDropdown";
 
+const AI_PROMPT_SUGGESTIONS = [
+  "Ask ZenHR AI anything… (e.g. leave, payroll, team)",
+  "Ask AI: 'How many leave days do I have left?'",
+  "Ask AI: 'Who is on my department team?'",
+  "Ask AI: 'When is the next payroll date?'",
+  "Ask AI: 'What open positions do we have?'",
+];
+
 const Header: React.FC = () => {
   const { activeTab, setActiveTab, toggleMobileSidebar } = useNavigation();
   const { user, logout } = useAuth();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showAssistant, setShowAssistant] = useState(false);
+  const [assistantInitialQuery, setAssistantInitialQuery] = useState<string | undefined>(undefined);
+  const [topbarAiInput, setTopbarAiInput] = useState("");
+  const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+
+  // Rotate friendly placeholder suggestions when user hasn't typed anything
+  useEffect(() => {
+    if (topbarAiInput) return;
+    const interval = setInterval(() => {
+      setPlaceholderIndex((prev) => (prev + 1) % AI_PROMPT_SUGGESTIONS.length);
+    }, 4500);
+    return () => clearInterval(interval);
+  }, [topbarAiInput]);
+
+  const handleAiSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const query = topbarAiInput.trim();
+    if (query) {
+      setAssistantInitialQuery(query);
+      setTopbarAiInput("");
+    }
+    setShowAssistant(true);
+  };
 
   const formattedTitle = activeTab
     .split("-")
