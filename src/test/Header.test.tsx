@@ -92,4 +92,40 @@ describe('Header Component', () => {
     const { container } = renderHeader(null as any);
     expect(container.firstChild).toBeNull();
   });
+
+  it('renders topbar AI input space with friendly placeholder and allows typing', () => {
+    renderHeader();
+
+    const aiInput = screen.getByLabelText(/Ask ZenHR AI anything/i) as HTMLInputElement;
+    expect(aiInput).toBeInTheDocument();
+    expect(aiInput.placeholder).toMatch(/Ask (ZenHR )?AI/i);
+
+    fireEvent.change(aiInput, { target: { value: 'How many leave days do I have?' } });
+    expect(aiInput.value).toBe('How many leave days do I have?');
+  });
+
+  it('submits query from topbar AI input and opens AI assistant drawer', () => {
+    renderHeader();
+
+    const aiInput = screen.getByLabelText(/Ask ZenHR AI anything/i) as HTMLInputElement;
+    fireEvent.change(aiInput, { target: { value: 'When is the next payday?' } });
+
+    // Submit via form / Enter key
+    fireEvent.submit(aiInput.closest('form')!);
+
+    // AIAssistant should be open with the question
+    expect(screen.getByText('When is the next payday?')).toBeInTheDocument();
+    expect(screen.getByText('ZenHR Assistant')).toBeInTheDocument();
+    expect(aiInput.value).toBe('');
+  });
+
+  it('opens AI assistant drawer when clicking the Sparkles button in topbar', () => {
+    renderHeader();
+
+    const openAiBtn = screen.getByTitle('ZenHR AI Assistant');
+    expect(openAiBtn).toBeInTheDocument();
+
+    fireEvent.click(openAiBtn);
+    expect(screen.getByText('ZenHR Assistant')).toBeInTheDocument();
+  });
 });

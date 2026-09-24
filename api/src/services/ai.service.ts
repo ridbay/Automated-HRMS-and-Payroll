@@ -374,13 +374,30 @@ export class AiService {
         return { answer, toolsUsed };
       }
 
-      messages.push({ role: 'assistant', content: result.response || '', tool_calls: calls });
+      // ai.run() hands back its own simplified { name, arguments } shape for
+      // tool_calls, but replaying that same history back into the next
+      // ai.run() call is validated against the strict OpenAI
+      // ChatCompletionMessageToolCall schema (id/type/function required) —
+      // feeding back exactly what came out fails that validation. Assign a
+      // synthetic id per call and use it to match the corresponding tool
+      // result message's required tool_call_id.
+      const idsForCalls = calls.map((_: any, idx: number) => `call_${i}_${idx}`);
+      messages.push({
+        role: 'assistant',
+        content: result.response || '',
+        tool_calls: calls.map((call: any, idx: number) => ({
+          id: idsForCalls[idx],
+          type: 'function',
+          function: { name: call.name, arguments: JSON.stringify(call.arguments || {}) },
+        })),
+      });
 
-      for (const call of calls) {
+      for (let idx = 0; idx < calls.length; idx++) {
+        const call = calls[idx];
         toolsUsed.push(call.name);
         const fn = this.tools[call.name];
         const output = fn ? await fn(caller, call.arguments || {}).catch((err: any) => ({ error: err.message })) : { error: `Unknown tool "${call.name}"` };
-        messages.push({ role: 'tool', name: call.name, content: JSON.stringify(output) });
+        messages.push({ role: 'tool', tool_call_id: idsForCalls[idx], content: JSON.stringify(output) });
       }
     }
 

@@ -99,4 +99,40 @@ export class AdminLearningController {
     const enrollments = await learningService.getCourseEnrollments(courseId);
     return c.json({ data: enrollments });
   }
+
+  static async getOverview(c: Context<any>) {
+    const companyId = c.get('tenantId') || c.get('companyId');
+    if (!companyId) return c.json({ error: 'Tenant not found' }, 400);
+
+    const learningService = new LearningService(c.env.DB);
+    const overview = await learningService.getLMSOverview(companyId);
+    return c.json({ data: overview });
+  }
+
+  static async unassignCourse(c: Context<any>) {
+    const companyId = c.get('tenantId') || c.get('companyId');
+    if (!companyId) return c.json({ error: 'Tenant not found' }, 400);
+    const enrollmentId = c.req.param('enrollmentId');
+    if (!enrollmentId) return c.json({ error: 'Enrollment ID is required' }, 400);
+
+    const learningService = new LearningService(c.env.DB);
+    await learningService.unassignCourse(enrollmentId);
+    return c.json({ success: true });
+  }
+
+  static async assignByDepartment(c: Context<any>) {
+    const companyId = c.get('tenantId') || c.get('companyId');
+    if (!companyId) return c.json({ error: 'Tenant not found' }, 400);
+    const courseId = c.req.param('id');
+    if (!courseId) return c.json({ error: 'Course ID is required' }, 400);
+    const body = await c.req.json();
+
+    if (!body.department) {
+      return c.json({ error: 'department is required' }, 400);
+    }
+
+    const learningService = new LearningService(c.env.DB);
+    const result = await learningService.assignDepartment(courseId, companyId, body.department);
+    return c.json({ data: result }, 201);
+  }
 }

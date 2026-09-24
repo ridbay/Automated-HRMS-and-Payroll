@@ -61,4 +61,25 @@ describe('Admin Learning Controller', () => {
     const res: any = await AdminLearningController.deleteCourse(mockContext);
     expect(res.data.success).toBe(true);
   });
+
+  it('should get LMS overview', async () => {
+    LearningService.prototype.getLMSOverview = vi.fn().mockResolvedValue({ stats: { totalCourses: 1 }, courses: [], enrollments: [] });
+    const res: any = await AdminLearningController.getOverview(mockContext);
+    expect(res.data.data.stats.totalCourses).toBe(1);
+  });
+
+  it('should unassign a course', async () => {
+    LearningService.prototype.unassignCourse = vi.fn().mockResolvedValue({ success: true });
+    mockContext.req.param.mockReturnValue('enr1');
+    const res: any = await AdminLearningController.unassignCourse(mockContext);
+    expect(res.data.success).toBe(true);
+  });
+
+  it('should assign course by department', async () => {
+    LearningService.prototype.assignDepartment = vi.fn().mockResolvedValue({ success: true, count: 5 });
+    mockContext.req.json.mockResolvedValue({ department: 'Engineering' });
+    const res: any = await AdminLearningController.assignByDepartment(mockContext);
+    expect(res.status).toBe(201);
+    expect(res.data.data.count).toBe(5);
+  });
 });

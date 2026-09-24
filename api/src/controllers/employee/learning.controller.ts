@@ -28,4 +28,14 @@ export class EmployeeLearningController {
 
     return c.json({ data: enrollment });
   }
+
+  static async getTeamCourses(c: Context<any>) {
+    const employeeId = c.get('user')?.sub || c.get('employeeId');
+    const companyId = c.get('tenantId') || c.get('companyId');
+    if (!employeeId || !companyId) return c.json({ error: 'Missing employee or company context' }, 400);
+
+    const learningService = new LearningService(c.env.DB);
+    const teamCourses = await learningService.getTeamCourses(employeeId, companyId);
+    return c.json({ data: teamCourses });
+  }
 }

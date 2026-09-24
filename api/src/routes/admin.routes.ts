@@ -214,12 +214,15 @@ adminRoutes.delete("/surveys/:id", adminOnly, edit("company"), AdminSurveyContro
 
 // --- Learning Management System (LMS) ---
 adminRoutes.get("/courses", adminOnly, view("company"), AdminLearningController.getAllCourses);
+adminRoutes.get("/courses/overview", adminOnly, view("company"), AdminLearningController.getOverview);
 adminRoutes.post("/courses", adminOnly, edit("company"), AdminLearningController.createCourse);
 adminRoutes.get("/courses/:id", adminOnly, view("company"), AdminLearningController.getCourseById);
 adminRoutes.put("/courses/:id", adminOnly, edit("company"), AdminLearningController.updateCourse);
 adminRoutes.delete("/courses/:id", adminOnly, edit("company"), AdminLearningController.deleteCourse);
 adminRoutes.post("/courses/:id/assign", adminOnly, edit("company"), AdminLearningController.assignCourse);
+adminRoutes.post("/courses/:id/assign-department", adminOnly, edit("company"), AdminLearningController.assignByDepartment);
 adminRoutes.get("/courses/:id/enrollments", adminOnly, view("company"), AdminLearningController.getCourseEnrollments);
+adminRoutes.delete("/courses/:id/enrollments/:enrollmentId", adminOnly, edit("company"), AdminLearningController.unassignCourse);
 
 // --- AI knowledge base documents (admin-uploaded, searchable by the AI assistant) ---
 adminRoutes.get("/documents", adminOnly, view("company"), AdminCompanyDocumentController.list);

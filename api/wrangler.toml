@@ -1,6 +1,10 @@
 name = "zenhr-api"
 main = "src/index.ts"
-compatibility_date = "2024-03-20"
+# Bumped from 2024-03-20 to 2024-04-03 (the minimum needed) — the AI_SEARCH
+# binding below is an RPC-based Service Binding, and RPC method calls (e.g.
+# .search()) are only enabled at this compat date or later; older dates treat
+# the binding as a plain fetcher stub and every method call throws.
+compatibility_date = "2024-04-03"
 compatibility_flags = ["nodejs_compat"]
 account_id = "3f509287c54b566a4a6fba51ec5bc842"
 

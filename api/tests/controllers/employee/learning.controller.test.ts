@@ -37,4 +37,16 @@ describe('Employee Learning Controller', () => {
     const res: any = await EmployeeLearningController.updateCourseProgress(mockContext);
     expect(res.data.data.progress).toBe(50);
   });
+
+  it('should get team courses', async () => {
+    LearningService.prototype.getTeamCourses = vi.fn().mockResolvedValue([{ enrollment: { id: 'e1' }, course: { title: 'Team Course' } }]);
+    mockContext.get = vi.fn((key: string) => {
+      if (key === 'user') return { sub: 'mgr1' };
+      if (key === 'companyId') return 'comp1';
+      return null;
+    });
+    const res: any = await EmployeeLearningController.getTeamCourses(mockContext);
+    expect(res.data.data).toHaveLength(1);
+    expect(res.data.data[0].course.title).toBe('Team Course');
+  });
 });

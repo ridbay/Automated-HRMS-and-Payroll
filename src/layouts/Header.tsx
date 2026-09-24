@@ -95,10 +95,10 @@ const Header: React.FC = () => {
         <button
           type="button"
           onClick={() => setShowCommandPalette(true)}
-          className="hidden md:flex items-center relative ml-6 px-4 py-2 bg-slate-50 hover:bg-slate-100/80 rounded-2xl text-slate-400 text-sm w-72 transition-all cursor-pointer group text-left border border-transparent hover:border-slate-200"
+          className="hidden md:flex items-center relative ml-6 px-4 py-2 bg-slate-50 hover:bg-slate-100/80 rounded-2xl text-slate-400 text-sm w-48 lg:w-60 xl:w-72 transition-all cursor-pointer group text-left border border-transparent hover:border-slate-200"
         >
           <Search className="text-slate-400 group-hover:text-indigo-600 transition-colors mr-3" size={16} />
-          <span className="font-medium text-slate-400 group-hover:text-slate-600 flex-1">
+          <span className="font-medium text-slate-400 group-hover:text-slate-600 flex-1 truncate">
             Global search...
           </span>
           <kbd className="px-1.5 py-0.5 bg-white border border-slate-200 text-slate-400 text-[10px] font-bold rounded-lg shadow-sm">
@@ -117,13 +117,59 @@ const Header: React.FC = () => {
           <Search size={20} />
         </button>
 
+        {/* Mobile AI button */}
         <button
+          type="button"
           onClick={() => setShowAssistant(true)}
-          title="Ask the ZenHR assistant"
-          className="p-2.5 text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 rounded-2xl transition-all"
+          title="Ask ZenHR AI Assistant"
+          className="sm:hidden flex items-center gap-1.5 px-2.5 py-1.5 bg-gradient-to-r from-indigo-50 to-purple-50 hover:from-indigo-100 hover:to-purple-100 text-indigo-700 border border-indigo-200/60 rounded-xl font-bold text-xs shadow-2xs transition-all"
         >
-          <Sparkles size={20} />
+          <Sparkles size={14} className="text-indigo-600" />
+          <span>Ask AI</span>
         </button>
+
+        {/* Desktop/Tablet AI Input Space */}
+        <form
+          onSubmit={handleAiSubmit}
+          className="hidden sm:flex items-center relative bg-gradient-to-r from-indigo-50/70 via-purple-50/40 to-slate-50 hover:bg-slate-50/90 focus-within:bg-white border border-indigo-100/90 hover:border-indigo-300 focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500/15 rounded-2xl transition-all shadow-2xs h-10 px-2.5 w-60 md:w-72 lg:w-84 xl:w-96 group"
+        >
+          <button
+            type="button"
+            onClick={() => setShowAssistant(true)}
+            title="ZenHR AI Assistant"
+            className="w-7 h-7 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 text-white flex items-center justify-center shrink-0 shadow-xs shadow-indigo-500/20 hover:scale-105 active:scale-95 transition-all cursor-pointer"
+          >
+            <Sparkles size={14} className="animate-pulse" />
+          </button>
+
+          <input
+            type="text"
+            value={topbarAiInput}
+            onChange={(e) => setTopbarAiInput(e.target.value)}
+            placeholder={AI_PROMPT_SUGGESTIONS[placeholderIndex]}
+            aria-label="Ask ZenHR AI anything"
+            className="flex-1 bg-transparent px-2.5 py-1 text-xs sm:text-sm font-medium text-slate-700 placeholder:text-slate-400 placeholder:font-normal focus:outline-none min-w-0"
+          />
+
+          {topbarAiInput.trim() ? (
+            <button
+              type="submit"
+              title="Ask AI (Enter)"
+              className="p-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl transition-all shrink-0 shadow-xs"
+            >
+              <ArrowRight size={14} />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowAssistant(true)}
+              title="Open Assistant chat"
+              className="hidden lg:inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-indigo-600 hover:text-indigo-700 bg-white/80 hover:bg-white border border-indigo-100/80 px-2 py-0.5 rounded-lg shadow-2xs transition-colors shrink-0"
+            >
+              <span>Ask AI</span>
+            </button>
+          )}
+        </form>
 
         <div className="relative">
           <button
@@ -237,7 +283,12 @@ const Header: React.FC = () => {
         </div>
       </div>
 
-      <AIAssistant open={showAssistant} onClose={() => setShowAssistant(false)} />
+      <AIAssistant
+        open={showAssistant}
+        onClose={() => setShowAssistant(false)}
+        initialQuestion={assistantInitialQuery}
+        onClearInitialQuestion={() => setAssistantInitialQuery(undefined)}
+      />
       <CommandPalette
         isOpen={showCommandPalette}
         onClose={() => setShowCommandPalette(false)}

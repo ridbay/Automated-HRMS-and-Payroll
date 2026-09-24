@@ -107,4 +107,13 @@ describe('AIAssistant', () => {
     expect(mockAsk).not.toHaveBeenCalled();
     expect(screen.getByText('Thinking…')).toBeInTheDocument();
   });
+
+  it('automatically submits initialQuestion when provided upon opening', () => {
+    const onClear = vi.fn();
+    render(<AIAssistant open onClose={vi.fn()} initialQuestion="What is my leave balance?" onClearInitialQuestion={onClear} />);
+
+    expect(screen.getByText('What is my leave balance?')).toBeInTheDocument();
+    expect(mockAsk).toHaveBeenCalledWith('What is my leave balance?', expect.any(Object));
+    expect(onClear).toHaveBeenCalled();
+  });
 });

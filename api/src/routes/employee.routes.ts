@@ -88,6 +88,7 @@ employeeRoutes.post('/surveys/:id/responses', EmployeeSurveyController.submitSur
 
 // --- Learning Management System (LMS) ---
 employeeRoutes.get('/courses', EmployeeLearningController.getMyCourses);
+employeeRoutes.get('/courses/team', EmployeeLearningController.getTeamCourses);
 employeeRoutes.put('/courses/enrollments/:id/progress', EmployeeLearningController.updateCourseProgress);
 
 // Manager-scoped: the caller's own direct reports (id/name/avatar/role/dept
