@@ -89,11 +89,18 @@ export const useUpdatePayrollSettings = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error('Failed to update payroll settings');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to update payroll settings');
+      }
       const json = await res.json();
       return json.data;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['payrollSettings'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['payrollSettings'] });
+      queryClient.invalidateQueries({ queryKey: ['payrollDashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['payrollPreview'] });
+    },
   });
 };
 
@@ -156,10 +163,16 @@ export const useCreateSalaryComponent = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error('Failed to create salary component');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to create salary component');
+      }
       return res.json();
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['salaryComponents'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['salaryComponents'] });
+      queryClient.invalidateQueries({ queryKey: ['payrollPreview'] });
+    },
   });
 };
 
@@ -172,10 +185,16 @@ export const useUpdateSalaryComponent = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
-      if (!res.ok) throw new Error('Failed to update salary component');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to update salary component');
+      }
       return res.json();
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['salaryComponents'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['salaryComponents'] });
+      queryClient.invalidateQueries({ queryKey: ['payrollPreview'] });
+    },
   });
 };
 
@@ -193,7 +212,10 @@ export const useDeleteSalaryComponent = () => {
       }
       return res.json();
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['salaryComponents'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['salaryComponents'] });
+      queryClient.invalidateQueries({ queryKey: ['payrollPreview'] });
+    },
   });
 };
 
@@ -288,7 +310,11 @@ export const useCreateLoan = () => {
       }
       return res.json();
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['loans'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['loans'] });
+      queryClient.invalidateQueries({ queryKey: ['payrollDashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['payrollPreview'] });
+    },
   });
 };
 
@@ -301,10 +327,17 @@ export const useUpdateLoan = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
-      if (!res.ok) throw new Error('Failed to update loan');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to update loan');
+      }
       return res.json();
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['loans'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['loans'] });
+      queryClient.invalidateQueries({ queryKey: ['payrollDashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['payrollPreview'] });
+    },
   });
 };
 
@@ -315,10 +348,17 @@ export const useDeleteLoan = () => {
       const res = await fetchWithTenant(`${API_URL}/admin/payroll/loans/${id}`, {
         method: 'DELETE',
       });
-      if (!res.ok) throw new Error('Failed to delete loan');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to delete loan');
+      }
       return res.json();
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['loans'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['loans'] });
+      queryClient.invalidateQueries({ queryKey: ['payrollDashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['payrollPreview'] });
+    },
   });
 };
 
@@ -334,6 +374,30 @@ export const useLoanRepayments = (loanId?: string) => {
       return json.data;
     },
     enabled: !!loanId,
+  });
+};
+
+export const useRecordLoanRepayment = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ loanId, amount, payrollRunId }: { loanId: string; amount: number; payrollRunId?: string }) => {
+      const res = await fetchWithTenant(`${API_URL}/admin/payroll/loans/${loanId}/repayments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount, payrollRunId }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to record repayment');
+      }
+      return res.json();
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['loans'] });
+      queryClient.invalidateQueries({ queryKey: ['loanRepayments', variables.loanId] });
+      queryClient.invalidateQueries({ queryKey: ['payrollDashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['payrollPreview'] });
+    },
   });
 };
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   X,
   BookOpen,
@@ -12,8 +12,8 @@ import {
   Search,
   UserCheck,
   Award,
-} from 'lucide-react';
-import * as learningClient from '../../api/learning.client';
+} from "lucide-react";
+import * as learningClient from "../../api/learning.client";
 
 interface CourseDetailModalProps {
   isOpen: boolean;
@@ -32,39 +32,46 @@ export const CourseDetailModal: React.FC<CourseDetailModalProps> = ({
 }) => {
   const popupAlert = (msg: string) => window.alert(msg);
   const popupConfirm = (msg: string) => Promise.resolve(window.confirm(msg));
-  const { data: enrollments = [], isLoading } = learningClient.useCourseEnrollments(course?.id ?? null);
+  const { data: enrollments = [], isLoading } =
+    learningClient.useCourseEnrollments(course?.id ?? null);
   const unassign = learningClient.useUnassignCourse
     ? learningClient.useUnassignCourse()
     : { mutate: (_p: any, c?: any) => c?.onSuccess?.() };
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
 
   if (!isOpen || !course) return null;
 
   const total = enrollments.length;
   const completed = enrollments.filter(
-    (e: any) => (e.enrollment?.progress ?? 0) >= 100 || e.enrollment?.status === 'completed'
+    (e: any) =>
+      (e.enrollment?.progress ?? 0) >= 100 ||
+      e.enrollment?.status === "completed",
   );
   const inProgress = enrollments.filter((e: any) => {
     const p = e.enrollment?.progress ?? 0;
     return p > 0 && p < 100;
   });
-  const notStarted = enrollments.filter((e: any) => (e.enrollment?.progress ?? 0) === 0);
-  const completionRate = total > 0 ? Math.round((completed.length / total) * 100) : 0;
+  const notStarted = enrollments.filter(
+    (e: any) => (e.enrollment?.progress ?? 0) === 0,
+  );
+  const completionRate =
+    total > 0 ? Math.round((completed.length / total) * 100) : 0;
 
   const filteredEnrollments = enrollments.filter((e: any) => {
-    const name = `${e.employee?.name || ''} ${e.employee?.lastName || ''}`.toLowerCase();
-    const email = (e.employee?.email || '').toLowerCase();
+    const name =
+      `${e.employee?.name || ""} ${e.employee?.lastName || ""}`.toLowerCase();
+    const email = (e.employee?.email || "").toLowerCase();
     const q = search.trim().toLowerCase();
     const matchesSearch = !q || name.includes(q) || email.includes(q);
 
     const progress = e.enrollment?.progress ?? 0;
-    const isDone = progress >= 100 || e.enrollment?.status === 'completed';
+    const isDone = progress >= 100 || e.enrollment?.status === "completed";
     const isOngoing = progress > 0 && progress < 100;
 
-    if (statusFilter === 'completed') return matchesSearch && isDone;
-    if (statusFilter === 'in_progress') return matchesSearch && isOngoing;
-    if (statusFilter === 'not_started') return matchesSearch && progress === 0;
+    if (statusFilter === "completed") return matchesSearch && isDone;
+    if (statusFilter === "in_progress") return matchesSearch && isOngoing;
+    if (statusFilter === "not_started") return matchesSearch && progress === 0;
     return matchesSearch;
   });
 
@@ -72,16 +79,16 @@ export const CourseDetailModal: React.FC<CourseDetailModalProps> = ({
     if (popupConfirm) {
       const ok = await popupConfirm(
         `Remove ${employeeName} from "${course.title}"? Their progress will be deleted.`,
-        'Confirm Unassign'
       );
       if (!ok) return;
     }
     unassign.mutate(
       { courseId: course.id, enrollmentId },
       {
-        onSuccess: () => popupAlert(`Removed ${employeeName} from the course roster.`, 'Unassigned'),
-        onError: (err: any) => popupAlert(err.message || 'Failed to unassign.', 'Error'),
-      }
+        onSuccess: () =>
+          popupAlert(`Removed ${employeeName} from the course roster.`),
+        onError: (err: any) => popupAlert(err.message || "Failed to unassign."),
+      },
     );
   };
 
@@ -107,7 +114,9 @@ export const CourseDetailModal: React.FC<CourseDetailModalProps> = ({
                   <Clock size={13} /> {course.duration} minutes
                 </span>
               </div>
-              <h2 className="text-2xl md:text-3xl font-black tracking-tight">{course.title}</h2>
+              <h2 className="text-2xl md:text-3xl font-black tracking-tight">
+                {course.title}
+              </h2>
               {course.description && (
                 <p className="text-sm text-indigo-100/80 max-w-2xl font-medium leading-relaxed">
                   {course.description}
@@ -141,19 +150,27 @@ export const CourseDetailModal: React.FC<CourseDetailModalProps> = ({
           {/* Quick Metrics Bar */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6 pt-6 border-t border-white/10 text-white">
             <div className="bg-white/5 rounded-xl p-3 border border-white/10">
-              <span className="text-[10px] font-black uppercase tracking-wider text-indigo-200">Total Enrolled</span>
+              <span className="text-[10px] font-black uppercase tracking-wider text-indigo-200">
+                Total Enrolled
+              </span>
               <p className="text-2xl font-black mt-0.5">{total}</p>
             </div>
             <div className="bg-white/5 rounded-xl p-3 border border-white/10">
-              <span className="text-[10px] font-black uppercase tracking-wider text-emerald-300">Completed</span>
+              <span className="text-[10px] font-black uppercase tracking-wider text-emerald-300">
+                Completed
+              </span>
               <p className="text-2xl font-black mt-0.5">{completed.length}</p>
             </div>
             <div className="bg-white/5 rounded-xl p-3 border border-white/10">
-              <span className="text-[10px] font-black uppercase tracking-wider text-amber-300">In Progress</span>
+              <span className="text-[10px] font-black uppercase tracking-wider text-amber-300">
+                In Progress
+              </span>
               <p className="text-2xl font-black mt-0.5">{inProgress.length}</p>
             </div>
             <div className="bg-white/5 rounded-xl p-3 border border-white/10">
-              <span className="text-[10px] font-black uppercase tracking-wider text-indigo-200">Completion Rate</span>
+              <span className="text-[10px] font-black uppercase tracking-wider text-indigo-200">
+                Completion Rate
+              </span>
               <p className="text-2xl font-black mt-0.5">{completionRate}%</p>
             </div>
           </div>
@@ -163,7 +180,9 @@ export const CourseDetailModal: React.FC<CourseDetailModalProps> = ({
         <div className="p-6 md:p-8 flex-1 flex flex-col overflow-hidden">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
             <div>
-              <h3 className="text-lg font-black text-slate-800">Learner Roster</h3>
+              <h3 className="text-lg font-black text-slate-800">
+                Learner Roster
+              </h3>
               <p className="text-xs text-slate-400 font-medium">
                 Track individual employee progress and completion status.
               </p>
@@ -171,7 +190,10 @@ export const CourseDetailModal: React.FC<CourseDetailModalProps> = ({
 
             <div className="flex items-center gap-2 w-full sm:w-auto">
               <div className="relative flex-1 sm:w-56">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <Search
+                  size={14}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                />
                 <input
                   type="text"
                   placeholder="Filter roster..."
@@ -203,7 +225,9 @@ export const CourseDetailModal: React.FC<CourseDetailModalProps> = ({
             ) : filteredEnrollments.length === 0 ? (
               <div className="py-12 text-center text-slate-400">
                 <Users size={36} className="mx-auto mb-2 opacity-30" />
-                <p className="text-sm font-bold">No learners found matching criteria.</p>
+                <p className="text-sm font-bold">
+                  No learners found matching criteria.
+                </p>
               </div>
             ) : (
               <table className="w-full text-left text-xs border-collapse">
@@ -221,27 +245,37 @@ export const CourseDetailModal: React.FC<CourseDetailModalProps> = ({
                     const emp = item.employee;
                     const enr = item.enrollment;
                     const progress = enr?.progress ?? 0;
-                    const isDone = progress >= 100 || enr?.status === 'completed';
+                    const isDone =
+                      progress >= 100 || enr?.status === "completed";
 
                     return (
-                      <tr key={enr.id} className="hover:bg-slate-50/70 transition-colors">
+                      <tr
+                        key={enr.id}
+                        className="hover:bg-slate-50/70 transition-colors"
+                      >
                         <td className="py-3.5 px-4">
                           <div className="font-bold text-slate-800">
                             {emp?.name} {emp?.lastName}
                           </div>
-                          <div className="text-[11px] text-slate-400">{emp?.email}</div>
+                          <div className="text-[11px] text-slate-400">
+                            {emp?.email}
+                          </div>
                         </td>
                         <td className="py-3.5 px-4">
                           <span
                             className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider ${
                               isDone
-                                ? 'bg-emerald-50 text-emerald-600'
+                                ? "bg-emerald-50 text-emerald-600"
                                 : progress > 0
-                                ? 'bg-indigo-50 text-indigo-600'
-                                : 'bg-slate-100 text-slate-500'
+                                  ? "bg-indigo-50 text-indigo-600"
+                                  : "bg-slate-100 text-slate-500"
                             }`}
                           >
-                            {isDone ? 'Completed' : progress > 0 ? 'In Progress' : 'Not Started'}
+                            {isDone
+                              ? "Completed"
+                              : progress > 0
+                                ? "In Progress"
+                                : "Not Started"}
                           </span>
                         </td>
                         <td className="py-3.5 px-4">
@@ -252,7 +286,11 @@ export const CourseDetailModal: React.FC<CourseDetailModalProps> = ({
                             <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
                               <div
                                 className={`h-full rounded-full ${
-                                  isDone ? 'bg-emerald-500' : progress > 0 ? 'bg-indigo-500' : 'bg-slate-300'
+                                  isDone
+                                    ? "bg-emerald-500"
+                                    : progress > 0
+                                      ? "bg-indigo-500"
+                                      : "bg-slate-300"
                                 }`}
                                 style={{ width: `${progress}%` }}
                               />
@@ -260,7 +298,9 @@ export const CourseDetailModal: React.FC<CourseDetailModalProps> = ({
                           </div>
                         </td>
                         <td className="py-3.5 px-4 text-slate-500 font-medium">
-                          {enr.enrolledAt ? new Date(enr.enrolledAt).toLocaleDateString() : '—'}
+                          {enr.enrolledAt
+                            ? new Date(enr.enrolledAt).toLocaleDateString()
+                            : "—"}
                         </td>
                         <td className="py-3.5 px-4 text-right">
                           <div className="flex items-center justify-end gap-2">
@@ -270,7 +310,8 @@ export const CourseDetailModal: React.FC<CourseDetailModalProps> = ({
                                   onViewCertificate({
                                     recipientName: `${emp?.name} ${emp?.lastName}`,
                                     courseTitle: course.title,
-                                    completedAt: enr.completedAt || enr.enrolledAt,
+                                    completedAt:
+                                      enr.completedAt || enr.enrolledAt,
                                     duration: course.duration,
                                   })
                                 }
@@ -280,7 +321,12 @@ export const CourseDetailModal: React.FC<CourseDetailModalProps> = ({
                               </button>
                             )}
                             <button
-                              onClick={() => handleUnassign(enr.id, `${emp?.name} ${emp?.lastName}`)}
+                              onClick={() =>
+                                handleUnassign(
+                                  enr.id,
+                                  `${emp?.name} ${emp?.lastName}`,
+                                )
+                              }
                               className="px-2.5 py-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors text-[10px] font-bold"
                             >
                               Unassign

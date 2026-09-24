@@ -197,6 +197,25 @@ export const getLoanRepayments = async (c: Context<AppEnv>) => {
   }
 };
 
+export const recordLoanRepayment = async (c: Context<AppEnv>) => {
+  try {
+    const service = new PayrollService(c.env.DB);
+    const { amount, payrollRunId } = await c.req.json();
+    if (!amount || Number(amount) <= 0) {
+      return c.json({ error: 'Valid repayment amount is required' }, 400);
+    }
+    const result = await service.recordLoanRepayment(
+      (c.get('companyId') as string),
+      (c.req.param('id') as string),
+      Number(amount),
+      payrollRunId
+    );
+    return c.json({ data: result }, 201);
+  } catch (error: any) {
+    return c.json({ error: error.message }, error.message === 'Loan not found' ? 404 : 500);
+  }
+};
+
 // ---------------- Preview ----------------
 export const previewPayroll = async (c: Context<AppEnv>) => {
   try {

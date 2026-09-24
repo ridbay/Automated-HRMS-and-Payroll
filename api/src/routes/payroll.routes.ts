@@ -17,6 +17,7 @@ import {
   updateLoan,
   deleteLoan,
   getLoanRepayments,
+  recordLoanRepayment,
   previewPayroll,
   recomputePreview,
   submitPayrollRun,
@@ -77,6 +78,7 @@ payrollRoutes.post('/loans', adminOnly, requirePermission('payroll', 'create'), 
 payrollRoutes.put('/loans/:id', adminOnly, requirePermission('payroll', 'edit'), updateLoan);
 payrollRoutes.delete('/loans/:id', adminOnly, requirePermission('payroll', 'delete'), deleteLoan);
 payrollRoutes.get('/loans/:id/repayments', adminOnly, requirePermission('payroll', 'view'), getLoanRepayments);
+payrollRoutes.post('/loans/:id/repayments', adminOnly, requirePermission('payroll', 'edit'), recordLoanRepayment);
 
 // Preview (budget visibility is also useful to line managers)
 payrollRoutes.get('/preview', adminOrManager, requirePermission('payroll', 'view'), previewPayroll);

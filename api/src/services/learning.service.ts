@@ -118,7 +118,7 @@ export class LearningService {
           lastName: employees.lastName,
           email: employees.email,
           department: employees.department,
-          jobTitle: employees.jobTitle,
+          role: employees.role,
         }
       })
       .from(courseEnrollments)

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Wallet,
@@ -33,6 +33,12 @@ import {
   Trash2,
   Pencil,
   Zap,
+  Search,
+  SlidersHorizontal,
+  ArrowDownRight,
+  Edit2,
+  RotateCcw,
+  Check,
 } from "lucide-react";
 import { useNavigation } from "../../context/NavigationContext";
 import { useAuth } from "../../context/AuthContext";
@@ -56,13 +62,17 @@ import {
   useUpdateTaxBrackets,
   useLoans,
   useCreateLoan,
+  useUpdateLoan,
   useDeleteLoan,
   useLoanRepayments,
+  useRecordLoanRepayment,
   useSalaryComponents,
   useCreateSalaryComponent,
+  useUpdateSalaryComponent,
   useDeleteSalaryComponent,
   usePayGrades,
   useCreatePayGrade,
+  useUpdatePayGrade,
   useDeletePayGrade,
   usePayrollSettings,
   useUpdatePayrollSettings,
@@ -71,7 +81,7 @@ import {
 const WRITE_ROLES = ["SUPER_ADMIN", "HR_ADMIN", "PAYROLL_OFFICER"];
 
 const formatCurrency = (val: number | undefined | null) =>
-  new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN" }).format(val || 0);
+  new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 }).format(val || 0);
 
 const periodLabel = (month: number, year: number) =>
   new Date(year, month - 1, 1).toLocaleString("en-US", { month: "long", year: "numeric" });
@@ -112,9 +122,40 @@ const Payroll: React.FC<PayrollProps> = ({ initialTab = "dashboard" }) => {
   const [wizardStep, setWizardStep] = useState(1);
   const [overrides, setOverrides] = useState<Record<string, { bonuses?: number; otherDeductions?: number }>>({});
   const [livePreview, setLivePreview] = useState<any>(null);
+
+  // Loan state
   const [showLoanModal, setShowLoanModal] = useState(false);
+  const [editingLoan, setEditingLoan] = useState<any | null>(null);
   const [scheduleLoanId, setScheduleLoanId] = useState<string | null>(null);
+  const [loanSearch, setLoanSearch] = useState("");
+  const [loanStatusFilter, setLoanStatusFilter] = useState("all");
+
+  // Settings & configuration state
   const [settingsSection, setSettingsSection] = useState<"general" | "components" | "grades">("general");
+  const [showComponentModal, setShowComponentModal] = useState(false);
+  const [editingComponent, setEditingComponent] = useState<any | null>(null);
+  const [componentTypeFilter, setComponentTypeFilter] = useState<"all" | "earning" | "deduction">("all");
+  const [showGradeModal, setShowGradeModal] = useState(false);
+  const [editingGrade, setEditingGrade] = useState<any | null>(null);
+
+  // Synchronize with URL search query if provided (e.g. ?tab=loans or ?tab=settings&section=components)
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.location?.search) {
+      try {
+        const search = new URLSearchParams(window.location.search);
+        const tabParam = search.get("tab");
+        const sectionParam = search.get("section");
+        if (tabParam && ["dashboard", "wizard", "compliance", "loans", "history", "settings"].includes(tabParam)) {
+          setActiveTab(tabParam as any);
+        }
+        if (sectionParam && ["general", "components", "grades"].includes(sectionParam)) {
+          setSettingsSection(sectionParam as any);
+        }
+      } catch {
+        // safe fallback
+      }
+    }
+  }, []);
 
   const shiftPeriod = (delta: number) => {
     let m = periodMonth + delta;
@@ -155,19 +196,25 @@ const Payroll: React.FC<PayrollProps> = ({ initialTab = "dashboard" }) => {
   const [bracketDraft, setBracketDraft] = useState<any[] | null>(null);
   const brackets = bracketDraft ?? taxBrackets ?? [];
 
-  const { data: loans } = useLoans(activeTab === "loans" || wizardStep === 3);
-  const createLoanMutation = useCreateLoan();
-  const deleteLoanMutation = useDeleteLoan();
-  const { data: scheduleRepayments } = useLoanRepayments(scheduleLoanId || undefined);
+  const { data: loans, isLoading: isLoansLoading } = useLoans(activeTab === "loans" || wizardStep === 3);
+  const createLoanMutation = useCreateLoan?.() || { mutate: () => {}, isPending: false };
+  const updateLoanMutation = useUpdateLoan?.() || { mutate: () => {}, isPending: false };
+  const deleteLoanMutation = useDeleteLoan?.() || { mutate: () => {}, isPending: false };
+  const recordLoanRepaymentMutation = useRecordLoanRepayment?.() || { mutate: () => {}, isPending: false };
+  const { data: scheduleRepayments, isLoading: isScheduleLoading } = useLoanRepayments(scheduleLoanId || undefined);
 
-  const { data: salaryComponents } = useSalaryComponents(activeTab === "settings" && settingsSection === "components");
-  const createComponentMutation = useCreateSalaryComponent();
-  const deleteComponentMutation = useDeleteSalaryComponent();
-  const { data: payGrades } = usePayGrades(activeTab === "settings" && settingsSection === "grades");
-  const createGradeMutation = useCreatePayGrade();
-  const deleteGradeMutation = useDeletePayGrade();
-  const { data: payrollSettings } = usePayrollSettings(activeTab === "settings" && settingsSection === "general");
-  const updateSettingsMutation = useUpdatePayrollSettings();
+  const { data: salaryComponents, isLoading: isComponentsLoading } = useSalaryComponents(activeTab === "settings" && settingsSection === "components");
+  const createComponentMutation = useCreateSalaryComponent?.() || { mutate: () => {}, isPending: false };
+  const updateComponentMutation = useUpdateSalaryComponent?.() || { mutate: () => {}, isPending: false };
+  const deleteComponentMutation = useDeleteSalaryComponent?.() || { mutate: () => {}, isPending: false };
+
+  const { data: payGrades, isLoading: isGradesLoading } = usePayGrades(activeTab === "settings" && settingsSection === "grades");
+  const createGradeMutation = useCreatePayGrade?.() || { mutate: () => {}, isPending: false };
+  const updateGradeMutation = useUpdatePayGrade?.() || { mutate: () => {}, isPending: false };
+  const deleteGradeMutation = useDeletePayGrade?.() || { mutate: () => {}, isPending: false };
+
+  const { data: payrollSettings, isLoading: isSettingsLoading } = usePayrollSettings(activeTab === "settings" && settingsSection === "general");
+  const updateSettingsMutation = useUpdatePayrollSettings?.() || { mutate: () => {}, isPending: false };
   const [settingsDraft, setSettingsDraft] = useState<any | null>(null);
 
   const isRunLocked = !!activeRunSummary;
@@ -390,14 +437,107 @@ const Payroll: React.FC<PayrollProps> = ({ initialTab = "dashboard" }) => {
           </section>
 
           <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm">
-            <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest mb-6">Active Loans</h4>
+            <div className="flex justify-between items-center mb-6">
+              <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Active Loans</h4>
+              {!isViewOnly && (
+                <button
+                  onClick={() => { setActiveTab("loans"); setEditingLoan(null); setShowLoanModal(true); }}
+                  className="text-[10px] font-black text-indigo-600 hover:text-indigo-700 flex items-center gap-1 uppercase tracking-wider"
+                >
+                  <Plus size={14} /> New Loan
+                </button>
+              )}
+            </div>
             <div className="flex justify-between items-center text-sm">
               <span className="font-bold text-slate-500">Employees with active loans</span>
-              <span className="font-black text-slate-800">{dashboard?.activeLoanCount ?? 0}</span>
+              <span className="font-black text-slate-800">{dashboard?.activeLoanCount ?? (loans?.filter((l: any) => l.status === "active").length || 0)}</span>
             </div>
             <div className="flex justify-between items-center text-sm border-t border-slate-100 pt-4 mt-4">
               <span className="font-bold text-slate-500">Outstanding balance</span>
-              <span className="font-black text-indigo-600">{formatCurrency(dashboard?.activeLoanBalance)}</span>
+              <span className="font-black text-indigo-600">
+                {formatCurrency(
+                  dashboard?.activeLoanBalance ??
+                  loans?.filter((l: any) => l.status === "active").reduce((acc: number, l: any) => acc + (Number(l.remainingBalance) || 0), 0)
+                )}
+              </span>
+            </div>
+            <button
+              onClick={() => setActiveTab("loans")}
+              className="w-full mt-6 py-3.5 bg-slate-50 hover:bg-indigo-50 text-slate-700 hover:text-indigo-600 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+            >
+              <Gavel size={14} /> Manage Loans
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Quick Access to Administration Governance Modules */}
+      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-8 md:p-10 rounded-[3rem] text-white shadow-xl relative overflow-hidden">
+        <div className="relative z-10">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-400">Payroll Governance & Setup</p>
+              <h3 className="text-2xl font-black text-white tracking-tight">Administration Modules</h3>
+            </div>
+            <p className="text-xs text-slate-300 max-w-md">
+              Configure cycle rules, statutory contribution formulas, salary component catalogs, pay grade levels, and staff loan facilities.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div
+              onClick={() => setActiveTab("loans")}
+              className="bg-white/10 hover:bg-white/15 p-6 rounded-3xl border border-white/10 backdrop-blur-sm cursor-pointer transition-all hover:scale-[1.02] group"
+            >
+              <div className="w-10 h-10 rounded-xl bg-indigo-500/20 text-indigo-300 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                <Gavel size={20} />
+              </div>
+              <h4 className="font-black text-base text-white mb-1">Loans & Advances</h4>
+              <p className="text-[11px] text-slate-300 mb-4">Track disbursements, recovery schedules, and automated deductions.</p>
+              <span className="text-[10px] font-black uppercase text-indigo-300 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                Open Loans <ChevronRight size={12} />
+              </span>
+            </div>
+
+            <div
+              onClick={() => { setActiveTab("settings"); setSettingsSection("general"); }}
+              className="bg-white/10 hover:bg-white/15 p-6 rounded-3xl border border-white/10 backdrop-blur-sm cursor-pointer transition-all hover:scale-[1.02] group"
+            >
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-300 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                <Settings size={20} />
+              </div>
+              <h4 className="font-black text-base text-white mb-1">General Configuration</h4>
+              <p className="text-[11px] text-slate-300 mb-4">Cutoff days, disbursement dates, pension, NHF, and statutory rules.</p>
+              <span className="text-[10px] font-black uppercase text-emerald-300 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                Configure Rules <ChevronRight size={12} />
+              </span>
+            </div>
+
+            <div
+              onClick={() => { setActiveTab("settings"); setSettingsSection("components"); }}
+              className="bg-white/10 hover:bg-white/15 p-6 rounded-3xl border border-white/10 backdrop-blur-sm cursor-pointer transition-all hover:scale-[1.02] group"
+            >
+              <div className="w-10 h-10 rounded-xl bg-violet-500/20 text-violet-300 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                <LayoutGrid size={20} />
+              </div>
+              <h4 className="font-black text-base text-white mb-1">Salary Components</h4>
+              <p className="text-[11px] text-slate-300 mb-4">Fixed & percentage-based earnings, allowances, and tax rules.</p>
+              <span className="text-[10px] font-black uppercase text-violet-300 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                Manage Components <ChevronRight size={12} />
+              </span>
+            </div>
+
+            <div
+              onClick={() => { setActiveTab("settings"); setSettingsSection("grades"); }}
+              className="bg-white/10 hover:bg-white/15 p-6 rounded-3xl border border-white/10 backdrop-blur-sm cursor-pointer transition-all hover:scale-[1.02] group"
+            >
+              <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-300 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                <TrendingUp size={20} />
+              </div>
+              <h4 className="font-black text-base text-white mb-1">Pay Grades</h4>
+              <p className="text-[11px] text-slate-300 mb-4">Salary structure hierarchy, min/max bands, and spread spreads.</p>
+              <span className="text-[10px] font-black uppercase text-amber-300 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                Configure Grades <ChevronRight size={12} />
+              </span>
             </div>
           </div>
         </div>
@@ -910,58 +1050,240 @@ const Payroll: React.FC<PayrollProps> = ({ initialTab = "dashboard" }) => {
     </div>
   );
 
-  const renderLoans = () => (
-    <div className="space-y-8 pb-20">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-black text-slate-800">Active Loan Portfolio</h2>
-        {!isViewOnly && (
-          <button onClick={() => setShowLoanModal(true)} className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl flex items-center gap-2">
-            <Plus size={16} /> New Loan Setup
-          </button>
-        )}
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        {(loans || []).map((loan: any) => (
-          <div key={loan.id} className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm relative overflow-hidden group">
-            <div className="flex justify-between items-start mb-8">
-              <div className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center shadow-inner group-hover:scale-110 transition-transform">
-                <Gavel size={28} />
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="px-3 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-[9px] font-black uppercase tracking-widest">{loan.status}</span>
+  const renderLoans = () => {
+    const activeLoans = (loans || []).filter((l: any) => l.status === "active");
+    const totalPrincipal = (loans || []).reduce((acc: number, l: any) => acc + (Number(l.principal || l.amount) || 0), 0);
+    const totalOutstanding = activeLoans.reduce((acc: number, l: any) => acc + (Number(l.remainingBalance) || 0), 0);
+    const totalMonthly = activeLoans.reduce((acc: number, l: any) => acc + (Number(l.monthlyInstallment || l.monthlyDeduction) || 0), 0);
+
+    const filteredLoans = (loans || []).filter((l: any) => {
+      const empName = l.employeeName || employeeName(l.employeeId) || "";
+      const reasonOrPurpose = l.purpose || l.reason || "";
+      const matchSearch =
+        !loanSearch ||
+        empName.toLowerCase().includes(loanSearch.toLowerCase()) ||
+        reasonOrPurpose.toLowerCase().includes(loanSearch.toLowerCase());
+      const matchStatus = loanStatusFilter === "all" || l.status === loanStatusFilter;
+      return matchSearch && matchStatus;
+    });
+
+    return (
+      <div className="space-y-8 pb-20">
+        {/* Loan Portfolio KPI Summary */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+            <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-4">
+              <Gavel size={20} />
+            </div>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Active Loans</p>
+            <h4 className="text-2xl font-black text-slate-800">{activeLoans.length}</h4>
+            <p className="text-xs text-slate-400 mt-1">{loans?.length || 0} total records</p>
+          </div>
+
+          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-4">
+              <Banknote size={20} />
+            </div>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Disbursed</p>
+            <h4 className="text-2xl font-black text-slate-800 tabular-nums">{formatCurrency(totalPrincipal)}</h4>
+            <p className="text-xs text-slate-400 mt-1">Across all loan history</p>
+          </div>
+
+          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+            <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center mb-4">
+              <TrendingUp size={20} />
+            </div>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Outstanding Balance</p>
+            <h4 className="text-2xl font-black text-amber-600 tabular-nums">{formatCurrency(totalOutstanding)}</h4>
+            <p className="text-xs text-slate-400 mt-1">Currently recoverable</p>
+          </div>
+
+          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+            <div className="w-10 h-10 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center mb-4">
+              <DollarSign size={20} />
+            </div>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Monthly Deductions</p>
+            <h4 className="text-2xl font-black text-violet-600 tabular-nums">{formatCurrency(totalMonthly)}</h4>
+            <p className="text-xs text-slate-400 mt-1">Automated per cycle</p>
+          </div>
+        </div>
+
+        {/* Toolbar & Filter Bar */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+          <div className="flex items-center gap-3 w-full md:w-auto">
+            <div className="relative w-full md:w-80">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+              <input
+                type="text"
+                placeholder="Search staff or purpose…"
+                value={loanSearch}
+                onChange={(e) => setLoanSearch(e.target.value)}
+                className="w-full pl-11 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none focus:border-indigo-600 transition-colors"
+              />
+            </div>
+            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+              {(["all", "active", "paused", "completed"] as const).map((st) => (
+                <button
+                  key={st}
+                  onClick={() => setLoanStatusFilter(st)}
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${
+                    loanStatusFilter === st
+                      ? "bg-white text-indigo-600 shadow-sm font-black"
+                      : "text-slate-500 hover:text-slate-700"
+                  }`}
+                >
+                  {st}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {!isViewOnly && (
+            <button
+              onClick={() => { setEditingLoan(null); setShowLoanModal(true); }}
+              className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-100 flex items-center gap-2 transition-all hover:scale-105 active:scale-95 whitespace-nowrap"
+            >
+              <Plus size={16} /> New Loan Setup
+            </button>
+          )}
+        </div>
+
+        {/* Loan Cards Grid */}
+        {isLoansLoading ? (
+          <div className="flex justify-center items-center py-24">
+            <Loader2 className="animate-spin text-indigo-600" size={40} />
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {filteredLoans.map((loan: any) => {
+              const empName = loan.employeeName || employeeName(loan.employeeId) || "—";
+              const principal = Number(loan.principal ?? loan.amount ?? 0);
+              const monthlyInstallment = Number(loan.monthlyInstallment ?? loan.monthlyDeduction ?? 0);
+              const totalRepayable = principal + (principal * (loan.interestRatePercent || 0)) / 100;
+              const repaidAmount = Math.max(0, totalRepayable - (Number(loan.remainingBalance) || 0));
+              const progressPct = totalRepayable > 0 ? Math.min(100, Math.round((repaidAmount / totalRepayable) * 100)) : 0;
+              const purposeText = loan.purpose || loan.reason;
+              const statusColors: Record<string, string> = {
+                active: "bg-emerald-50 text-emerald-700 border-emerald-200",
+                paused: "bg-amber-50 text-amber-700 border-amber-200",
+                completed: "bg-sky-50 text-sky-700 border-sky-200",
+                cancelled: "bg-slate-100 text-slate-500 border-slate-200",
+              };
+
+              return (
+                <div key={loan.id} className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm relative overflow-hidden group hover:border-indigo-200 transition-all flex flex-col justify-between">
+                  <div>
+                    <div className="flex justify-between items-start mb-6">
+                      <div className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center shadow-inner group-hover:scale-105 transition-transform">
+                        <Gavel size={26} />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border ${statusColors[loan.status] || "bg-slate-100 text-slate-600 border-slate-200"}`}>
+                          {loan.status}
+                        </span>
+                        {!isViewOnly && (
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => { setEditingLoan(loan); setShowLoanModal(true); }}
+                              className="p-1.5 text-slate-300 hover:text-indigo-600 rounded-lg transition-colors"
+                              title="Edit Loan"
+                            >
+                              <Pencil size={15} />
+                            </button>
+                            <button
+                              onClick={async () => {
+                                if (await confirm(`Delete this loan record for ${empName}? All repayment records will also be removed.`)) {
+                                  deleteLoanMutation.mutate(loan.id, {
+                                    onSuccess: () => popupAlert("Loan deleted successfully.", "Deleted"),
+                                    onError: (e: any) => popupAlert(e.message || "Failed to delete loan", "Error"),
+                                  });
+                                }
+                              }}
+                              className="p-1.5 text-slate-300 hover:text-rose-500 rounded-lg transition-colors"
+                              title="Delete Loan"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <h3 className="text-lg font-black text-slate-800 mb-1">{empName}</h3>
+                    {purposeText && (
+                      <p className="text-xs text-slate-500 font-medium italic mb-4">{purposeText}</p>
+                    )}
+
+                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-3 mb-6">
+                      <div className="flex justify-between text-xs">
+                        <span className="font-bold text-slate-400 uppercase text-[10px]">Principal</span>
+                        <span className="font-black text-slate-800">{formatCurrency(principal)}</span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="font-bold text-slate-400 uppercase text-[10px]">Interest Rate</span>
+                        <span className="font-bold text-slate-700">{loan.interestRatePercent || 0}%</span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="font-bold text-slate-400 uppercase text-[10px]">Monthly Deduction</span>
+                        <span className="font-black text-indigo-600">{formatCurrency(monthlyInstallment)}</span>
+                      </div>
+                      <div className="flex justify-between text-xs border-t border-slate-200 pt-2">
+                        <span className="font-bold text-slate-400 uppercase text-[10px]">Remaining Balance</span>
+                        <span className="font-black text-rose-600">{formatCurrency(loan.remainingBalance)}</span>
+                      </div>
+                    </div>
+
+                    {/* Repayment Progress */}
+                    <div className="space-y-1.5 mb-6">
+                      <div className="flex justify-between text-[10px] font-black uppercase tracking-wider text-slate-400">
+                        <span>Recovery Progress</span>
+                        <span>{progressPct}% ({formatCurrency(repaidAmount)} paid)</span>
+                      </div>
+                      <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-emerald-500 rounded-full transition-all duration-500" style={{ width: `${progressPct}%` }} />
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                      <span>Term: {loan.durationMonths} months</span>
+                      <span>Started: {loan.startDate || "—"}</span>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => setScheduleLoanId(loan.id)}
+                    className="w-full mt-6 py-3.5 bg-slate-50 text-slate-600 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-600 hover:text-white transition-all flex items-center justify-center gap-2 group-hover:bg-indigo-50 group-hover:text-indigo-600 group-hover:hover:bg-indigo-600 group-hover:hover:text-white"
+                  >
+                    View Recovery Schedule
+                  </button>
+                </div>
+              );
+            })}
+
+            {filteredLoans.length === 0 && (
+              <div className="col-span-full text-center py-20 bg-white rounded-[3rem] border border-dashed border-slate-200">
+                <Gavel className="mx-auto text-slate-300 mb-4" size={40} />
+                <h4 className="text-base font-black text-slate-700 mb-1">No loans matching your view</h4>
+                <p className="text-xs text-slate-400 max-w-sm mx-auto mb-6">
+                  {loanSearch || loanStatusFilter !== "all"
+                    ? "Try adjusting your search keywords or status filter."
+                    : "No staff loans or advances have been configured yet."}
+                </p>
                 {!isViewOnly && (
                   <button
-                    onClick={async () => { if (await confirm(`Delete this loan for ${loan.employeeName}?`)) deleteLoanMutation.mutate(loan.id); }}
-                    className="text-slate-300 hover:text-rose-500"
+                    onClick={() => { setEditingLoan(null); setShowLoanModal(true); }}
+                    className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-lg"
                   >
-                    <Trash2 size={14} />
+                    + Create First Loan
                   </button>
                 )}
               </div>
-            </div>
-            <h3 className="text-lg font-black text-slate-800 mb-1">{loan.employeeName}</h3>
-            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-8">Principal: {formatCurrency(loan.principal)}</p>
-            <div className="space-y-4">
-              <div className="flex justify-between text-xs font-bold">
-                <span className="text-slate-400 uppercase">Monthly Deduction</span>
-                <span className="text-slate-800">{formatCurrency(loan.monthlyInstallment)}</span>
-              </div>
-              <div className="flex justify-between text-xs font-bold">
-                <span className="text-slate-400 uppercase">Remaining Balance</span>
-                <span className="text-slate-800">{formatCurrency(loan.remainingBalance)}</span>
-              </div>
-            </div>
-            <button onClick={() => setScheduleLoanId(loan.id)} className="w-full mt-8 py-4 bg-slate-50 text-slate-600 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-600 hover:text-white transition-all">
-              View Recovery Schedule
-            </button>
+            )}
           </div>
-        ))}
-        {(!loans || loans.length === 0) && (
-          <div className="col-span-full text-center py-20 bg-white rounded-[3rem] border border-slate-100 text-sm font-bold text-slate-400">No loans set up yet.</div>
         )}
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderHistory = () => (
     <div className="space-y-8 pb-20">
@@ -1005,82 +1327,234 @@ const Payroll: React.FC<PayrollProps> = ({ initialTab = "dashboard" }) => {
   const renderSettings = () => (
     <div className="space-y-10 pb-20">
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-        <div className="space-y-4">
+        <div className="space-y-3">
           {[
-            { id: "general", label: "General Configuration" },
-            { id: "components", label: "Salary Components" },
-            { id: "grades", label: "Pay Grades" },
+            { id: "general", label: "General Configuration", icon: <Settings size={16} /> },
+            { id: "components", label: "Salary Components", icon: <LayoutGrid size={16} /> },
+            { id: "grades", label: "Pay Grades", icon: <TrendingUp size={16} /> },
           ].map((item) => (
             <button
               key={item.id}
               onClick={() => setSettingsSection(item.id as any)}
-              className={`w-full text-left px-6 py-4 rounded-2xl font-bold text-xs uppercase tracking-widest transition-all ${settingsSection === item.id ? "bg-indigo-600 text-white shadow-xl shadow-indigo-100" : "bg-white text-slate-500 hover:bg-slate-50 border border-slate-100"}`}
+              className={`w-full text-left px-6 py-4 rounded-2xl font-bold text-xs uppercase tracking-widest transition-all flex items-center gap-3 ${
+                settingsSection === item.id
+                  ? "bg-indigo-600 text-white shadow-xl shadow-indigo-100"
+                  : "bg-white text-slate-500 hover:bg-slate-50 border border-slate-100"
+              }`}
             >
-              {item.label}
+              {item.icon} {item.label}
             </button>
           ))}
         </div>
 
         <div className="lg:col-span-3 space-y-10">
           {settingsSection === "general" && (
-            <section className="bg-white p-10 rounded-[3rem] border border-slate-200 shadow-sm">
-              <h3 className="text-xl font-black text-slate-800 mb-8 flex items-center gap-3"><Settings className="text-indigo-600" /> General Configuration</h3>
-              {settings && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  {[
-                    { key: "cutoffDay", label: "Payroll Cutoff Day", type: "number" },
-                    { key: "paymentDay", label: "Payment Disbursement Day", type: "number" },
-                    { key: "workingDaysPerMonth", label: "Working Days / Month", type: "number" },
-                    { key: "pensionEmployeeRate", label: "Pension Rate — Employee (%)", type: "number" },
-                    { key: "pensionEmployerRate", label: "Pension Rate — Employer (%)", type: "number" },
-                    { key: "nhfRate", label: "NHF Rate — of Basic (%)", type: "number" },
-                    { key: "nsitfRate", label: "NSITF Rate — Employer, of Gross (%)", type: "number" },
-                    { key: "itfRate", label: "ITF Levy — Employer, of Gross (%)", type: "number" },
-                    { key: "minWageAnnual", label: "Minimum Wage (Annual, ₦)", type: "number" },
-                  ].map((f) => (
-                    <div key={f.key} className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{f.label}</label>
-                      <input
-                        type="number"
-                        disabled={isViewOnly}
-                        value={settings[f.key] ?? 0}
-                        onChange={(e) => setSettingsDraft({ ...settings, [f.key]: Number(e.target.value) })}
-                        className="w-full px-6 py-4 bg-slate-50 rounded-2xl outline-none font-bold text-slate-700 disabled:text-slate-400"
-                      />
+            <section className="bg-white p-8 md:p-10 rounded-[3rem] border border-slate-200 shadow-sm space-y-8">
+              <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 border-b border-slate-100 pb-6">
+                <div>
+                  <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
+                    <Settings className="text-indigo-600" /> General Configuration
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-1 font-medium">
+                    Statutory contribution rates, schedule cutoff timing, and compliance formulas.
+                  </p>
+                </div>
+                {!isViewOnly && (
+                  <button
+                    onClick={() => {
+                      setSettingsDraft({
+                        payCycle: "monthly",
+                        cutoffDay: 20,
+                        paymentDay: 25,
+                        workingDaysPerMonth: 22,
+                        prorationEnabled: true,
+                        minWageCheckEnabled: true,
+                        minWageAnnual: 840000,
+                        pensionEmployeeRate: 8,
+                        pensionEmployerRate: 10,
+                        applyConsolidatedReliefAllowance: true,
+                        nhfEnabled: true,
+                        nhfRate: 2.5,
+                        nsitfEnabled: true,
+                        nsitfRate: 1,
+                        itfEnabled: true,
+                        itfRate: 1,
+                        currency: "NGN",
+                      });
+                      popupAlert("Reset to standard statutory rates draft. Click 'Save Settings' to apply.", "Draft Ready");
+                    }}
+                    className="px-4 py-2 border border-slate-200 hover:border-slate-300 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all"
+                  >
+                    <RotateCcw size={12} /> Standard Defaults
+                  </button>
+                )}
+              </div>
+
+              {isSettingsLoading && !settings ? (
+                <div className="flex justify-center items-center py-20">
+                  <Loader2 className="animate-spin text-indigo-600" size={36} />
+                </div>
+              ) : settings && (
+                <div className="space-y-8">
+                  {/* Category 1: Schedule & Timing */}
+                  <div>
+                    <h4 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-4">Pay Schedule & Frequency</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Pay Cycle Frequency</label>
+                        <select
+                          disabled={isViewOnly}
+                          value={settings.payCycle || "monthly"}
+                          onChange={(e) => setSettingsDraft({ ...settings, payCycle: e.target.value })}
+                          className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl outline-none font-bold text-sm text-slate-700"
+                        >
+                          <option value="monthly">Monthly</option>
+                          <option value="biweekly">Bi-weekly</option>
+                          <option value="weekly">Weekly</option>
+                        </select>
+                      </div>
+                      {[
+                        { key: "cutoffDay", label: "Payroll Cutoff Day (1-31)", type: "number" },
+                        { key: "paymentDay", label: "Payment Disbursement Day (1-31)", type: "number" },
+                        { key: "workingDaysPerMonth", label: "Working Days / Month", type: "number" },
+                      ].map((f) => (
+                        <div key={f.key} className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{f.label}</label>
+                          <input
+                            type="number"
+                            disabled={isViewOnly}
+                            value={settings[f.key] ?? (f.key === "paymentDay" ? settings.disbursementDay : 0) ?? 0}
+                            onChange={(e) => {
+                              const val = Number(e.target.value);
+                              setSettingsDraft({
+                                ...settings,
+                                [f.key]: val,
+                                ...(f.key === "paymentDay" ? { disbursementDay: val } : {}),
+                              });
+                            }}
+                            className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl outline-none font-bold text-sm text-slate-700 disabled:text-slate-400"
+                          />
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                  <div className="md:col-span-2 flex flex-col md:flex-row gap-4 pt-4">
-                    {[
-                      { key: "prorationEnabled", label: "Proration Logic", sub: "Auto-calc for joiners/leavers" },
-                      { key: "applyConsolidatedReliefAllowance", label: "Apply CRA", sub: "Consolidated Relief Allowance in PAYE" },
-                      { key: "nhfEnabled", label: "NHF Deduction", sub: "National Housing Fund — deducted from net pay" },
-                      { key: "nsitfEnabled", label: "NSITF Contribution", sub: "Employer-paid, tracked for remittance only" },
-                      { key: "itfEnabled", label: "ITF Levy", sub: "Employer-paid, tracked for remittance only" },
-                    ].map((t) => (
-                      <div key={t.key} className="flex-1 p-6 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
+                  </div>
+
+                  {/* Category 2: Statutory Rates */}
+                  <div>
+                    <h4 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-4">Statutory Contribution Rates (%)</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {[
+                        { key: "pensionEmployeeRate", label: "Pension Rate — Employee (%)", sub: "of Basic + Housing + Transport" },
+                        { key: "pensionEmployerRate", label: "Pension Rate — Employer (%)", sub: "of Basic + Housing + Transport" },
+                        { key: "nhfRate", label: "NHF Rate — of Basic (%)", sub: "National Housing Fund deduction" },
+                        { key: "nsitfRate", label: "NSITF Rate — Employer (%)", sub: "Employees' Comp (of Gross)" },
+                        { key: "itfRate", label: "ITF Levy — Employer (%)", sub: "Industrial Training (of Gross)" },
+                      ].map((f) => (
+                        <div key={f.key} className="p-5 bg-slate-50 rounded-2xl border border-slate-100 space-y-2">
+                          <label className="text-[10px] font-black text-slate-600 uppercase tracking-widest block">{f.label}</label>
+                          <input
+                            type="number"
+                            step="0.1"
+                            disabled={isViewOnly}
+                            value={settings[f.key] ?? 0}
+                            onChange={(e) => setSettingsDraft({ ...settings, [f.key]: Number(e.target.value) })}
+                            className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl outline-none font-black text-base text-indigo-600"
+                          />
+                          <p className="text-[9px] text-slate-400 font-bold uppercase">{f.sub}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Category 3: Minimum Wage Threshold */}
+                  <div>
+                    <h4 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-4">Wage Safeguards</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">National Minimum Wage (Annual ₦)</label>
+                        <input
+                          type="number"
+                          disabled={isViewOnly}
+                          value={settings.minWageAnnual ?? 840000}
+                          onChange={(e) => setSettingsDraft({ ...settings, minWageAnnual: Number(e.target.value) })}
+                          className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl outline-none font-bold text-sm text-slate-700"
+                        />
+                        <p className="text-xs text-indigo-600 font-bold">
+                          Equivalent to {formatCurrency(Math.round((settings.minWageAnnual || 0) / 12))}/month baseline.
+                        </p>
+                      </div>
+                      <div className="p-5 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
                         <div>
-                          <p className="text-sm font-black text-slate-800">{t.label}</p>
-                          <p className="text-[10px] text-slate-400 font-bold uppercase">{t.sub}</p>
+                          <p className="text-sm font-black text-slate-800">Minimum Wage Check</p>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase">Raise exception if base pay is below threshold</p>
                         </div>
                         <button
                           disabled={isViewOnly}
-                          onClick={() => setSettingsDraft({ ...settings, [t.key]: !settings[t.key] })}
-                          className={`w-12 h-6 rounded-full flex items-center px-1 transition-colors ${settings[t.key] ? "bg-indigo-600 justify-end" : "bg-slate-300 justify-start"}`}
+                          onClick={() => setSettingsDraft({ ...settings, minWageCheckEnabled: !settings.minWageCheckEnabled })}
+                          className={`w-12 h-6 rounded-full flex items-center px-1 transition-colors ${settings.minWageCheckEnabled ? "bg-indigo-600 justify-end" : "bg-slate-300 justify-start"}`}
                         >
-                          <div className="w-4 h-4 bg-white rounded-full" />
+                          <div className="w-4 h-4 bg-white rounded-full shadow-sm" />
                         </button>
                       </div>
-                    ))}
+                    </div>
                   </div>
+
+                  {/* Category 4: Statutory Logic Toggles */}
+                  <div>
+                    <h4 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-4">Calculation Policy Toggles</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {[
+                        { key: "prorationEnabled", label: "Proration Logic", sub: "Auto-calc for joiners and leavers based on attendance days" },
+                        { key: "applyConsolidatedReliefAllowance", label: "Apply CRA", sub: "Statutory Consolidated Relief Allowance in PAYE tax engine" },
+                        { key: "nhfEnabled", label: "NHF Deduction", sub: "National Housing Fund — deducted from staff net pay" },
+                        { key: "nsitfEnabled", label: "NSITF Contribution", sub: "Employer-paid statutory cost, tracked for remittance" },
+                        { key: "itfEnabled", label: "ITF Levy", sub: "Employer-paid statutory cost, tracked for remittance" },
+                      ].map((t) => (
+                        <div key={t.key} className="p-6 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
+                          <div className="max-w-[80%]">
+                            <p className="text-sm font-black text-slate-800">{t.label}</p>
+                            <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">{t.sub}</p>
+                          </div>
+                          <button
+                            disabled={isViewOnly}
+                            onClick={() => setSettingsDraft({ ...settings, [t.key]: !settings[t.key] })}
+                            className={`w-12 h-6 rounded-full flex items-center px-1 transition-colors shrink-0 ${settings[t.key] ? "bg-indigo-600 justify-end" : "bg-slate-300 justify-start"}`}
+                          >
+                            <div className="w-4 h-4 bg-white rounded-full shadow-sm" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
                   {!isViewOnly && (
-                    <div className="md:col-span-2">
+                    <div className="pt-4 border-t border-slate-100 flex items-center gap-4">
                       <button
-                        onClick={() => updateSettingsMutation.mutate(settings, { onSuccess: () => { setSettingsDraft(null); popupAlert("Payroll settings saved.", "Saved"); } })}
+                        onClick={() => {
+                          updateSettingsMutation.mutate(settings, {
+                            onSuccess: () => {
+                              setSettingsDraft(null);
+                              popupAlert("Payroll settings updated successfully.", "Saved");
+                            },
+                            onError: (err: any) => {
+                              popupAlert(err.message || "Failed to update settings", "Error");
+                            },
+                          });
+                        }}
                         disabled={updateSettingsMutation.isPending || !settingsDraft}
-                        className="px-8 py-4 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl disabled:opacity-40"
+                        className="px-10 py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-100 disabled:opacity-40 transition-all hover:scale-105 active:scale-95 flex items-center gap-2"
                       >
-                        {updateSettingsMutation.isPending ? "Saving…" : "Save Settings"}
+                        {updateSettingsMutation.isPending ? <Loader2 className="animate-spin" size={16} /> : <Check size={16} />}
+                        {updateSettingsMutation.isPending ? "Saving Changes…" : "Save Settings"}
                       </button>
+                      {settingsDraft && (
+                        <button
+                          onClick={() => setSettingsDraft(null)}
+                          className="px-6 py-4 bg-white border border-slate-200 text-slate-500 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-50 transition-all"
+                        >
+                          Discard Draft
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1089,79 +1563,249 @@ const Payroll: React.FC<PayrollProps> = ({ initialTab = "dashboard" }) => {
           )}
 
           {settingsSection === "components" && (
-            <section className="bg-white p-10 rounded-[3rem] border border-slate-200 shadow-sm">
-              <div className="flex justify-between items-center mb-8">
-                <h3 className="text-xl font-black text-slate-800 flex items-center gap-3"><LayoutGrid className="text-emerald-500" /> Salary Components</h3>
+            <section className="bg-white p-8 md:p-10 rounded-[3rem] border border-slate-200 shadow-sm space-y-8">
+              <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 border-b border-slate-100 pb-6">
+                <div>
+                  <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
+                    <LayoutGrid className="text-emerald-500" /> Salary Components Catalog
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-1 font-medium">
+                    Configure allowances, regular earnings, statutory items, and payroll deductions.
+                  </p>
+                </div>
                 {!isViewOnly && (
                   <button
-                    onClick={async () => {
-                      const name = await prompt("Component name:", "", "New Salary Component");
-                      if (!name) return;
-                      createComponentMutation.mutate({ name, type: "earning", calculationType: "fixed", value: 0, taxable: true });
-                    }}
-                    className="px-6 py-3 bg-slate-900 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all"
+                    onClick={() => { setEditingComponent(null); setShowComponentModal(true); }}
+                    className="px-6 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:scale-105 transition-all flex items-center gap-2"
                   >
-                    + Add Component
+                    <Plus size={16} /> Add Component
                   </button>
                 )}
               </div>
-              <div className="space-y-4">
-                {(salaryComponents || []).map((c: any) => (
-                  <div key={c.id} className="p-6 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between group hover:border-indigo-200 transition-all">
-                    <div>
-                      <p className="text-sm font-black text-slate-800 flex items-center gap-2">{c.name} {c.statutory && <Lock size={12} className="text-slate-300" />}</p>
-                      <div className="flex gap-2 mt-1">
-                        <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded ${c.type === "earning" ? "bg-emerald-100 text-emerald-600" : "bg-rose-100 text-rose-600"}`}>{c.type}</span>
-                        <span className="text-[9px] font-bold text-slate-400 uppercase bg-white px-2 py-0.5 rounded border border-slate-100">{c.taxable ? "Taxable" : "Pre-Tax"}</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <p className="text-xs font-bold font-mono text-slate-600">{c.calculationType === "fixed" ? formatCurrency(c.value) : `${c.value}% of ${c.calculationType.replace("percentage_of_", "")}`}</p>
-                      {!isViewOnly && !c.statutory && (
-                        <button onClick={async () => { if (await confirm(`Delete "${c.name}"?`)) deleteComponentMutation.mutate(c.id); }} className="text-slate-300 hover:text-rose-500">
-                          <Trash2 size={14} />
-                        </button>
-                      )}
-                    </div>
-                  </div>
+
+              {/* Filter Pills */}
+              <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl w-fit">
+                {(["all", "earning", "deduction"] as const).map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setComponentTypeFilter(t)}
+                    className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${
+                      componentTypeFilter === t
+                        ? "bg-white text-indigo-600 shadow-sm"
+                        : "text-slate-500 hover:text-slate-700"
+                    }`}
+                  >
+                    {t === "all" ? "All Components" : `${t}s`}
+                  </button>
                 ))}
               </div>
+
+              {isComponentsLoading ? (
+                <div className="flex justify-center items-center py-20">
+                  <Loader2 className="animate-spin text-emerald-600" size={36} />
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {(salaryComponents || [])
+                    .filter((c: any) => componentTypeFilter === "all" || c.type === componentTypeFilter)
+                    .map((c: any) => {
+                      const formulaLabel =
+                        !c.calculationType
+                          ? "Standard element"
+                          : c.calculationType === "fixed"
+                            ? `${formatCurrency(c.value)} fixed`
+                            : `${c.value}% of ${String(c.calculationType).replace("percentage_of_", "")}`;
+
+                      return (
+                        <div
+                          key={c.id}
+                          className="p-6 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4 group hover:border-indigo-200 transition-all"
+                        >
+                          <div className="flex items-start gap-4">
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xs font-black shrink-0 ${
+                              c.type === "earning" ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
+                            }`}>
+                              {c.type === "earning" ? "+" : "−"}
+                            </div>
+                            <div>
+                              <p className="text-sm font-black text-slate-800 flex items-center gap-2">
+                                {c.name}
+                                {c.code && (
+                                  <span className="text-[10px] font-mono text-slate-400 font-bold bg-slate-100 px-1.5 py-0.5 rounded">
+                                    {c.code}
+                                  </span>
+                                )}
+                                {(c.statutory || c.isStatutory) && (
+                                  <span className="flex items-center gap-1 text-[9px] font-black uppercase bg-slate-200 text-slate-600 px-2 py-0.5 rounded">
+                                    <Lock size={10} /> Statutory
+                                  </span>
+                                )}
+                              </p>
+                              <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                                <span className={`text-[9px] font-black uppercase px-2.5 py-0.5 rounded ${
+                                  c.type === "earning" ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
+                                }`}>
+                                  {c.type}
+                                </span>
+                                <span className="text-[9px] font-bold text-slate-500 uppercase bg-white px-2.5 py-0.5 rounded border border-slate-200">
+                                  {c.taxable ? "Taxable (PAYE)" : "Pre-Tax / Exempt"}
+                                </span>
+                                <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded ${
+                                  c.active ? "text-emerald-600" : "text-slate-400"
+                                }`}>
+                                  {c.active ? "● Active" : "○ Inactive"}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between sm:justify-end gap-6">
+                            <span className="text-sm font-bold font-mono text-slate-700 bg-white px-4 py-2 rounded-xl border border-slate-200">
+                              {formulaLabel}
+                            </span>
+                            {!isViewOnly && (
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => { setEditingComponent(c); setShowComponentModal(true); }}
+                                  className="p-2 text-slate-400 hover:text-indigo-600 rounded-lg transition-colors"
+                                  title="Edit Component"
+                                >
+                                  <Pencil size={15} />
+                                </button>
+                                {!c.statutory && (
+                                  <button
+                                    onClick={async () => {
+                                      if (await confirm(`Delete component "${c.name}"? This removes it from future payroll runs.`)) {
+                                        deleteComponentMutation.mutate(c.id, {
+                                          onSuccess: () => popupAlert(`Component "${c.name}" deleted.`, "Deleted"),
+                                          onError: (e: any) => popupAlert(e.message || "Failed to delete component", "Error"),
+                                        });
+                                      }
+                                    }}
+                                    className="p-2 text-slate-400 hover:text-rose-500 rounded-lg transition-colors"
+                                    title="Delete Component"
+                                  >
+                                    <Trash2 size={15} />
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                  {(!salaryComponents || salaryComponents.length === 0) && (
+                    <div className="text-center py-16 border border-dashed border-slate-200 rounded-3xl text-sm text-slate-400 font-bold">
+                      No components found. Click "+ Add Component" to configure one.
+                    </div>
+                  )}
+                </div>
+              )}
             </section>
           )}
 
           {settingsSection === "grades" && (
-            <section className="bg-white p-10 rounded-[3rem] border border-slate-200 shadow-sm">
-              <div className="flex justify-between items-center mb-8">
-                <h3 className="text-xl font-black text-slate-800 flex items-center gap-3"><TrendingUp className="text-amber-500" /> Pay Grade Structures</h3>
+            <section className="bg-white p-8 md:p-10 rounded-[3rem] border border-slate-200 shadow-sm space-y-8">
+              <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 border-b border-slate-100 pb-6">
+                <div>
+                  <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
+                    <TrendingUp className="text-amber-500" /> Pay Grade Structures & Salary Bands
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-1 font-medium">
+                    Manage seniority levels, salary caps, and organization pay brackets.
+                  </p>
+                </div>
                 {!isViewOnly && (
                   <button
-                    onClick={async () => {
-                      const name = await prompt("Grade name (e.g. Senior L4):", "", "New Pay Grade");
-                      if (!name) return;
-                      createGradeMutation.mutate({ name, level: (payGrades?.length || 0) + 1, minSalary: 0, maxSalary: 0 });
-                    }}
-                    className="px-6 py-3 bg-slate-900 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all text-xs"
+                    onClick={() => { setEditingGrade(null); setShowGradeModal(true); }}
+                    className="px-6 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:scale-105 transition-all flex items-center gap-2"
                   >
-                    + New Grade
+                    <Plus size={16} /> New Grade
                   </button>
                 )}
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {(payGrades || []).map((g: any) => (
-                  <div key={g.id} className="p-6 border border-slate-200 rounded-2xl flex justify-between items-center group hover:bg-slate-50 hover:border-indigo-200 transition-all">
-                    <div>
-                      <span className="font-black text-slate-700 text-sm">{g.name}</span>
-                      <p className="text-[10px] text-slate-400 font-bold uppercase">{formatCurrency(g.minSalary)} – {formatCurrency(g.maxSalary)}</p>
+
+              {isGradesLoading ? (
+                <div className="flex justify-center items-center py-20">
+                  <Loader2 className="animate-spin text-amber-600" size={36} />
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {(payGrades || []).map((g: any) => {
+                    const midpoint = Math.round(((g.minSalary || 0) + (g.maxSalary || 0)) / 2);
+                    const spread = Math.max(0, (g.maxSalary || 0) - (g.minSalary || 0));
+
+                    return (
+                      <div
+                        key={g.id}
+                        className="p-6 border border-slate-200 rounded-3xl bg-slate-50/50 hover:bg-white hover:border-indigo-200 transition-all flex flex-col justify-between group shadow-sm"
+                      >
+                        <div>
+                          <div className="flex justify-between items-start mb-4">
+                            <span className="px-3 py-1 bg-indigo-100 text-indigo-700 rounded-xl text-[10px] font-black uppercase tracking-wider">
+                              Level {g.level || 1}
+                            </span>
+                            {!isViewOnly && (
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={() => { setEditingGrade(g); setShowGradeModal(true); }}
+                                  className="p-1.5 text-slate-400 hover:text-indigo-600 rounded-lg transition-colors"
+                                  title="Edit Grade"
+                                >
+                                  <Pencil size={15} />
+                                </button>
+                                <button
+                                  onClick={async () => {
+                                    if (await confirm(`Delete pay grade "${g.name}"?`)) {
+                                      deleteGradeMutation.mutate(g.id, {
+                                        onSuccess: () => popupAlert(`Pay grade "${g.name}" deleted.`, "Deleted"),
+                                        onError: (e: any) => popupAlert(e.message || "Failed to delete grade", "Error"),
+                                      });
+                                    }
+                                  }}
+                                  className="p-1.5 text-slate-400 hover:text-rose-500 rounded-lg transition-colors"
+                                  title="Delete Grade"
+                                >
+                                  <Trash2 size={15} />
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 mb-2">
+                            <h4 className="text-base font-black text-slate-800">{g.name}</h4>
+                            {g.code && (
+                              <span className="text-[10px] font-mono font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded">
+                                {g.code}
+                              </span>
+                            )}
+                          </div>
+                          <div className="p-4 bg-white rounded-2xl border border-slate-100 space-y-2 mb-4">
+                            <div className="flex justify-between text-xs">
+                              <span className="font-bold text-slate-400 uppercase text-[10px]">Salary Band</span>
+                              <span className="font-black text-slate-800">{formatCurrency(g.minSalary)} – {formatCurrency(g.maxSalary)}</span>
+                            </div>
+                            <div className="flex justify-between text-xs">
+                              <span className="font-bold text-slate-400 uppercase text-[10px]">Midpoint</span>
+                              <span className="font-bold text-indigo-600">{formatCurrency(midpoint)}</span>
+                            </div>
+                            <div className="flex justify-between text-xs">
+                              <span className="font-bold text-slate-400 uppercase text-[10px]">Spread</span>
+                              <span className="font-bold text-slate-500">{formatCurrency(spread)}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {(!payGrades || payGrades.length === 0) && (
+                    <div className="col-span-full text-center py-16 border border-dashed border-slate-200 rounded-3xl text-sm text-slate-400 font-bold">
+                      No pay grades configured yet. Click "+ New Grade" to establish salary structures.
                     </div>
-                    {!isViewOnly && (
-                      <button onClick={async () => { if (await confirm(`Delete "${g.name}"?`)) deleteGradeMutation.mutate(g.id); }} className="text-slate-300 hover:text-rose-500">
-                        <Trash2 size={16} />
-                      </button>
-                    )}
-                  </div>
-                ))}
-                {(!payGrades || payGrades.length === 0) && <p className="text-xs text-slate-400 font-bold">No pay grades defined yet.</p>}
-              </div>
+                  )}
+                </div>
+              )}
             </section>
           )}
         </div>
@@ -1207,85 +1851,705 @@ const Payroll: React.FC<PayrollProps> = ({ initialTab = "dashboard" }) => {
         </motion.div>
       </AnimatePresence>
 
+      {/* Loan Creation / Edit Modal */}
       {showLoanModal && (
         <LoanModal
+          loan={editingLoan}
           employees={employees || []}
-          onClose={() => setShowLoanModal(false)}
-          onSubmit={(payload) => createLoanMutation.mutate(payload, { onSuccess: () => setShowLoanModal(false), onError: (e: any) => popupAlert(e.message, "Error") })}
-          isPending={createLoanMutation.isPending}
+          onClose={() => { setShowLoanModal(false); setEditingLoan(null); }}
+          onSubmit={(payload) => {
+            if (editingLoan) {
+              updateLoanMutation.mutate(
+                { id: editingLoan.id, data: payload },
+                {
+                  onSuccess: () => {
+                    setShowLoanModal(false);
+                    setEditingLoan(null);
+                    popupAlert("Loan updated successfully.", "Saved");
+                  },
+                  onError: (e: any) => popupAlert(e.message || "Failed to update loan", "Error"),
+                }
+              );
+            } else {
+              createLoanMutation.mutate(payload, {
+                onSuccess: () => {
+                  setShowLoanModal(false);
+                  popupAlert("New loan facility activated.", "Created");
+                },
+                onError: (e: any) => popupAlert(e.message || "Failed to create loan", "Error"),
+              });
+            }
+          }}
+          isPending={createLoanMutation.isPending || updateLoanMutation.isPending}
         />
       )}
 
+      {/* Loan Recovery Schedule Modal */}
       {scheduleLoanId && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setScheduleLoanId(null)}>
-          <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
-            <div className="p-6 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
-              <h2 className="text-xl font-black text-slate-800">Recovery Schedule</h2>
-              <button onClick={() => setScheduleLoanId(null)} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
-            </div>
-            <div className="p-6 overflow-y-auto space-y-3">
-              {(scheduleRepayments || []).length === 0 && <p className="text-sm text-slate-400 font-bold text-center py-8">No repayments recorded yet — they're logged automatically when payroll runs are marked paid.</p>}
-              {scheduleRepayments?.map((r: any) => (
-                <div key={r.id} className="p-4 bg-slate-50 rounded-2xl flex justify-between items-center">
-                  <div>
-                    <p className="text-sm font-black text-slate-800">{formatCurrency(r.amount)}</p>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase">{new Date(r.paidAt).toLocaleDateString()}</p>
-                  </div>
-                  <p className="text-xs font-bold text-slate-500">Balance: {formatCurrency(r.balanceAfter)}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+        <RecoveryScheduleModal
+          loan={(loans || []).find((l: any) => l.id === scheduleLoanId)}
+          repayments={scheduleRepayments || []}
+          isLoading={isScheduleLoading}
+          onClose={() => setScheduleLoanId(null)}
+          onRecordRepayment={(amount, notes) => {
+            recordLoanRepaymentMutation.mutate(
+              { loanId: scheduleLoanId, amount, payrollRunId: notes },
+              {
+                onSuccess: () => popupAlert("Repayment logged successfully.", "Repayment Recorded"),
+                onError: (e: any) => popupAlert(e.message || "Failed to record repayment", "Error"),
+              }
+            );
+          }}
+          isRecording={recordLoanRepaymentMutation.isPending}
+        />
+      )}
+
+      {/* Salary Component Modal */}
+      {showComponentModal && (
+        <SalaryComponentModal
+          component={editingComponent}
+          onClose={() => { setShowComponentModal(false); setEditingComponent(null); }}
+          onSubmit={(payload) => {
+            if (editingComponent) {
+              updateComponentMutation.mutate(
+                { id: editingComponent.id, data: payload },
+                {
+                  onSuccess: () => {
+                    setShowComponentModal(false);
+                    setEditingComponent(null);
+                    popupAlert("Salary component updated.", "Saved");
+                  },
+                  onError: (e: any) => popupAlert(e.message || "Failed to update component", "Error"),
+                }
+              );
+            } else {
+              createComponentMutation.mutate(payload, {
+                onSuccess: () => {
+                  setShowComponentModal(false);
+                  popupAlert("Salary component added.", "Created");
+                },
+                onError: (e: any) => popupAlert(e.message || "Failed to create component", "Error"),
+              });
+            }
+          }}
+          isPending={createComponentMutation.isPending || updateComponentMutation.isPending}
+        />
+      )}
+
+      {/* Pay Grade Modal */}
+      {showGradeModal && (
+        <PayGradeModal
+          grade={editingGrade}
+          defaultLevel={(payGrades?.length || 0) + 1}
+          onClose={() => { setShowGradeModal(false); setEditingGrade(null); }}
+          onSubmit={(payload) => {
+            if (editingGrade) {
+              updateGradeMutation.mutate(
+                { id: editingGrade.id, data: payload },
+                {
+                  onSuccess: () => {
+                    setShowGradeModal(false);
+                    setEditingGrade(null);
+                    popupAlert("Pay grade updated.", "Saved");
+                  },
+                  onError: (e: any) => popupAlert(e.message || "Failed to update pay grade", "Error"),
+                }
+              );
+            } else {
+              createGradeMutation.mutate(payload, {
+                onSuccess: () => {
+                  setShowGradeModal(false);
+                  popupAlert("New pay grade added.", "Created");
+                },
+                onError: (e: any) => popupAlert(e.message || "Failed to create pay grade", "Error"),
+              });
+            }
+          }}
+          isPending={createGradeMutation.isPending || updateGradeMutation.isPending}
+        />
       )}
     </div>
   );
 };
 
-const LoanModal: React.FC<{ employees: any[]; onClose: () => void; onSubmit: (p: any) => void; isPending: boolean }> = ({ employees, onClose, onSubmit, isPending }) => {
-  const [form, setForm] = useState({ employeeId: "", principal: "", interestRatePercent: "0", durationMonths: "12", purpose: "" });
+// =========================================================================
+// Modal Components
+// =========================================================================
+
+const LoanModal: React.FC<{
+  loan?: any;
+  employees: any[];
+  onClose: () => void;
+  onSubmit: (p: any) => void;
+  isPending: boolean;
+}> = ({ loan, employees, onClose, onSubmit, isPending }) => {
+  const [form, setForm] = useState({
+    employeeId: loan?.employeeId || "",
+    principal: loan?.principal ? String(loan.principal) : "",
+    interestRatePercent: loan?.interestRatePercent !== undefined ? String(loan.interestRatePercent) : "0",
+    durationMonths: loan?.durationMonths ? String(loan.durationMonths) : "12",
+    purpose: loan?.purpose || "",
+    status: loan?.status || "active",
+    remainingBalance: loan?.remainingBalance !== undefined ? String(loan.remainingBalance) : "",
+    startDate: loan?.startDate || new Date().toISOString().slice(0, 10),
+  });
+
+  const principalNum = Number(form.principal) || 0;
+  const interestNum = Number(form.interestRatePercent) || 0;
+  const durationNum = Math.max(1, Number(form.durationMonths) || 1);
+  const totalRepayable = principalNum + principalNum * (interestNum / 100);
+  const monthlyInstallment = Math.round(totalRepayable / durationNum);
+
   return (
     <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
         <div className="p-6 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
-          <h2 className="text-xl font-black text-slate-800">New Loan Setup</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
+          <div>
+            <h2 className="text-xl font-black text-slate-800">{loan ? "Edit Loan Record" : "New Loan Setup"}</h2>
+            <p className="text-xs text-slate-400 font-medium">Configure principal, recovery period, and interest charges.</p>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-2"><X size={20} /></button>
         </div>
         <div className="p-6 space-y-4 overflow-y-auto">
           <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Employee</label>
-            <select value={form.employeeId} onChange={(e) => setForm({ ...form, employeeId: e.target.value })} className="w-full px-4 py-3 bg-slate-50 rounded-xl outline-none font-bold text-sm">
-              <option value="">Select employee…</option>
-              {employees.map((e: any) => <option key={e.id} value={e.id}>{e.name} {e.lastName}</option>)}
+            <select
+              disabled={!!loan}
+              value={form.employeeId}
+              onChange={(e) => setForm({ ...form, employeeId: e.target.value })}
+              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-sm text-slate-700 disabled:opacity-60"
+            >
+              <option value="">Select staff member…</option>
+              {employees.map((e: any) => (
+                <option key={e.id} value={e.id}>
+                  {e.name} {e.lastName || ""} {e.department ? `(${e.department})` : ""}
+                </option>
+              ))}
             </select>
           </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Principal (₦)</label>
-              <input type="number" value={form.principal} onChange={(e) => setForm({ ...form, principal: e.target.value })} className="w-full px-4 py-3 bg-slate-50 rounded-xl outline-none font-bold text-sm" />
+              <input
+                type="number"
+                placeholder="e.g. 500000"
+                value={form.principal}
+                onChange={(e) => setForm({ ...form, principal: e.target.value })}
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-sm text-slate-700"
+              />
             </div>
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Interest (%)</label>
-              <input type="number" value={form.interestRatePercent} onChange={(e) => setForm({ ...form, interestRatePercent: e.target.value })} className="w-full px-4 py-3 bg-slate-50 rounded-xl outline-none font-bold text-sm" />
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Interest Rate (%)</label>
+              <input
+                type="number"
+                step="0.5"
+                value={form.interestRatePercent}
+                onChange={(e) => setForm({ ...form, interestRatePercent: e.target.value })}
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-sm text-slate-700"
+              />
             </div>
           </div>
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Duration (months)</label>
-            <input type="number" value={form.durationMonths} onChange={(e) => setForm({ ...form, durationMonths: e.target.value })} className="w-full px-4 py-3 bg-slate-50 rounded-xl outline-none font-bold text-sm" />
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Duration (months)</label>
+              <input
+                type="number"
+                value={form.durationMonths}
+                onChange={(e) => setForm({ ...form, durationMonths: e.target.value })}
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-sm text-slate-700"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Start Date</label>
+              <input
+                type="date"
+                value={form.startDate}
+                onChange={(e) => setForm({ ...form, startDate: e.target.value })}
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-sm text-slate-700"
+              />
+            </div>
           </div>
+
+          {loan && (
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</label>
+                <select
+                  value={form.status}
+                  onChange={(e) => setForm({ ...form, status: e.target.value })}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-sm text-slate-700"
+                >
+                  <option value="active">Active</option>
+                  <option value="paused">Paused</option>
+                  <option value="completed">Completed</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Remaining Balance (₦)</label>
+                <input
+                  type="number"
+                  value={form.remainingBalance}
+                  onChange={(e) => setForm({ ...form, remainingBalance: e.target.value })}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-sm text-slate-700"
+                />
+              </div>
+            </div>
+          )}
+
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Purpose (optional)</label>
-            <input type="text" value={form.purpose} onChange={(e) => setForm({ ...form, purpose: e.target.value })} className="w-full px-4 py-3 bg-slate-50 rounded-xl outline-none font-bold text-sm" />
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Purpose / Reason</label>
+            <input
+              type="text"
+              placeholder="e.g. Relocation assistance, Emergency advance"
+              value={form.purpose}
+              onChange={(e) => setForm({ ...form, purpose: e.target.value })}
+              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-sm text-slate-700"
+            />
+          </div>
+
+          {/* Calculated Preview Box */}
+          <div className="p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100 space-y-1.5 text-xs">
+            <p className="font-black text-indigo-900 uppercase text-[10px] tracking-wider mb-2">Automated Repayment Projection</p>
+            <div className="flex justify-between font-bold text-slate-600">
+              <span>Total Repayable (Principal + Interest):</span>
+              <span className="text-slate-900">{formatCurrency(totalRepayable)}</span>
+            </div>
+            <div className="flex justify-between font-bold text-slate-600">
+              <span>Monthly Deduction:</span>
+              <span className="text-indigo-600 font-black">{formatCurrency(monthlyInstallment)} / mo</span>
+            </div>
           </div>
         </div>
-        <div className="p-6 border-t border-slate-100 flex justify-end gap-3">
-          <button onClick={onClose} className="px-6 py-3 bg-white border border-slate-200 rounded-xl font-black text-xs uppercase tracking-widest text-slate-500">Cancel</button>
+
+        <div className="p-6 border-t border-slate-100 flex justify-end gap-3 bg-slate-50">
+          <button onClick={onClose} className="px-6 py-3 bg-white border border-slate-200 rounded-xl font-black text-xs uppercase tracking-widest text-slate-500 hover:bg-slate-100">
+            Cancel
+          </button>
           <button
             disabled={!form.employeeId || !form.principal || isPending}
-            onClick={() => onSubmit({ ...form, principal: Number(form.principal), interestRatePercent: Number(form.interestRatePercent), durationMonths: Number(form.durationMonths) })}
-            className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-xl disabled:opacity-40"
+            onClick={() => {
+              const payload: any = {
+                employeeId: form.employeeId,
+                principal: Number(form.principal),
+                interestRatePercent: Number(form.interestRatePercent),
+                durationMonths: Number(form.durationMonths),
+                purpose: form.purpose,
+                startDate: form.startDate,
+                status: form.status,
+              };
+              if (loan && form.remainingBalance !== "") {
+                payload.remainingBalance = Number(form.remainingBalance);
+              }
+              onSubmit(payload);
+            }}
+            className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-xl disabled:opacity-40 hover:bg-indigo-700 transition-all"
           >
-            {isPending ? "Creating…" : "Create Loan"}
+            {isPending ? "Processing…" : loan ? "Save Changes" : "Create Loan"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const RecoveryScheduleModal: React.FC<{
+  loan: any;
+  repayments: any[];
+  isLoading: boolean;
+  onClose: () => void;
+  onRecordRepayment: (amount: number, notes?: string) => void;
+  isRecording: boolean;
+}> = ({ loan, repayments, isLoading, onClose, onRecordRepayment, isRecording }) => {
+  const [manualAmount, setManualAmount] = useState("");
+  const [manualNotes, setManualNotes] = useState("");
+  const [showAddPayment, setShowAddPayment] = useState(false);
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
+        <div className="p-6 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-black text-slate-800">Recovery Schedule & Log</h2>
+            <p className="text-xs text-slate-400 font-medium">
+              {loan?.employeeName || "Employee"} — Principal: {formatCurrency(loan?.principal)}
+            </p>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-2"><X size={20} /></button>
+        </div>
+
+        <div className="p-6 overflow-y-auto space-y-6">
+          {/* Loan Summary Badge */}
+          <div className="grid grid-cols-3 gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100 text-center">
+            <div>
+              <p className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Remaining</p>
+              <p className="text-sm font-black text-rose-600 mt-0.5">{formatCurrency(loan?.remainingBalance)}</p>
+            </div>
+            <div>
+              <p className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Monthly</p>
+              <p className="text-sm font-black text-indigo-600 mt-0.5">{formatCurrency(loan?.monthlyInstallment)}</p>
+            </div>
+            <div>
+              <p className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Status</p>
+              <span className="text-xs font-black uppercase text-emerald-600 mt-0.5 inline-block">{loan?.status}</span>
+            </div>
+          </div>
+
+          {/* Quick Record Manual Repayment Accordion */}
+          <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50/50">
+            <div className="flex justify-between items-center">
+              <div>
+                <p className="text-xs font-black text-slate-800">Manual Repayment Entry</p>
+                <p className="text-[10px] text-slate-400">Record an off-cycle or direct bank transfer recovery.</p>
+              </div>
+              <button
+                onClick={() => setShowAddPayment(!showAddPayment)}
+                className="px-3 py-1.5 bg-white border border-slate-200 hover:border-indigo-600 text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-wider transition-colors"
+              >
+                {showAddPayment ? "Cancel" : "+ Record Payment"}
+              </button>
+            </div>
+
+            {showAddPayment && (
+              <div className="mt-4 pt-4 border-t border-slate-200 space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black text-slate-400 uppercase">Amount (₦)</label>
+                    <input
+                      type="number"
+                      placeholder="e.g. 50000"
+                      value={manualAmount}
+                      onChange={(e) => setManualAmount(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black text-slate-400 uppercase">Notes / Reference</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Direct wire transfer"
+                      value={manualNotes}
+                      onChange={(e) => setManualNotes(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none"
+                    />
+                  </div>
+                </div>
+                <button
+                  disabled={!manualAmount || Number(manualAmount) <= 0 || isRecording}
+                  onClick={() => {
+                    onRecordRepayment(Number(manualAmount), manualNotes);
+                    setManualAmount("");
+                    setManualNotes("");
+                    setShowAddPayment(false);
+                  }}
+                  className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black text-[10px] uppercase tracking-widest disabled:opacity-40 shadow-sm transition-all"
+                >
+                  {isRecording ? "Recording…" : "Confirm Repayment"}
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Repayments Timeline List */}
+          <div>
+            <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Repayment History</h4>
+            {isLoading ? (
+              <div className="flex justify-center py-10">
+                <Loader2 className="animate-spin text-indigo-600" size={24} />
+              </div>
+            ) : repayments.length === 0 ? (
+              <div className="p-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-xs font-bold text-slate-400">
+                No repayments logged yet. Repayments are logged automatically when payroll runs are marked paid, or via the manual entry button above.
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {repayments.map((r: any) => (
+                  <div key={r.id} className="p-4 bg-slate-50 hover:bg-slate-100 rounded-2xl border border-slate-100 flex justify-between items-center transition-colors">
+                    <div>
+                      <p className="text-sm font-black text-slate-800">{formatCurrency(r.amount)}</p>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">
+                        {r.paidAt ? new Date(r.paidAt).toLocaleDateString() : "—"} {r.payrollRunId ? `· Run ID: ${r.payrollRunId}` : "· Direct Recovery"}
+                      </p>
+                    </div>
+                    <p className="text-xs font-bold text-slate-500">
+                      Balance: <span className="font-black text-slate-700">{formatCurrency(r.balanceAfter)}</span>
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="p-6 border-t border-slate-100 flex justify-end bg-slate-50">
+          <button onClick={onClose} className="px-6 py-2.5 bg-white border border-slate-200 rounded-xl font-black text-xs uppercase tracking-widest text-slate-600 hover:bg-slate-100">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const SalaryComponentModal: React.FC<{
+  component?: any;
+  onClose: () => void;
+  onSubmit: (p: any) => void;
+  isPending: boolean;
+}> = ({ component, onClose, onSubmit, isPending }) => {
+  const [form, setForm] = useState({
+    name: component?.name || "",
+    code: component?.code || "",
+    type: component?.type || "earning",
+    calculationType: component?.calculationType || "fixed",
+    value: component?.value !== undefined ? String(component.value) : "0",
+    taxable: component?.taxable !== undefined ? Boolean(component.taxable) : true,
+    active: component?.active !== undefined ? Boolean(component.active) : true,
+  });
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
+        <div className="p-6 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-black text-slate-800">
+              {component ? "Edit Salary Component" : "New Salary Component"}
+            </h2>
+            <p className="text-xs text-slate-400 font-medium">Define regular pay additions or payroll deductions.</p>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-2"><X size={20} /></button>
+        </div>
+
+        <div className="p-6 space-y-4 overflow-y-auto">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Component Name</label>
+              <input
+                type="text"
+                placeholder="e.g. Remote Work Stipend, Health Insurance"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-sm text-slate-700"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Code</label>
+              <input
+                type="text"
+                placeholder="e.g. TRANSPORT, HEALTH_INS"
+                value={form.code}
+                onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-sm text-slate-700 font-mono"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Classification</label>
+              <select
+                value={form.type}
+                onChange={(e) => setForm({ ...form, type: e.target.value })}
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-sm text-slate-700"
+              >
+                <option value="earning">Earning (+ Addition)</option>
+                <option value="deduction">Deduction (− Deduction)</option>
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Calculation Mode</label>
+              <select
+                value={form.calculationType}
+                onChange={(e) => setForm({ ...form, calculationType: e.target.value })}
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-sm text-slate-700"
+              >
+                <option value="fixed">Fixed Amount (₦)</option>
+                <option value="percentage_of_basic">% of Basic Salary</option>
+                <option value="percentage_of_gross">% of Gross Salary</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+              {form.calculationType === "fixed" ? "Fixed Value (₦)" : "Rate Percentage (%)"}
+            </label>
+            <input
+              type="number"
+              step={form.calculationType === "fixed" ? "1" : "0.5"}
+              value={form.value}
+              onChange={(e) => setForm({ ...form, value: e.target.value })}
+              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-sm text-slate-700"
+            />
+          </div>
+
+          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-black text-slate-800">Subject to PAYE Tax</p>
+                <p className="text-[10px] text-slate-400 font-bold uppercase">Include in taxable income computation</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setForm({ ...form, taxable: !form.taxable })}
+                className={`w-12 h-6 rounded-full flex items-center px-1 transition-colors ${form.taxable ? "bg-indigo-600 justify-end" : "bg-slate-300 justify-start"}`}
+              >
+                <div className="w-4 h-4 bg-white rounded-full shadow-sm" />
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between border-t border-slate-200 pt-3">
+              <div>
+                <p className="text-xs font-black text-slate-800">Active Status</p>
+                <p className="text-[10px] text-slate-400 font-bold uppercase">Apply automatically in upcoming payroll cycles</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setForm({ ...form, active: !form.active })}
+                className={`w-12 h-6 rounded-full flex items-center px-1 transition-colors ${form.active ? "bg-emerald-600 justify-end" : "bg-slate-300 justify-start"}`}
+              >
+                <div className="w-4 h-4 bg-white rounded-full shadow-sm" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-6 border-t border-slate-100 flex justify-end gap-3 bg-slate-50">
+          <button onClick={onClose} className="px-6 py-3 bg-white border border-slate-200 rounded-xl font-black text-xs uppercase tracking-widest text-slate-500 hover:bg-slate-100">
+            Cancel
+          </button>
+          <button
+            disabled={!form.name.trim() || isPending}
+            onClick={() => onSubmit({
+              name: form.name.trim(),
+              code: form.code.trim(),
+              type: form.type,
+              calculationType: form.calculationType,
+              value: Number(form.value) || 0,
+              taxable: form.taxable,
+              active: form.active,
+            })}
+            className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-xl disabled:opacity-40 hover:bg-indigo-700 transition-all"
+          >
+            {isPending ? "Saving…" : component ? "Save Changes" : "Create Component"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const PayGradeModal: React.FC<{
+  grade?: any;
+  defaultLevel?: number;
+  onClose: () => void;
+  onSubmit: (p: any) => void;
+  isPending: boolean;
+}> = ({ grade, defaultLevel = 1, onClose, onSubmit, isPending }) => {
+  const [form, setForm] = useState({
+    name: grade?.name || "",
+    code: grade?.code || "",
+    level: grade?.level !== undefined ? String(grade.level) : String(defaultLevel),
+    minSalary: grade?.minSalary !== undefined ? String(grade.minSalary) : "0",
+    maxSalary: grade?.maxSalary !== undefined ? String(grade.maxSalary) : "0",
+  });
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
+        <div className="p-6 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-black text-slate-800">
+              {grade ? "Edit Pay Grade" : "New Pay Grade"}
+            </h2>
+            <p className="text-xs text-slate-400 font-medium">Establish career rank tier and salary remuneration range.</p>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-2"><X size={20} /></button>
+        </div>
+
+        <div className="p-6 space-y-4 overflow-y-auto">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Grade Title / Designation</label>
+              <input
+                type="text"
+                placeholder="e.g. Senior Principal (L5), Junior Associate (L1)"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-sm text-slate-700"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Code</label>
+              <input
+                type="text"
+                placeholder="e.g. ENG-L1, MGT-04"
+                value={form.code}
+                onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-sm text-slate-700 font-mono"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Hierarchy Rank Level (Numeric order)</label>
+            <input
+              type="number"
+              min="1"
+              value={form.level}
+              onChange={(e) => setForm({ ...form, level: e.target.value })}
+              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-sm text-slate-700"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Minimum Salary (₦)</label>
+              <input
+                type="number"
+                value={form.minSalary}
+                onChange={(e) => setForm({ ...form, minSalary: e.target.value })}
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-sm text-slate-700"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Maximum Salary (₦)</label>
+              <input
+                type="number"
+                value={form.maxSalary}
+                onChange={(e) => setForm({ ...form, maxSalary: e.target.value })}
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-sm text-slate-700"
+              />
+            </div>
+          </div>
+
+          <div className="p-4 bg-amber-50/50 rounded-2xl border border-amber-100 text-xs text-amber-900 space-y-1">
+            <p className="font-black text-[10px] uppercase tracking-wider text-amber-700">Salary Band Summary</p>
+            <p className="font-bold">
+              Spread: {formatCurrency(Math.max(0, (Number(form.maxSalary) || 0) - (Number(form.minSalary) || 0)))} · Midpoint: {formatCurrency(Math.round(((Number(form.minSalary) || 0) + (Number(form.maxSalary) || 0)) / 2))}
+            </p>
+          </div>
+        </div>
+
+        <div className="p-6 border-t border-slate-100 flex justify-end gap-3 bg-slate-50">
+          <button onClick={onClose} className="px-6 py-3 bg-white border border-slate-200 rounded-xl font-black text-xs uppercase tracking-widest text-slate-500 hover:bg-slate-100">
+            Cancel
+          </button>
+          <button
+            disabled={!form.name.trim() || isPending}
+            onClick={() => onSubmit({
+              name: form.name.trim(),
+              code: form.code.trim(),
+              level: Number(form.level) || 1,
+              minSalary: Number(form.minSalary) || 0,
+              maxSalary: Number(form.maxSalary) || 0,
+            })}
+            className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-xl disabled:opacity-40 hover:bg-indigo-700 transition-all"
+          >
+            {isPending ? "Saving…" : grade ? "Save Changes" : "Create Pay Grade"}
           </button>
         </div>
       </div>

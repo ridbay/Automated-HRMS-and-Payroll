@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { motion } from 'framer-motion';
+import React, { useState, useMemo } from "react";
+import { motion } from "framer-motion";
 import {
   GraduationCap,
   PlayCircle,
@@ -15,54 +15,59 @@ import {
   Sparkles,
   Send,
   Eye,
-} from 'lucide-react';
-import { useMyCourses } from '../../api/learning.client';
-import { TakeCourseModal } from './TakeCourseModal';
-import { CertificateModal } from '../lms/CertificateModal';
+} from "lucide-react";
+import { useMyCourses } from "../../api/learning.client";
+import { TakeCourseModal } from "./TakeCourseModal";
+import { CertificateModal } from "../lms/CertificateModal";
 
 const progressColor = (pct: number) => {
-  if (pct >= 100) return 'bg-emerald-500';
-  if (pct >= 50) return 'bg-indigo-500';
-  return 'bg-amber-400';
+  if (pct >= 100) return "bg-emerald-500";
+  if (pct >= 50) return "bg-indigo-500";
+  return "bg-amber-400";
 };
 
 const EmployeeLMS: React.FC = () => {
-  const user = typeof window !== 'undefined' && localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user') || '{}') : null;
+  const user =
+    typeof window !== "undefined" && localStorage.getItem("user")
+      ? JSON.parse(localStorage.getItem("user") || "{}")
+      : null;
   const popupAlert = (msg: string) => window.alert(msg);
 
-  const isManager = user?.role === 'MANAGER';
-  const [managerViewTab, setManagerViewTab] = useState<'my' | 'team'>('my');
+  const isManager = user?.role === "MANAGER";
+  const [managerViewTab, setManagerViewTab] = useState<"my" | "team">("my");
 
   const { data: enrollments = [], isLoading } = useMyCourses();
   const teamEnrollments: any[] = [];
   const isTeamLoading = false;
 
   const [activeEnrollment, setActiveEnrollment] = useState<any | null>(null);
-  const [selectedCertificate, setSelectedCertificate] = useState<any | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [teamSearch, setTeamSearch] = useState('');
+  const [selectedCertificate, setSelectedCertificate] = useState<any | null>(
+    null,
+  );
+  const [searchQuery, setSearchQuery] = useState("");
+  const [teamSearch, setTeamSearch] = useState("");
 
   const completed = enrollments.filter(
-    (e: any) => (e.enrollment?.progress ?? e.progress ?? 0) >= 100
+    (e: any) => (e.enrollment?.progress ?? e.progress ?? 0) >= 100,
   );
   const inProgress = enrollments.filter((e: any) => {
     const p = e.enrollment?.progress ?? e.progress ?? 0;
     return p > 0 && p < 100;
   });
   const notStarted = enrollments.filter(
-    (e: any) => (e.enrollment?.progress ?? e.progress ?? 0) === 0
+    (e: any) => (e.enrollment?.progress ?? e.progress ?? 0) === 0,
   );
 
   const filteredInProgress = inProgress.filter((e: any) => {
-    const title = (e.course?.title || e.title || '').toLowerCase();
+    const title = (e.course?.title || e.title || "").toLowerCase();
     return !searchQuery || title.includes(searchQuery.toLowerCase());
   });
   const filteredNotStarted = notStarted.filter((e: any) => {
-    const title = (e.course?.title || e.title || '').toLowerCase();
+    const title = (e.course?.title || e.title || "").toLowerCase();
     return !searchQuery || title.includes(searchQuery.toLowerCase());
   });
   const filteredCompleted = completed.filter((e: any) => {
-    const title = (e.course?.title || e.title || '').toLowerCase();
+    const title = (e.course?.title || e.title || "").toLowerCase();
     return !searchQuery || title.includes(searchQuery.toLowerCase());
   });
 
@@ -76,7 +81,8 @@ const EmployeeLMS: React.FC = () => {
 
   const CourseCard = ({ enrollment, i }: { enrollment: any; i: number }) => {
     const course = enrollment.course ?? enrollment;
-    const progress = enrollment.enrollment?.progress ?? enrollment.progress ?? 0;
+    const progress =
+      enrollment.enrollment?.progress ?? enrollment.progress ?? 0;
     const isDone = progress >= 100;
 
     return (
@@ -85,14 +91,18 @@ const EmployeeLMS: React.FC = () => {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: i * 0.05 }}
         className={`bg-white rounded-[2rem] border shadow-sm hover:shadow-lg transition-all overflow-hidden group ${
-          isDone ? 'border-slate-100 opacity-80' : 'border-slate-200 hover:border-indigo-200'
+          isDone
+            ? "border-slate-100 opacity-80"
+            : "border-slate-200 hover:border-indigo-200"
         }`}
       >
         <div className="p-8 space-y-5">
           <div className="flex items-start justify-between gap-4">
             <div
               className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform ${
-                isDone ? 'bg-emerald-50 text-emerald-500' : 'bg-indigo-50 text-indigo-600'
+                isDone
+                  ? "bg-emerald-50 text-emerald-500"
+                  : "bg-indigo-50 text-indigo-600"
               }`}
             >
               {isDone ? <CheckCircle2 size={22} /> : <BookOpen size={22} />}
@@ -100,13 +110,17 @@ const EmployeeLMS: React.FC = () => {
             <span
               className={`px-3 py-1 text-[9px] font-black uppercase tracking-widest rounded-lg shrink-0 ${
                 isDone
-                  ? 'bg-emerald-50 text-emerald-600'
+                  ? "bg-emerald-50 text-emerald-600"
                   : progress > 0
-                  ? 'bg-indigo-50 text-indigo-600'
-                  : 'bg-slate-50 text-slate-500'
+                    ? "bg-indigo-50 text-indigo-600"
+                    : "bg-slate-50 text-slate-500"
               }`}
             >
-              {isDone ? 'Completed' : progress > 0 ? 'In Progress' : 'Not Started'}
+              {isDone
+                ? "Completed"
+                : progress > 0
+                  ? "In Progress"
+                  : "Not Started"}
             </span>
           </div>
 
@@ -126,14 +140,16 @@ const EmployeeLMS: React.FC = () => {
               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
                 <BarChart2 size={11} /> Progress
               </span>
-              <span className="text-[10px] font-black text-slate-600">{Math.round(progress)}%</span>
+              <span className="text-[10px] font-black text-slate-600">
+                {Math.round(progress)}%
+              </span>
             </div>
             <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
               <motion.div
                 className={`h-full rounded-full ${progressColor(progress)}`}
                 initial={{ width: 0 }}
                 animate={{ width: `${progress}%` }}
-                transition={{ duration: 0.6, ease: 'easeOut' }}
+                transition={{ duration: 0.6, ease: "easeOut" }}
               />
             </div>
           </div>
@@ -152,13 +168,13 @@ const EmployeeLMS: React.FC = () => {
                 className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-100"
               >
                 <PlayCircle size={13} />
-                {progress > 0 ? 'Continue' : 'Start'}
+                {progress > 0 ? "Continue" : "Start"}
               </button>
             ) : (
               <button
                 onClick={() =>
                   setSelectedCertificate({
-                    recipientName: `${user?.name || 'Employee'}`,
+                    recipientName: `${user?.name || "Employee"}`,
                     courseTitle: course.title ?? course.name,
                     completedAt: enrollment.enrollment?.completedAt,
                     duration: course.duration,
@@ -185,7 +201,9 @@ const EmployeeLMS: React.FC = () => {
               <GraduationCap size={14} /> ZenHR Academy
             </span>
           </div>
-          <h1 className="text-3xl font-black text-slate-800 tracking-tight">My Learning</h1>
+          <h1 className="text-3xl font-black text-slate-800 tracking-tight">
+            My Learning
+          </h1>
           <p className="text-sm text-slate-500 font-medium mt-1">
             Courses assigned to you by your HR team.
           </p>
@@ -207,41 +225,48 @@ const EmployeeLMS: React.FC = () => {
       {isManager && (
         <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
           <button
-            onClick={() => setManagerViewTab('my')}
+            onClick={() => setManagerViewTab("my")}
             className={`px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 ${
-              managerViewTab === 'my'
-                ? 'bg-slate-900 text-white shadow-md'
-                : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
+              managerViewTab === "my"
+                ? "bg-slate-900 text-white shadow-md"
+                : "text-slate-500 hover:text-slate-800 hover:bg-slate-100"
             }`}
           >
             <BookOpen size={15} /> My Learning ({enrollments.length})
           </button>
           <button
-            onClick={() => setManagerViewTab('team')}
+            onClick={() => setManagerViewTab("team")}
             className={`px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 ${
-              managerViewTab === 'team'
-                ? 'bg-slate-900 text-white shadow-md'
-                : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
+              managerViewTab === "team"
+                ? "bg-slate-900 text-white shadow-md"
+                : "text-slate-500 hover:text-slate-800 hover:bg-slate-100"
             }`}
           >
-            <Users size={15} /> Team Learning Progress ({teamEnrollments.length})
+            <Users size={15} /> Team Learning Progress ({teamEnrollments.length}
+            )
           </button>
         </div>
       )}
 
       {/* Manager Team Learning View */}
-      {isManager && managerViewTab === 'team' ? (
+      {isManager && managerViewTab === "team" ? (
         <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
-              <h2 className="text-lg font-black text-slate-800">Team Learning & Compliance</h2>
+              <h2 className="text-lg font-black text-slate-800">
+                Team Learning & Compliance
+              </h2>
               <p className="text-xs text-slate-500 font-medium">
-                Monitor training progress and completions for your direct reports.
+                Monitor training progress and completions for your direct
+                reports.
               </p>
             </div>
 
             <div className="relative w-full sm:w-64">
-              <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <Search
+                size={15}
+                className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
+              />
               <input
                 type="text"
                 placeholder="Search direct reports..."
@@ -259,7 +284,9 @@ const EmployeeLMS: React.FC = () => {
           ) : teamEnrollments.length === 0 ? (
             <div className="py-12 text-center text-slate-400">
               <Users size={40} className="mx-auto mb-3 opacity-30" />
-              <p className="text-sm font-bold">No direct reports currently enrolled in courses.</p>
+              <p className="text-sm font-bold">
+                No direct reports currently enrolled in courses.
+              </p>
             </div>
           ) : (
             <div className="overflow-x-auto border border-slate-100 rounded-2xl">
@@ -276,8 +303,11 @@ const EmployeeLMS: React.FC = () => {
                 <tbody className="divide-y divide-slate-100">
                   {teamEnrollments
                     .filter((item: any) => {
-                      const name = `${item.employee?.name || ''} ${item.employee?.lastName || ''}`.toLowerCase();
-                      const courseTitle = (item.course?.title || '').toLowerCase();
+                      const name =
+                        `${item.employee?.name || ""} ${item.employee?.lastName || ""}`.toLowerCase();
+                      const courseTitle = (
+                        item.course?.title || ""
+                      ).toLowerCase();
                       const q = teamSearch.trim().toLowerCase();
                       return !q || name.includes(q) || courseTitle.includes(q);
                     })
@@ -289,7 +319,10 @@ const EmployeeLMS: React.FC = () => {
                       const isDone = progress >= 100;
 
                       return (
-                        <tr key={enr.id} className="hover:bg-slate-50/70 transition-colors">
+                        <tr
+                          key={enr.id}
+                          className="hover:bg-slate-50/70 transition-colors"
+                        >
                           <td className="py-3.5 px-4 font-bold text-slate-800">
                             {emp?.name} {emp?.lastName}
                           </td>
@@ -300,13 +333,17 @@ const EmployeeLMS: React.FC = () => {
                             <span
                               className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider ${
                                 isDone
-                                  ? 'bg-emerald-50 text-emerald-600'
+                                  ? "bg-emerald-50 text-emerald-600"
                                   : progress > 0
-                                  ? 'bg-indigo-50 text-indigo-600'
-                                  : 'bg-slate-100 text-slate-500'
+                                    ? "bg-indigo-50 text-indigo-600"
+                                    : "bg-slate-100 text-slate-500"
                               }`}
                             >
-                              {isDone ? 'Completed' : progress > 0 ? 'In Progress' : 'Not Started'}
+                              {isDone
+                                ? "Completed"
+                                : progress > 0
+                                  ? "In Progress"
+                                  : "Not Started"}
                             </span>
                           </td>
                           <td className="py-3.5 px-4">
@@ -317,7 +354,11 @@ const EmployeeLMS: React.FC = () => {
                               <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
                                 <div
                                   className={`h-full rounded-full ${
-                                    isDone ? 'bg-emerald-500' : progress > 0 ? 'bg-indigo-500' : 'bg-slate-300'
+                                    isDone
+                                      ? "bg-emerald-500"
+                                      : progress > 0
+                                        ? "bg-indigo-500"
+                                        : "bg-slate-300"
                                   }`}
                                   style={{ width: `${progress}%` }}
                                 />
@@ -328,7 +369,9 @@ const EmployeeLMS: React.FC = () => {
                             {!isDone && (
                               <button
                                 onClick={() =>
-                                  popupAlert(`Encouragement sent to ${emp?.name}.`, 'Reminder Sent')
+                                  popupAlert(
+                                    `Encouragement sent to ${emp?.name}.`,
+                                  )
                                 }
                                 className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-bold transition-colors inline-flex items-center gap-1"
                               >
@@ -352,9 +395,12 @@ const EmployeeLMS: React.FC = () => {
               <div className="w-24 h-24 bg-indigo-50 rounded-full flex items-center justify-center mb-6">
                 <GraduationCap size={40} className="text-indigo-300" />
               </div>
-              <h2 className="text-xl font-black text-slate-700 mb-2">No courses assigned</h2>
+              <h2 className="text-xl font-black text-slate-700 mb-2">
+                No courses assigned
+              </h2>
               <p className="text-sm text-slate-400 font-medium max-w-xs">
-                Your HR team hasn't enrolled you in any courses yet. Check back soon.
+                Your HR team hasn't enrolled you in any courses yet. Check back
+                soon.
               </p>
             </div>
           ) : (

@@ -102,6 +102,11 @@ const AppContent: React.FC = () => {
         return <Payroll />;
       case "compliance":
         return <Payroll initialTab="compliance" />;
+      case "loans":
+      case "payroll-loans":
+        return <Payroll initialTab="loans" />;
+      case "payroll-settings":
+        return <Payroll initialTab="settings" />;
       case "recruitment":
       case "requisitions":
       case "pipeline":

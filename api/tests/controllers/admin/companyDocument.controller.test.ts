@@ -34,7 +34,7 @@ describe('AdminCompanyDocumentController', () => {
     mockContext.get.mockImplementation((k: string) => (k === 'companyId' ? 'comp-1' : undefined));
     CompanyDocumentService.prototype.list = vi.fn().mockResolvedValue([{ id: 'DOC-1', title: 'Handbook' }]);
 
-    const res = await AdminCompanyDocumentController.list(mockContext);
+    const res: any = await AdminCompanyDocumentController.list(mockContext);
 
     expect(CompanyDocumentService.prototype.list).toHaveBeenCalledWith('comp-1');
     expect(res.data.data).toEqual([{ id: 'DOC-1', title: 'Handbook' }]);
@@ -82,7 +82,7 @@ describe('AdminCompanyDocumentController', () => {
     CompanyDocumentService.prototype.get = vi.fn().mockResolvedValue({ id: 'DOC-1', title: 'Remote Work Policy' });
     CompanyDocumentService.prototype.delete = vi.fn().mockResolvedValue({ success: true });
 
-    const res = await AdminCompanyDocumentController.remove(mockContext);
+    const res: any = await AdminCompanyDocumentController.remove(mockContext);
 
     expect(CompanyDocumentService.prototype.delete).toHaveBeenCalledWith('comp-1', 'DOC-1', mockContext.env.BUCKET);
     expect(AuditService.prototype.log).toHaveBeenCalledWith('comp-1', expect.objectContaining({

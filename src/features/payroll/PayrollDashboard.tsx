@@ -128,6 +128,14 @@ const PayrollDashboard: React.FC = () => {
     );
   };
 
+  const navigateTo = (tab: string, section?: string) => {
+    if (typeof window !== "undefined") {
+      const url = section ? `/payroll?tab=${tab}&section=${section}` : `/payroll?tab=${tab}`;
+      window.history.pushState(null, "", url);
+    }
+    setActiveTab("payroll");
+  };
+
   return (
     <div className="space-y-10 pb-20">
       {/* Header */}
@@ -325,6 +333,46 @@ const PayrollDashboard: React.FC = () => {
             )}
           </section>
 
+          {/* Payroll Configuration & Management quick access */}
+          <section className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm">
+            <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] mb-4">
+              Payroll Setup & Rules
+            </h3>
+            <p className="text-xs text-slate-500 font-medium mb-6">
+              Configure statutory compliance, salary rules, pay grade bands, and staff loans.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => navigateTo("loans")}
+                className="p-3.5 bg-slate-50 hover:bg-indigo-50 hover:border-indigo-200 border border-slate-200 rounded-2xl text-left transition-all group"
+              >
+                <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest block mb-1">Loans & Adv</span>
+                <span className="text-xs font-bold text-slate-700 group-hover:text-indigo-900">Staff Loans →</span>
+              </button>
+              <button
+                onClick={() => navigateTo("settings", "general")}
+                className="p-3.5 bg-slate-50 hover:bg-emerald-50 hover:border-emerald-200 border border-slate-200 rounded-2xl text-left transition-all group"
+              >
+                <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest block mb-1">Config</span>
+                <span className="text-xs font-bold text-slate-700 group-hover:text-emerald-900">General Rules →</span>
+              </button>
+              <button
+                onClick={() => navigateTo("settings", "components")}
+                className="p-3.5 bg-slate-50 hover:bg-amber-50 hover:border-amber-200 border border-slate-200 rounded-2xl text-left transition-all group"
+              >
+                <span className="text-[10px] font-black text-amber-600 uppercase tracking-widest block mb-1">Components</span>
+                <span className="text-xs font-bold text-slate-700 group-hover:text-amber-900">Components →</span>
+              </button>
+              <button
+                onClick={() => navigateTo("settings", "grades")}
+                className="p-3.5 bg-slate-50 hover:bg-purple-50 hover:border-purple-200 border border-slate-200 rounded-2xl text-left transition-all group"
+              >
+                <span className="text-[10px] font-black text-purple-600 uppercase tracking-widest block mb-1">Grading</span>
+                <span className="text-xs font-bold text-slate-700 group-hover:text-purple-900">Pay Grades →</span>
+              </button>
+            </div>
+          </section>
+
           {/* Loans */}
           <section className="bg-slate-900 p-8 rounded-[3rem] text-white shadow-2xl relative overflow-hidden">
             <ShieldCheck className="absolute -bottom-6 -right-6 w-32 h-32 text-indigo-500/20 rotate-12" />
@@ -350,7 +398,7 @@ const PayrollDashboard: React.FC = () => {
               )}
             </div>
             <button
-              onClick={() => setActiveTab("payroll")}
+              onClick={() => navigateTo("loans")}
               className="relative z-10 w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl"
             >
               Manage Loans

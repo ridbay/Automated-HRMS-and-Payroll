@@ -44,10 +44,36 @@ const mockUser: any = { id: 'emp-1', name: 'Sarah Connor', role: 'HR_ADMIN' };
 // mutation hooks below) because these two are the ones we actually assert
 // call arguments on — a plain factory closure would hand back a new mock
 // function on every re-render, losing the call history we need to inspect.
-const { mockRecompute, mockSubmit, mockConfirm } = vi.hoisted(() => ({
+const {
+  mockRecompute,
+  mockSubmit,
+  mockConfirm,
+  mockCreateLoan,
+  mockUpdateLoan,
+  mockDeleteLoan,
+  mockRecordLoanRepayment,
+  mockCreateSalaryComponent,
+  mockUpdateSalaryComponent,
+  mockDeleteSalaryComponent,
+  mockCreatePayGrade,
+  mockUpdatePayGrade,
+  mockDeletePayGrade,
+  mockUpdatePayrollSettings,
+} = vi.hoisted(() => ({
   mockRecompute: vi.fn(),
   mockSubmit: vi.fn(),
   mockConfirm: vi.fn().mockResolvedValue(true),
+  mockCreateLoan: vi.fn(),
+  mockUpdateLoan: vi.fn(),
+  mockDeleteLoan: vi.fn(),
+  mockRecordLoanRepayment: vi.fn(),
+  mockCreateSalaryComponent: vi.fn(),
+  mockUpdateSalaryComponent: vi.fn(),
+  mockDeleteSalaryComponent: vi.fn(),
+  mockCreatePayGrade: vi.fn(),
+  mockUpdatePayGrade: vi.fn(),
+  mockDeletePayGrade: vi.fn(),
+  mockUpdatePayrollSettings: vi.fn(),
 }));
 
 vi.mock('../context/NavigationContext', () => ({
@@ -62,7 +88,7 @@ vi.mock('../components/PopupProvider', () => ({
   usePopup: () => ({ alert: vi.fn(), confirm: mockConfirm, prompt: vi.fn() }),
 }));
 
-const mutationStub = () => ({ mutate: vi.fn(), isPending: false });
+const mutationStub = (mutateFn = vi.fn()) => ({ mutate: mutateFn, isPending: false });
 
 vi.mock('../api/client', () => ({
   useEmployees: vi.fn(() => ({ data: [] })),
@@ -82,17 +108,21 @@ vi.mock('../api/client', () => ({
   useTaxBrackets: vi.fn(() => ({ data: [] })),
   useUpdateTaxBrackets: vi.fn(() => mutationStub()),
   useLoans: vi.fn(() => ({ data: [] })),
-  useCreateLoan: vi.fn(() => mutationStub()),
-  useDeleteLoan: vi.fn(() => mutationStub()),
+  useCreateLoan: vi.fn(() => mutationStub(mockCreateLoan)),
+  useUpdateLoan: vi.fn(() => mutationStub(mockUpdateLoan)),
+  useDeleteLoan: vi.fn(() => mutationStub(mockDeleteLoan)),
   useLoanRepayments: vi.fn(() => ({ data: [] })),
+  useRecordLoanRepayment: vi.fn(() => mutationStub(mockRecordLoanRepayment)),
   useSalaryComponents: vi.fn(() => ({ data: [] })),
-  useCreateSalaryComponent: vi.fn(() => mutationStub()),
-  useDeleteSalaryComponent: vi.fn(() => mutationStub()),
+  useCreateSalaryComponent: vi.fn(() => mutationStub(mockCreateSalaryComponent)),
+  useUpdateSalaryComponent: vi.fn(() => mutationStub(mockUpdateSalaryComponent)),
+  useDeleteSalaryComponent: vi.fn(() => mutationStub(mockDeleteSalaryComponent)),
   usePayGrades: vi.fn(() => ({ data: [] })),
-  useCreatePayGrade: vi.fn(() => mutationStub()),
-  useDeletePayGrade: vi.fn(() => mutationStub()),
+  useCreatePayGrade: vi.fn(() => mutationStub(mockCreatePayGrade)),
+  useUpdatePayGrade: vi.fn(() => mutationStub(mockUpdatePayGrade)),
+  useDeletePayGrade: vi.fn(() => mutationStub(mockDeletePayGrade)),
   usePayrollSettings: vi.fn(() => ({ data: null })),
-  useUpdatePayrollSettings: vi.fn(() => mutationStub()),
+  useUpdatePayrollSettings: vi.fn(() => mutationStub(mockUpdatePayrollSettings)),
 }));
 
 describe('Payroll (admin) dashboard and tab routing', () => {
@@ -275,3 +305,265 @@ describe('Payroll Run Wizard', () => {
     expect(screen.getByText(/hasn't been paid yet — complete Payment \(step 6\) first/)).toBeInTheDocument();
   });
 });
+
+describe('Payroll Administration: Loans & Advances', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockUser.role = 'HR_ADMIN';
+    vi.mocked(client.useEmployees).mockReturnValue({
+      data: [
+        { id: 'emp-1', name: 'John', lastName: 'Doe', email: 'john@example.com' },
+        { id: 'emp-2', name: 'Jane', lastName: 'Smith', email: 'jane@example.com' },
+      ],
+    } as any);
+  });
+
+  it('renders active loans with balances and summary metrics', () => {
+    vi.mocked(client.useLoans).mockReturnValue({
+      data: [
+        {
+          id: 'loan-1',
+          employeeId: 'emp-1',
+          employeeName: 'John Doe',
+          type: 'personal',
+          principal: 500000,
+          remainingBalance: 300000,
+          monthlyInstallment: 50000,
+          status: 'active',
+          purpose: 'Emergency home repair',
+        },
+      ],
+      isLoading: false,
+    } as any);
+
+    render(<Payroll initialTab="loans" />);
+
+    expect(screen.getByText('Active Loans')).toBeInTheDocument();
+    expect(screen.getByText('John Doe')).toBeInTheDocument();
+    expect(screen.getByText('Emergency home repair')).toBeInTheDocument();
+    expect(screen.getAllByText('₦300,000').length).toBeGreaterThan(0);
+    expect(screen.getByText('New Loan Setup')).toBeInTheDocument();
+  });
+
+  it('filters loans by search and status filter', () => {
+    vi.mocked(client.useLoans).mockReturnValue({
+      data: [
+        {
+          id: 'loan-1',
+          employeeId: 'emp-1',
+          employeeName: 'John Doe',
+          type: 'personal',
+          principal: 500000,
+          remainingBalance: 300000,
+          monthlyInstallment: 50000,
+          status: 'active',
+          purpose: 'Personal support',
+        },
+        {
+          id: 'loan-2',
+          employeeId: 'emp-2',
+          employeeName: 'Jane Smith',
+          type: 'emergency',
+          principal: 100000,
+          remainingBalance: 0,
+          monthlyInstallment: 20000,
+          status: 'completed',
+          purpose: 'Medical bills',
+        },
+      ],
+      isLoading: false,
+    } as any);
+
+    render(<Payroll initialTab="loans" />);
+
+    expect(screen.getByText('John Doe')).toBeInTheDocument();
+    expect(screen.getByText('Jane Smith')).toBeInTheDocument();
+
+    const searchInput = screen.getByPlaceholderText('Search staff or purpose…');
+    fireEvent.change(searchInput, { target: { value: 'Jane' } });
+
+    expect(screen.queryByText('John Doe')).not.toBeInTheDocument();
+    expect(screen.getByText('Jane Smith')).toBeInTheDocument();
+  });
+
+  it('opens New Loan Setup modal and calls useCreateLoan on submit', () => {
+    vi.mocked(client.useLoans).mockReturnValue({ data: [], isLoading: false } as any);
+
+    render(<Payroll initialTab="loans" />);
+
+    fireEvent.click(screen.getByText('New Loan Setup'));
+    expect(screen.getAllByText('New Loan Setup').length).toBeGreaterThan(0);
+
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'emp-1' } });
+    fireEvent.change(screen.getByPlaceholderText('e.g. 500000'), { target: { value: '250000' } });
+
+    fireEvent.click(screen.getByText('Create Loan'));
+
+    expect(mockCreateLoan).toHaveBeenCalledWith(
+      expect.objectContaining({
+        employeeId: 'emp-1',
+        principal: 250000,
+      }),
+      expect.any(Object)
+    );
+  });
+});
+
+describe('Payroll Administration: General Configuration', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockUser.role = 'HR_ADMIN';
+  });
+
+  it('renders General Configuration with settings and saves updates', () => {
+    vi.mocked(client.usePayrollSettings).mockReturnValue({
+      data: {
+        pensionEmployerRate: 10,
+        pensionEmployeeRate: 8,
+        nhfRate: 2.5,
+        nsitfRate: 1,
+        itfRate: 1,
+        paymentDay: 25,
+        currency: 'NGN',
+        payrollLocked: false,
+      },
+    } as any);
+
+    render(<Payroll initialTab="settings" />);
+
+    expect(screen.getAllByText('General Configuration').length).toBeGreaterThan(0);
+    expect(screen.getByDisplayValue('10')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('8')).toBeInTheDocument();
+
+    const dayInput = screen.getByDisplayValue('25');
+    fireEvent.change(dayInput, { target: { value: '28' } });
+
+    fireEvent.click(screen.getByText('Save Settings'));
+
+    expect(mockUpdatePayrollSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        paymentDay: 28,
+        pensionEmployerRate: 10,
+        pensionEmployeeRate: 8,
+      }),
+      expect.any(Object)
+    );
+  });
+});
+
+describe('Payroll Administration: Salary Components', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockUser.role = 'HR_ADMIN';
+  });
+
+  it('switches to Salary Components, lists components and opens Add Component modal', () => {
+    vi.mocked(client.useSalaryComponents).mockReturnValue({
+      data: [
+        {
+          id: 'comp-1',
+          name: 'Basic Salary',
+          code: 'BASIC',
+          type: 'earning',
+          taxable: true,
+          statutory: true,
+          description: 'Base pay element',
+        },
+        {
+          id: 'comp-2',
+          name: 'Housing Allowance',
+          code: 'HOUSING',
+          type: 'earning',
+          taxable: true,
+          statutory: false,
+        },
+      ],
+      isLoading: false,
+    } as any);
+
+    render(<Payroll initialTab="settings" />);
+
+    // Switch to Salary Components sub-tab
+    fireEvent.click(screen.getByText('Salary Components'));
+
+    expect(screen.getByText('BASIC')).toBeInTheDocument();
+    expect(screen.getByText('HOUSING')).toBeInTheDocument();
+    expect(screen.getByText('Statutory')).toBeInTheDocument();
+
+    // Open add component modal
+    fireEvent.click(screen.getByText('Add Component'));
+    expect(screen.getByText('New Salary Component')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText(/Remote Work Stipend/i), { target: { value: 'Transport Allowance' } });
+    fireEvent.change(screen.getByPlaceholderText(/TRANSPORT/i), { target: { value: 'TRANS' } });
+
+    fireEvent.click(screen.getByText('Create Component'));
+
+    expect(mockCreateSalaryComponent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'Transport Allowance',
+        code: 'TRANS',
+        type: 'earning',
+      }),
+      expect.any(Object)
+    );
+  });
+});
+
+describe('Payroll Administration: Pay Grades', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockUser.role = 'HR_ADMIN';
+  });
+
+  it('switches to Pay Grades, lists grades and opens Create Pay Grade modal', () => {
+    vi.mocked(client.usePayGrades).mockReturnValue({
+      data: [
+        {
+          id: 'pg-1',
+          name: 'Junior Software Engineer',
+          code: 'ENG-L1',
+          level: 1,
+          minSalary: 350000,
+          maxSalary: 550000,
+          currency: 'NGN',
+        },
+      ],
+      isLoading: false,
+    } as any);
+
+    render(<Payroll initialTab="settings" />);
+
+    // Switch to Pay Grades sub-tab
+    fireEvent.click(screen.getByText('Pay Grades'));
+
+    expect(screen.getByText('Junior Software Engineer')).toBeInTheDocument();
+    expect(screen.getByText('ENG-L1')).toBeInTheDocument();
+    expect(screen.getByText('₦350,000 – ₦550,000')).toBeInTheDocument();
+
+    // Open Add Pay Grade modal
+    fireEvent.click(screen.getByText('New Grade'));
+    expect(screen.getByText('New Pay Grade')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText(/Senior Principal/i), { target: { value: 'Principal Architect' } });
+    fireEvent.change(screen.getByPlaceholderText(/ENG-L1/i), { target: { value: 'ARCH-01' } });
+    fireEvent.change(screen.getByDisplayValue('2'), { target: { value: '5' } });
+    const zeroInputs = screen.getAllByDisplayValue('0');
+    fireEvent.change(zeroInputs[0], { target: { value: '1500000' } });
+    fireEvent.change(zeroInputs[1], { target: { value: '2500000' } });
+
+    fireEvent.click(screen.getByText('Create Pay Grade'));
+
+    expect(mockCreatePayGrade).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'Principal Architect',
+        code: 'ARCH-01',
+        level: 5,
+        minSalary: 1500000,
+        maxSalary: 2500000,
+      }),
+      expect.any(Object)
+    );
+  });
+});
+

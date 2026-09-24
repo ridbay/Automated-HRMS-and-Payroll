@@ -1,6 +1,6 @@
 import { D1Database, Ai, AiSearchInstance } from '@cloudflare/workers-types';
 import { drizzle } from 'drizzle-orm/d1';
-import { eq, and, like } from 'drizzle-orm';
+import { eq, and, like, ne, or } from 'drizzle-orm';
 import * as schema from '../db/schema';
 import { PayrollService } from './payroll.service';
 import { CompanyDocumentService } from './companyDocument.service';
@@ -61,7 +61,7 @@ const TOOL_SCHEMAS = [
   },
   {
     name: 'getHeadcount',
-    description: 'Active employee headcount. Managers get their own team size; HR Admin/Super Admin get the whole company (optionally one department).',
+    description: 'Current employee headcount and total staff numbers (total staff, plus breakdown by status like active, notice, probation, etc.). Managers get their own team size; HR Admin/Super Admin get the whole company (optionally filtered by departmentId).',
     parameters: { type: 'object', properties: { departmentId: { type: 'string' } } },
   },
   {
@@ -96,7 +96,9 @@ const TOOL_SCHEMAS = [
 
 const SYSTEM_PROMPT = (caller: AiCaller) =>
   `You are the ZenHR assistant, embedded in a Nigerian HRMS & payroll platform. The person asking is employee ${caller.employeeId} with role ${caller.role}. ` +
-  `Answer using the provided tools — never invent numbers or facts about employees, leave, payroll, or compliance. ` +
+  `For simple greetings or general conversational pleasantries (like "hi", "hello", "hey"), greet the user politely and offer help without calling any tools or looking up their profile. ` +
+  `Answer factual questions about employees, leave, payroll, company documents, or compliance using the provided tools — never invent numbers or facts. ` +
+  `Once a tool provides the necessary information, synthesize the final answer directly without calling the tool again. ` +
   `Every employee, regardless of role, can ask about a coworker's public directory info (title, department, manager, work email) via getEmployee/searchEmployees — that's not privileged data. ` +
   `For questions about company policy, process, or "how does X work here", use searchCompanyDocuments before answering from general knowledge — this company's own documents take priority over anything you already know. ` +
   `If searchCompanyDocuments returns no matches, say plainly that nothing in the company's uploaded documents covers it rather than guessing. When you do answer from a document, name which document it came from. ` +
@@ -198,8 +200,18 @@ export class AiService {
       }));
     }
 
-    const conditions = [eq(schema.employees.companyId, caller.companyId)];
-    if (args.query) conditions.push(like(schema.employees.name, `%${args.query}%`));
+    const conditions = [
+      eq(schema.employees.companyId, caller.companyId),
+      ne(schema.employees.status, 'terminated'),
+    ];
+    if (args.query) {
+      conditions.push(
+        or(
+          like(schema.employees.name, `%${args.query}%`),
+          like(schema.employees.lastName, `%${args.query}%`)
+        )!
+      );
+    }
     if (args.departmentId) conditions.push(eq(schema.employees.departmentId, args.departmentId));
 
     const rows = await this.db.query.employees.findMany({ where: and(...conditions), limit: 10 } as any);
@@ -252,7 +264,10 @@ export class AiService {
     }
 
     let employees = await this.db.query.employees.findMany({
-      where: and(eq(schema.employees.companyId, caller.companyId), eq(schema.employees.status, 'active')),
+      where: and(
+        eq(schema.employees.companyId, caller.companyId),
+        ne(schema.employees.status, 'terminated')
+      ),
     });
 
     if (caller.role === 'MANAGER') {
@@ -262,7 +277,22 @@ export class AiService {
       employees = (employees as any[]).filter((e) => e.departmentId === args.departmentId);
     }
 
-    return { count: (employees as any[]).length };
+    const total = (employees as any[]).length;
+    const active = (employees as any[]).filter((e) => e.status === 'active').length;
+    const onNotice = (employees as any[]).filter((e) => e.status === 'notice').length;
+    const onProbation = (employees as any[]).filter((e) => e.status === 'probation').length;
+    const onboarding = (employees as any[]).filter((e) => e.status === 'onboarding').length;
+    const onLeave = (employees as any[]).filter((e) => e.status === 'on_leave').length;
+
+    return {
+      count: total,
+      totalStaff: total,
+      activeStaff: active,
+      ...(onNotice > 0 ? { onNotice } : {}),
+      ...(onProbation > 0 ? { onProbation } : {}),
+      ...(onboarding > 0 ? { onboarding } : {}),
+      ...(onLeave > 0 ? { onLeave } : {}),
+    };
   }
 
   private async getPayrollSummary(caller: AiCaller, args: { month?: number; year?: number }) {
@@ -369,26 +399,21 @@ export class AiService {
       const calls = result?.tool_calls || [];
 
       if (calls.length === 0) {
-        const answer = result?.response || "I wasn't able to come up with an answer.";
+        const answer = result?.response || result?.choices?.[0]?.message?.content || "I wasn't able to come up with an answer.";
         await this.logQuery(caller, question, toolsUsed);
         return { answer, toolsUsed };
       }
 
-      // ai.run() hands back its own simplified { name, arguments } shape for
-      // tool_calls, but replaying that same history back into the next
-      // ai.run() call is validated against the strict OpenAI
-      // ChatCompletionMessageToolCall schema (id/type/function required) —
-      // feeding back exactly what came out fails that validation. Assign a
-      // synthetic id per call and use it to match the corresponding tool
-      // result message's required tool_call_id.
-      const idsForCalls = calls.map((_: any, idx: number) => `call_${i}_${idx}`);
+      // Preserve Cloudflare Workers AI tool_call id from choices[0].message if present
+      const choiceCalls = result?.choices?.[0]?.message?.tool_calls || [];
+      const idsForCalls = calls.map((call: any, idx: number) => choiceCalls[idx]?.id || call.id || `call_${i}_${idx}`);
       messages.push({
         role: 'assistant',
         content: result.response || '',
         tool_calls: calls.map((call: any, idx: number) => ({
           id: idsForCalls[idx],
           type: 'function',
-          function: { name: call.name, arguments: JSON.stringify(call.arguments || {}) },
+          function: { name: call.name, arguments: typeof call.arguments === 'string' ? call.arguments : JSON.stringify(call.arguments || {}) },
         })),
       });
 
@@ -397,7 +422,12 @@ export class AiService {
         toolsUsed.push(call.name);
         const fn = this.tools[call.name];
         const output = fn ? await fn(caller, call.arguments || {}).catch((err: any) => ({ error: err.message })) : { error: `Unknown tool "${call.name}"` };
-        messages.push({ role: 'tool', tool_call_id: idsForCalls[idx], content: JSON.stringify(output) });
+        messages.push({
+          role: 'tool',
+          name: call.name,
+          tool_call_id: idsForCalls[idx],
+          content: JSON.stringify(output),
+        });
       }
     }
 

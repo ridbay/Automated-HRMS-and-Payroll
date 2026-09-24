@@ -67,17 +67,45 @@ export class PayrollService {
     const existing = await this.db.query.payrollSettings.findFirst({
       where: eq(schema.payrollSettings.companyId, companyId),
     });
-    if (existing) return existing;
+    if (existing) return { ...existing, disbursementDay: existing.paymentDay };
 
-    const settings = { companyId, ...DEFAULT_SETTINGS };
-    await this.db.insert(schema.payrollSettings).values(settings);
+    const settings = { companyId, ...DEFAULT_SETTINGS, disbursementDay: DEFAULT_SETTINGS.paymentDay };
+    await this.db.insert(schema.payrollSettings).values({ companyId, ...DEFAULT_SETTINGS });
     return settings;
   }
 
   async updateSettings(companyId: string, payload: any) {
     await this.getSettings(companyId); // ensure a row exists to update
     const { companyId: _drop, createdAt, updatedAt, ...rest } = payload || {};
-    await this.db.update(schema.payrollSettings).set(rest).where(eq(schema.payrollSettings.companyId, companyId));
+    if (rest.disbursementDay !== undefined && rest.paymentDay === undefined) {
+      rest.paymentDay = rest.disbursementDay;
+    }
+    const allowed = [
+      'payCycle', 'cutoffDay', 'paymentDay', 'workingDaysPerMonth',
+      'prorationEnabled', 'minWageCheckEnabled', 'minWageAnnual',
+      'pensionEmployeeRate', 'pensionEmployerRate',
+      'applyConsolidatedReliefAllowance', 'nhfEnabled', 'nhfRate',
+      'nsitfEnabled', 'nsitfRate', 'itfEnabled', 'itfRate', 'currency'
+    ];
+    const updateData: Record<string, any> = {};
+    for (const key of allowed) {
+      if (key in rest) {
+        if (typeof rest[key] === 'boolean') {
+          updateData[key] = rest[key];
+        } else if (typeof rest[key] === 'number') {
+          updateData[key] = rest[key];
+        } else if (typeof rest[key] === 'string') {
+          if (['cutoffDay', 'paymentDay', 'workingDaysPerMonth', 'minWageAnnual', 'pensionEmployeeRate', 'pensionEmployerRate', 'nhfRate', 'nsitfRate', 'itfRate'].includes(key)) {
+            updateData[key] = Number(rest[key]) || 0;
+          } else {
+            updateData[key] = rest[key];
+          }
+        }
+      }
+    }
+    if (Object.keys(updateData).length > 0) {
+      await this.db.update(schema.payrollSettings).set(updateData).where(eq(schema.payrollSettings.companyId, companyId));
+    }
     return this.getSettings(companyId);
   }
 
@@ -126,16 +154,38 @@ export class PayrollService {
   }
 
   async createSalaryComponent(companyId: string, payload: any) {
-    const row = { id: genId('SC'), companyId, active: true, statutory: false, taxable: true, ...payload };
+    const row = {
+      id: genId('SC'),
+      companyId,
+      name: payload.name?.trim() || 'Untitled Component',
+      type: payload.type === 'deduction' ? 'deduction' : 'earning',
+      calculationType: payload.calculationType || 'fixed',
+      value: Number(payload.value) || 0,
+      taxable: payload.taxable !== undefined ? Boolean(payload.taxable) : true,
+      statutory: false,
+      active: payload.active !== undefined ? Boolean(payload.active) : true,
+    };
     await this.db.insert(schema.salaryComponents).values(row);
     return row;
   }
 
   async updateSalaryComponent(companyId: string, id: string, payload: any) {
-    const { id: _id, companyId: _c, ...rest } = payload || {};
+    const existing = await this.db.query.salaryComponents.findFirst({
+      where: and(eq(schema.salaryComponents.id, id), eq(schema.salaryComponents.companyId, companyId)),
+    });
+    if (!existing) return null;
+    const { id: _id, companyId: _c, createdAt, updatedAt, ...rest } = payload || {};
+    const sanitized: Record<string, any> = {};
+    if (rest.name !== undefined) sanitized.name = rest.name.trim();
+    if (rest.type !== undefined) sanitized.type = rest.type;
+    if (rest.calculationType !== undefined) sanitized.calculationType = rest.calculationType;
+    if (rest.value !== undefined) sanitized.value = Number(rest.value) || 0;
+    if (rest.taxable !== undefined) sanitized.taxable = Boolean(rest.taxable);
+    if (rest.active !== undefined) sanitized.active = Boolean(rest.active);
+
     await this.db
       .update(schema.salaryComponents)
-      .set(rest)
+      .set(sanitized)
       .where(and(eq(schema.salaryComponents.id, id), eq(schema.salaryComponents.companyId, companyId)));
     return this.db.query.salaryComponents.findFirst({ where: eq(schema.salaryComponents.id, id) });
   }
@@ -156,14 +206,31 @@ export class PayrollService {
   }
 
   async createPayGrade(companyId: string, payload: any) {
-    const row = { id: genId('PG'), companyId, ...payload };
+    const row = {
+      id: genId('PG'),
+      companyId,
+      name: payload.name?.trim() || 'Untitled Grade',
+      level: Number(payload.level) || 1,
+      minSalary: Number(payload.minSalary) || 0,
+      maxSalary: Number(payload.maxSalary) || 0,
+    };
     await this.db.insert(schema.payGrades).values(row);
     return row;
   }
 
   async updatePayGrade(companyId: string, id: string, payload: any) {
-    const { id: _id, companyId: _c, ...rest } = payload || {};
-    await this.db.update(schema.payGrades).set(rest).where(and(eq(schema.payGrades.id, id), eq(schema.payGrades.companyId, companyId)));
+    const existing = await this.db.query.payGrades.findFirst({
+      where: and(eq(schema.payGrades.id, id), eq(schema.payGrades.companyId, companyId)),
+    });
+    if (!existing) return null;
+    const { id: _id, companyId: _c, createdAt, updatedAt, ...rest } = payload || {};
+    const sanitized: Record<string, any> = {};
+    if (rest.name !== undefined) sanitized.name = rest.name.trim();
+    if (rest.level !== undefined) sanitized.level = Number(rest.level) || 1;
+    if (rest.minSalary !== undefined) sanitized.minSalary = Number(rest.minSalary) || 0;
+    if (rest.maxSalary !== undefined) sanitized.maxSalary = Number(rest.maxSalary) || 0;
+
+    await this.db.update(schema.payGrades).set(sanitized).where(and(eq(schema.payGrades.id, id), eq(schema.payGrades.companyId, companyId)));
     return this.db.query.payGrades.findFirst({ where: eq(schema.payGrades.id, id) });
   }
 
@@ -204,7 +271,7 @@ export class PayrollService {
       durationMonths,
       monthlyInstallment,
       remainingBalance: Math.round(totalRepayable),
-      status: 'active',
+      status: payload.status || 'active',
       purpose: payload.purpose || null,
       startDate: payload.startDate || new Date().toISOString().slice(0, 10),
     };
@@ -213,14 +280,33 @@ export class PayrollService {
   }
 
   async updateLoan(companyId: string, id: string, payload: any) {
-    const { id: _id, companyId: _c, employeeId, ...rest } = payload || {};
-    await this.db.update(schema.loans).set(rest).where(and(eq(schema.loans.id, id), eq(schema.loans.companyId, companyId)));
+    const existing = await this.db.query.loans.findFirst({
+      where: and(eq(schema.loans.id, id), eq(schema.loans.companyId, companyId)),
+    });
+    if (!existing) return null;
+
+    const { id: _id, companyId: _c, createdAt, updatedAt, ...rest } = payload || {};
+    const sanitized: Record<string, any> = {};
+    if (rest.status !== undefined) sanitized.status = rest.status;
+    if (rest.principal !== undefined) sanitized.principal = Number(rest.principal) || 0;
+    if (rest.interestRatePercent !== undefined) sanitized.interestRatePercent = Number(rest.interestRatePercent) || 0;
+    if (rest.durationMonths !== undefined) sanitized.durationMonths = Number(rest.durationMonths) || 1;
+    if (rest.monthlyInstallment !== undefined) sanitized.monthlyInstallment = Number(rest.monthlyInstallment) || 0;
+    if (rest.remainingBalance !== undefined) {
+      sanitized.remainingBalance = Math.max(0, Number(rest.remainingBalance) || 0);
+      if (sanitized.remainingBalance === 0) sanitized.status = 'completed';
+    }
+    if (rest.purpose !== undefined) sanitized.purpose = rest.purpose;
+    if (rest.startDate !== undefined) sanitized.startDate = rest.startDate;
+
+    await this.db.update(schema.loans).set(sanitized).where(and(eq(schema.loans.id, id), eq(schema.loans.companyId, companyId)));
     return this.db.query.loans.findFirst({ where: eq(schema.loans.id, id) });
   }
 
   async deleteLoan(companyId: string, id: string) {
     const existing = await this.db.query.loans.findFirst({ where: and(eq(schema.loans.id, id), eq(schema.loans.companyId, companyId)) });
     if (!existing) return null;
+    await this.db.delete(schema.loanRepayments).where(eq(schema.loanRepayments.loanId, id));
     await this.db.delete(schema.loans).where(eq(schema.loans.id, id));
     return existing;
   }
@@ -230,6 +316,34 @@ export class PayrollService {
       where: and(eq(schema.loanRepayments.loanId, loanId), eq(schema.loanRepayments.companyId, companyId)),
       orderBy: [desc(schema.loanRepayments.paidAt)],
     });
+  }
+
+  async recordLoanRepayment(companyId: string, loanId: string, amount: number, payrollRunId?: string) {
+    const loan = await this.db.query.loans.findFirst({
+      where: and(eq(schema.loans.id, loanId), eq(schema.loans.companyId, companyId)),
+    });
+    if (!loan) throw new Error('Loan not found');
+
+    const repayAmount = Math.min(amount, loan.remainingBalance);
+    const balanceAfter = Math.max(0, loan.remainingBalance - repayAmount);
+
+    const repayment = {
+      id: genId('LR'),
+      companyId,
+      loanId,
+      payrollRunId: payrollRunId || null,
+      amount: repayAmount,
+      balanceAfter,
+      paidAt: new Date().toISOString(),
+    };
+    await this.db.insert(schema.loanRepayments).values(repayment);
+
+    await this.db.update(schema.loans).set({
+      remainingBalance: balanceAfter,
+      status: balanceAfter === 0 ? 'completed' : loan.status,
+    }).where(eq(schema.loans.id, loanId));
+
+    return repayment;
   }
 
   private async getActiveLoansByEmployee(companyId: string) {

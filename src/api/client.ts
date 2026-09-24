@@ -168,6 +168,7 @@ export {
   useUpdateLoan,
   useDeleteLoan,
   useLoanRepayments,
+  useRecordLoanRepayment,
   usePayrollRuns,
   usePayrollRun,
   useSubmitPayrollRun,
