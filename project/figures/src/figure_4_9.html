@@ -1,0 +1,39 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Figure 4.9</title>
+<!--
+  Figure 4.9: Generated payslip and statutory compliance calendar.
+  Real screenshots (local stack, demo company Ebony Crest Foods Ltd).
+  (a) Generated employee payslip showing decomposed earnings (basic, allowances) and statutory deductions (PAYE, pension) with amount in words.
+  (b) Statutory compliance calendar showing automatically generated remittance tasks (PAYE, pension, NHF, NSITF) with statutory deadlines and amounts.
+  Capture:
+    node scripts/demo/capture.mjs amaka project/figures/screens/fig4_9a_payslip.png --tab "my payroll" --eval scripts/demo/shots/fig4_9a_payslip.js --wait 3000 --width 1440 --height 1300
+    node scripts/demo/capture.mjs folake project/figures/screens/fig4_9b_compliance.png --tab "compliance" --wait 3000 --width 1440 --height 1000
+  Crops (2x):
+    a: sips -c 1950 1800 --cropOffset 180 780 project/figures/screens/fig4_9a_payslip.png --out project/figures/screens/fig4_9a_payslip_crop.png
+    b: sips -c 1200 2300 --cropOffset 160 536 project/figures/screens/fig4_9b_compliance.png --out project/figures/screens/fig4_9b_compliance_crop.png
+  Render: scripts/figures/render.sh figure_4_9 1100 1320
+-->
+<style>
+  html, body { margin: 0; padding: 0; background: #fff; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #111; width: 1100px; }
+  .wrap { padding: 14px 20px; }
+  .shot { border: 1.5px solid #999; border-radius: 6px; overflow: hidden; line-height: 0; }
+  .shot img { width: 100%; display: block; }
+  .mid { width: 620px; margin: 0 auto; }
+  .lab { font-size: 16.5px; margin: 8px 0 16px; text-align: center; line-height: 1.35; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="mid">
+    <div class="shot"><img src="../screens/fig4_9a_payslip_crop.png"></div>
+  </div>
+  <div class="lab"><b>(a)</b> Itemised employee payslip with gross component breakdown, statutory deductions, and net pay in words</div>
+  <div class="shot"><img src="../screens/fig4_9b_compliance_crop.png"></div>
+  <div class="lab"><b>(b)</b> Statutory compliance calendar with automatically scheduled remittances, filing deadlines, and status tracking</div>
+</div>
+</body>
+</html>

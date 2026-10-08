@@ -1,0 +1,106 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Figure 3.5</title>
+<!--
+  Figure 3.5: Context-level data flow diagram (Section 3.5.2).
+  Eight external entities: the six actor roles plus external applicants and the hosted
+  inference service. Edit ENTITIES below; arrows and labels are generated.
+  Render: scripts/figures/render.sh figure_3_5 1100 1000
+-->
+<style>
+  html, body { margin: 0; padding: 0; background: #fff; }
+  svg { display: block; font-family: Arial, Helvetica, sans-serif; }
+  .ent  { font-size: 19px; font-weight: 700; fill: #111; }
+  .flow { font-size: 16px; fill: #222; }
+  .proc { font-size: 24px; font-weight: 700; fill: #111; }
+  .key  { font-size: 15px; fill: #444; }
+</style>
+</head>
+<body>
+<svg id="d" width="1100" height="1000" viewBox="0 0 1100 1000" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="ah" markerWidth="12" markerHeight="12" refX="11" refY="6" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L12,6 L0,12 z" fill="#222"/>
+    </marker>
+  </defs>
+  <g id="arrows"></g>
+  <g id="labels"></g>
+  <!-- Single process -->
+  <circle cx="550" cy="490" r="125" fill="#dbe6f7" stroke="#0b3d91" stroke-width="3.5"/>
+  <text class="key" x="550" y="460" text-anchor="middle">0</text>
+  <text class="proc" x="550" y="498" text-anchor="middle">ZenHR</text>
+  <text class="proc" x="550" y="528" text-anchor="middle">system</text>
+  <g id="ents"></g>
+  <text class="key" x="40" y="985">Rectangles: external entities. Circle: the system as a single process. Arrows: data flows, in the direction shown.</text>
+</svg>
+<script>
+const NS = 'http://www.w3.org/2000/svg';
+const el = (tag, attrs, text) => {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (text !== undefined) e.textContent = text;
+  return e;
+};
+const C = { x: 550, y: 490, r: 125 };
+const W = 230, H = 64;
+
+// name, centre, flows into the system, flows out of the system ('|' = line break)
+const ENTITIES = [
+  ['Super Administrator', 550, 70,  'company settings,|roles, API keys', 'configuration|state'],
+  ['HR Administrator',    175, 175, 'configuration,|approvals',          'reports, records'],
+  ['Payroll Officer',     925, 175, 'run submission',                    'payroll reports,|export files'],
+  ['Manager',             145, 490, 'approvals,|scores',                 'team records'],
+  ['Hosted inference|service', 955, 490, 'tool call|or answer',         'prompt and tool|definitions'],
+  ['Employee',            175, 805, 'clock events, leave|requests, self-assessments', 'payslips,|balances'],
+  ['Recruiter',           925, 805, 'requisitions,|scorecards',          'pipeline|analytics'],
+  ['External applicant',  550, 910, 'application',                       'acknowledgement'],
+];
+
+// Where the line from (sx,sy) along unit (ux,uy) first enters the entity rectangle
+// (expanded by a small margin) -- slab method, so offset arrows meet the box edge exactly.
+function rectEntry(cx, cy, sx, sy, ux, uy) {
+  const hw = W / 2 + 5, hh = H / 2 + 5;
+  const tx1 = (cx - hw - sx) / ux, tx2 = (cx + hw - sx) / ux;
+  const ty1 = (cy - hh - sy) / uy, ty2 = (cy + hh - sy) / uy;
+  const tmin = Math.max(Math.min(tx1, tx2), Math.min(ty1, ty2));
+  return [sx + ux * tmin, sy + uy * tmin];
+}
+
+const arrows = document.getElementById('arrows');
+const labels = document.getElementById('labels');
+const ents = document.getElementById('ents');
+const GAP = 13;      // half-distance between the in and out arrows
+const LOFF = 22;     // label distance beyond its arrow
+
+function label(x, y, nx, ny, text) {
+  const lines = text.split('|');
+  let anchor = 'middle';
+  if (nx > 0.35) anchor = 'start'; else if (nx < -0.35) anchor = 'end';
+  const lh = 19, h = lines.length * lh;
+  // vertical placement: centre on the point, or push above/below for near-horizontal arrows
+  let y0 = y - h / 2 + 14;
+  if (anchor === 'middle') y0 = ny < 0 ? y - h + 6 : y + 18;
+  lines.forEach((t, i) => labels.appendChild(el('text', { class: 'flow', x, y: y0 + i * lh, 'text-anchor': anchor }, t)));
+}
+
+for (const [name, ex, ey, inFlow, outFlow] of ENTITIES) {
+  const d = Math.hypot(ex - C.x, ey - C.y), ux = (ex - C.x) / d, uy = (ey - C.y) / d;
+  const px = -uy, py = ux;   // perpendicular
+  for (const [sign, text, inward] of [[1, inFlow, true], [-1, outFlow, false]]) {
+    const ox = px * GAP * sign, oy = py * GAP * sign;
+    const a = [C.x + ux * (C.r + 8) + ox, C.y + uy * (C.r + 8) + oy];
+    const b = rectEntry(ex, ey, a[0], a[1], ux || 1e-9, uy || 1e-9);
+    const [from, to] = inward ? [b, a] : [a, b];
+    arrows.appendChild(el('line', { x1: from[0], y1: from[1], x2: to[0], y2: to[1], stroke: '#222', 'stroke-width': 2.2, 'marker-end': 'url(#ah)' }));
+    const mx = (a[0] + b[0]) / 2 + px * LOFF * sign, my = (a[1] + b[1]) / 2 + py * LOFF * sign;
+    label(mx, my, px * sign, py * sign, text);
+  }
+  ents.appendChild(el('rect', { x: ex - W / 2, y: ey - H / 2, width: W, height: H, fill: '#f2f2f2', stroke: '#222', 'stroke-width': 2.5 }));
+  const nl = name.split('|');
+  nl.forEach((t, i) => ents.appendChild(el('text', { class: 'ent', x: ex, y: ey + 7 - (nl.length - 1) * 11 + i * 22, 'text-anchor': 'middle' }, t)));
+}
+</script>
+</body>
+</html>

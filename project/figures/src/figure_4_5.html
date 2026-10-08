@@ -1,0 +1,39 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Figure 4.5</title>
+<!--
+  Figure 4.5: Leave balances and request approval.
+  Real screenshots (local stack, demo company). Amaka Eze has used 6 of 20 annual-leave days
+  (two approved requests from seed-demo.mjs); Adebola Okafor and Segun Bakare have pending requests
+  to their manager, Tunde Okonkwo.
+  Capture:
+    node scripts/demo/capture.mjs amaka project/figures/screens/fig4_5a_balances.png --tab "my leaves" --wait 5000 --height 1100
+    node scripts/demo/capture.mjs amaka project/figures/screens/fig4_5b_form.png --tab "my leaves" --eval scripts/demo/shots/fig4_5a_newrequest.js --wait 3000 --height 1100
+    node scripts/demo/capture.mjs tunde project/figures/screens/fig4_5c_approvals.png --tab "approvals" --wait 4000 --height 1100
+  Crops (2x): a -c 640 2300 --cropOffset 164 536; b -c 954 1532 --cropOffset 506 930; c -c 780 2300 --cropOffset 374 536
+  (the page's "Team Availability" and "Leave Policy" cards are static text, so they are cropped out of (a)).
+  Render: scripts/figures/render.sh figure_4_5 1100 1210
+-->
+<style>
+  html, body { margin: 0; padding: 0; background: #fff; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #111; width: 1100px; }
+  .wrap { padding: 14px 20px; }
+  .shot { border: 1.5px solid #999; border-radius: 6px; overflow: hidden; line-height: 0; }
+  .shot img { width: 100%; display: block; }
+  .mid { width: 640px; margin: 0 auto; }
+  .lab { font-size: 16.5px; margin: 8px 0 16px; text-align: center; line-height: 1.35; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="shot"><img src="../screens/fig4_5a_balances_crop.png"></div>
+  <div class="lab"><b>(a)</b> Employee leave balances by type: 14 of 20 annual-leave days remain after two approved requests</div>
+  <div class="mid"><div class="shot"><img src="../screens/fig4_5b_form_crop.png"></div></div>
+  <div class="lab"><b>(b)</b> The leave application form, step 1: each leave type shows the days still available</div>
+  <div class="shot"><img src="../screens/fig4_5c_approvals_crop.png"></div>
+  <div class="lab"><b>(c)</b> The manager's approval queue, limited to direct reports, with each request's dates, length and reason</div>
+</div>
+</body>
+</html>

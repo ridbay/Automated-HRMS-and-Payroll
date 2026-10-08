@@ -1,0 +1,41 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Figure 4.11</title>
+<!--
+  Figure 4.11: AI assistant: (a) scoped answer and (b) authorisation refusal.
+  Real screenshots (local stack, demo company Ebony Crest Foods Ltd) using Cloudflare Workers AI.
+  (a) Scoped answer: signed in as HR Admin Folake Ogunleye, querying company-wide headcount returns full workforce count (22) via getHeadcount tool.
+  (b) Authorisation refusal: signed in as Manager Tunde Okonkwo, attempting to query company payroll summary is refused and explained by the assistant (restricted to HR Admin / Super Admin).
+  Capture:
+    node scripts/demo/capture.mjs folake project/figures/screens/fig4_11a_ai_scoped.png --eval scripts/demo/shots/fig4_11a_ai_scoped.js --wait 3000 --width 1440 --height 900
+    node scripts/demo/capture.mjs tunde project/figures/screens/fig4_11b_ai_refusal.png --eval scripts/demo/shots/fig4_11b_ai_refusal.js --wait 3000 --width 1440 --height 900
+  Crops (2x):
+    a: sips -c 1800 1000 --cropOffset 0 1880 project/figures/screens/fig4_11a_ai_scoped.png --out project/figures/screens/fig4_11a_ai_crop.png
+    b: sips -c 1800 1000 --cropOffset 0 1880 project/figures/screens/fig4_11b_ai_refusal.png --out project/figures/screens/fig4_11b_ai_crop.png
+  Render: scripts/figures/render.sh figure_4_11 1100 1020
+-->
+<style>
+  html, body { margin: 0; padding: 0; background: #fff; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #111; width: 1100px; }
+  .wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; padding: 16px 20px; align-items: start; }
+  .shot { border: 1.5px solid #999; border-radius: 6px; overflow: hidden; line-height: 0; }
+  .shot img { width: 100%; display: block; }
+  .lab { font-size: 16.5px; margin-top: 10px; text-align: center; line-height: 1.35; }
+  .lab b { font-size: 16.5px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div>
+    <div class="shot"><img src="../screens/fig4_11a_ai_crop.png"></div>
+    <div class="lab"><b>(a)</b> Scoped answer: HR Admin successfully retrieves company-wide workforce statistics via tool execution</div>
+  </div>
+  <div>
+    <div class="shot"><img src="../screens/fig4_11b_ai_crop.png"></div>
+    <div class="lab"><b>(b)</b> Authorisation refusal: Manager querying payroll data outside their role scope is politely refused</div>
+  </div>
+</div>
+</body>
+</html>

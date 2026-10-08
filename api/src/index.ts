@@ -13,8 +13,22 @@ import supportRoutes from './routes/support.routes';
 
 const app = new Hono<AppEnv>();
 
+// Isolate instrumentation for the response-time evaluation
+// (scripts/measure-response-times.mjs). Module scope lives as long as the
+// isolate, so X-Isolate-Request: 1 marks a request served by a fresh (cold)
+// isolate. Server-Timing reports time spent inside the Worker; Workers only
+// advance the clock across I/O, so this is effectively D1/R2/AI wait time.
+let isolateRequestCount = 0;
+app.use('/*', async (c, next) => {
+  const requestNumber = ++isolateRequestCount;
+  const startedAt = Date.now();
+  await next();
+  c.header('X-Isolate-Request', String(requestNumber));
+  c.header('Server-Timing', `app;dur=${Date.now() - startedAt}`);
+});
+
 // Middleware
-app.use('/*', cors());
+app.use('/*', cors({ exposeHeaders: ['X-Isolate-Request', 'Server-Timing'] }));
 
 // Health Check
 app.get('/health', (c) => c.text('OK'));

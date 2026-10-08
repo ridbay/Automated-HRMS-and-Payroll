@@ -1,0 +1,97 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Figure 3.8</title>
+<!--
+  Figure 3.8: Request processing pipeline within the Worker (Section 3.5.4).
+  Stage-to-code mapping: authMiddleware (verify token; set employee, company, role),
+  requireRole (route allow-list), requirePermission (custom-role narrowing).
+  Render: scripts/figures/render.sh figure_3_8 1100 580
+-->
+<style>
+  html, body { margin: 0; padding: 0; background: #fff; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #111; width: 1100px; height: 580px; position: relative; }
+  .box { position: absolute; box-sizing: border-box; border: 2.5px solid #222; border-radius: 8px; background: #fff;
+         display: flex; align-items: center; justify-content: center; text-align: center;
+         font-size: 17px; line-height: 1.25; padding: 6px; }
+  .box b { font-size: 17px; }
+  .box.stage { background: #dbe6f7; border-color: #0b3d91; }
+  .box.term { border-radius: 30px; background: #f2f2f2; }
+  .reject { position: absolute; left: 160px; top: 395px; width: 640px; height: 76px; box-sizing: border-box;
+            border: 2.5px solid #9b1c1c; border-radius: 8px; background: #fff; color: #9b1c1c;
+            display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 18px; }
+  .reject b { font-size: 20px; }
+  .mw { position: absolute; font-family: Menlo, Consolas, monospace; font-size: 15px; color: #333; text-align: center; }
+  .code { position: absolute; font-size: 17px; font-weight: 700; color: #9b1c1c; }
+  .note { position: absolute; left: 20px; top: 500px; width: 1060px; font-size: 15px; color: #333; line-height: 1.35; }
+  svg { position: absolute; left: 0; top: 0; }
+</style>
+</head>
+<body>
+  <!-- middleware brackets -->
+  <div class="mw" style="left:160px; top:62px; width:308px;">authMiddleware</div>
+  <div class="mw" style="left:496px; top:62px; width:140px;">requireRole</div>
+  <div class="mw" style="left:664px; top:62px; width:140px;">requirePermission</div>
+
+  <div class="box term"  style="left:20px;  top:150px; width:112px; height:110px;"><b>Incoming request</b></div>
+  <div class="box stage" style="left:160px; top:150px; width:140px; height:110px;">Authenticate (verify token signature)</div>
+  <div class="box stage" style="left:328px; top:150px; width:140px; height:110px;">Resolve company</div>
+  <div class="box stage" style="left:496px; top:150px; width:140px; height:110px;">Check role against route allow-list</div>
+  <div class="box stage" style="left:664px; top:150px; width:140px; height:110px;">Apply custom permission narrowing</div>
+  <div class="box"       style="left:832px; top:150px; width:120px; height:110px;">Dispatch to module controller</div>
+
+  <div class="reject"><b>401 / 403: request terminated before module logic</b><span>no controller, service, or query runs</span></div>
+
+  <div class="code" style="left:240px; top:322px;">401</div>
+  <div class="code" style="left:576px; top:322px;">403</div>
+  <div class="code" style="left:744px; top:322px;">403</div>
+
+  <div class="note">Authentication and company resolution are carried out by one middleware. The company identifier is read from the
+    same verified token that establishes the caller's identity, so company resolution cannot fail once authentication has succeeded.
+    A missing signing secret is refused with 503 rather than accepted.</div>
+
+  <svg width="1100" height="580" viewBox="0 0 1100 580">
+    <defs>
+      <marker id="ah" markerWidth="12" markerHeight="12" refX="11" refY="6" orient="auto" markerUnits="userSpaceOnUse">
+        <path d="M0,0 L12,6 L0,12 z" fill="#222"/>
+      </marker>
+      <marker id="ahr" markerWidth="12" markerHeight="12" refX="11" refY="6" orient="auto" markerUnits="userSpaceOnUse">
+        <path d="M0,0 L12,6 L0,12 z" fill="#9b1c1c"/>
+      </marker>
+    </defs>
+    <!-- brackets over the middleware groups -->
+    <g stroke="#555" stroke-width="1.8" fill="none">
+      <path d="M162,96 V86 H466 V96"/>
+      <path d="M498,96 V86 H634 V96"/>
+      <path d="M666,96 V86 H802 V96"/>
+    </g>
+    <!-- main flow -->
+    <g stroke="#222" stroke-width="2.5">
+      <line x1="132" y1="205" x2="158" y2="205" marker-end="url(#ah)"/>
+      <line x1="300" y1="205" x2="326" y2="205" marker-end="url(#ah)"/>
+      <line x1="468" y1="205" x2="494" y2="205" marker-end="url(#ah)"/>
+      <line x1="636" y1="205" x2="662" y2="205" marker-end="url(#ah)"/>
+      <line x1="804" y1="205" x2="830" y2="205" marker-end="url(#ah)"/>
+      <!-- dispatch -> D1 / R2 -->
+      <path d="M952,205 H970 V125 H994" fill="none" marker-end="url(#ah)"/>
+      <path d="M970,205 V295 H994" fill="none" marker-end="url(#ah)"/>
+    </g>
+    <!-- rejection arrows -->
+    <g stroke="#9b1c1c" stroke-width="2.5">
+      <line x1="230" y1="262" x2="230" y2="392" marker-end="url(#ahr)"/>
+      <line x1="566" y1="262" x2="566" y2="392" marker-end="url(#ahr)"/>
+      <line x1="734" y1="262" x2="734" y2="392" marker-end="url(#ahr)"/>
+    </g>
+    <!-- D1 and R2 cylinders -->
+    <g stroke="#222" stroke-width="2.5" fill="#fff">
+      <path d="M996,104 V150 A42,11 0 0 0 1080,150 V104"/>
+      <ellipse cx="1038" cy="104" rx="42" ry="11"/>
+      <path d="M996,274 V320 A42,11 0 0 0 1080,320 V274"/>
+      <ellipse cx="1038" cy="274" rx="42" ry="11"/>
+    </g>
+    <text x="1038" y="139" text-anchor="middle" font-size="20" font-weight="700" fill="#111">D1</text>
+    <text x="1038" y="309" text-anchor="middle" font-size="20" font-weight="700" fill="#111">R2</text>
+  </svg>
+</body>
+</html>

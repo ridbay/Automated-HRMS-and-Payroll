@@ -1,0 +1,58 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Figure 3.10</title>
+<!--
+  Figure 3.10: Role-scoped interface views.
+  Real screenshots of the running application (local dev stack, fictional demo company
+  "Ebony Crest Foods Ltd"), captured with:
+    node scripts/demo/seed-demo.mjs
+    node scripts/demo/capture.mjs folake project/figures/screens/fig3_10_hr_admin.png
+    node scripts/demo/capture.mjs tunde  project/figures/screens/fig3_10_manager.png --wait 6000
+    node scripts/demo/capture.mjs amaka  project/figures/screens/fig3_10_employee.png
+  Render: scripts/figures/render.sh figure_3_10 1100 1530
+-->
+<style>
+  html, body { margin: 0; padding: 0; background: #fff; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #111; width: 1100px; }
+  .row { display: flex; gap: 20px; align-items: center; padding: 10px 16px; }
+  .shot { width: 768px; flex: none; border: 1.5px solid #888; border-radius: 6px; overflow: hidden; line-height: 0; }
+  .shot img { width: 100%; display: block; }
+  .call { width: 280px; font-size: 15px; line-height: 1.4; }
+  .call .r { display: inline-block; font-size: 15px; font-weight: 700; color: #fff; background: #3a3a3a; border-radius: 4px; padding: 3px 8px; margin-bottom: 8px; }
+  .call .n { font-size: 15px; margin-bottom: 10px; }
+  .call .sec { border-left: 4px solid #9b1c1c; padding: 6px 10px; background: #fbf3f3; color: #5a1010; font-size: 14px; }
+</style>
+</head>
+<body>
+
+<div class="row">
+  <div class="shot"><img src="../screens/fig3_10_hr_admin.png" alt="HR Administrator dashboard"></div>
+  <div class="call">
+    <div class="r">(a) HR Administrator</div>
+    <div class="n">Full module menu; company-wide headcount, open positions, payroll estimate and priority alerts.</div>
+    <div class="sec">The menu only shapes navigation. Every API route re-checks the caller's role and company on the server (Section 3.8.2).</div>
+  </div>
+</div>
+
+<div class="row">
+  <div class="shot"><img src="../screens/fig3_10_manager.png" alt="Manager dashboard"></div>
+  <div class="call">
+    <div class="r">(b) Manager</div>
+    <div class="n">Reduced menu; team size, presence and pending approvals cover direct reports only.</div>
+    <div class="sec">The menu only shapes navigation. The server limits each approval to the manager's own reports before any change is made.</div>
+  </div>
+</div>
+
+<div class="row">
+  <div class="shot"><img src="../screens/fig3_10_employee.png" alt="Employee self-service portal"></div>
+  <div class="call">
+    <div class="r">(c) Employee</div>
+    <div class="n">Self-service menu over the employee's own record: clock status, leave balance and latest payslip.</div>
+    <div class="sec">The menu only shapes navigation. Employee routes read the caller's identity from the verified token, never from the request.</div>
+  </div>
+</div>
+
+</body>
+</html>

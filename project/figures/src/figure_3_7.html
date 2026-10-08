@@ -1,0 +1,229 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Figure 3.7</title>
+<!--
+  Figure 3.7: Core entity relationship diagram (crow's-foot notation).
+  Generated from the Drizzle models in api/src/models/*.ts:
+    solid line  = foreign key declared with .references()
+    dashed line = reference column with no FK constraint (Section 3.6.2 convention)
+  The company relationship (1:N from COMPANIES) is shown by the C badge rather than
+  ~40 separate lines. Render: scripts/figures/render.sh figure_3_7 1100 1290
+-->
+<style>
+  html, body { margin: 0; padding: 0; background: #fff; }
+  svg { display: block; font-family: Arial, Helvetica, sans-serif; }
+  .eh  { font-size: 14.5px; font-weight: 700; fill: #fff; }
+  .er  { font-size: 13.5px; fill: #111; }
+  .erk { font-size: 13.5px; font-weight: 700; fill: #111; }
+  .eri { font-size: 13.5px; font-style: italic; fill: #555; }
+  .pt  { font-size: 14px; font-weight: 700; fill: #0b3d91; letter-spacing: 0.5px; }
+  .cb  { font-size: 11px; font-weight: 700; fill: #0b3d91; }
+  .lg  { font-size: 14px; fill: #222; }
+</style>
+</head>
+<body>
+<svg id="d" width="1100" height="1290" viewBox="0 0 1100 1290" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- many: crow's foot, prongs touch the entity edge at the path end -->
+    <marker id="many" markerWidth="14" markerHeight="16" refX="13" refY="8" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M1,8 L13,1 M1,8 L13,8 M1,8 L13,15" stroke="#222" stroke-width="1.6" fill="none"/>
+    </marker>
+    <!-- one and only one: two bars near the path start -->
+    <marker id="one" markerWidth="14" markerHeight="16" refX="1" refY="8" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M5,1 V15 M9,1 V15" stroke="#222" stroke-width="1.6" fill="none"/>
+    </marker>
+    <!-- zero or one (at the child end) -->
+    <marker id="zeroOne" markerWidth="22" markerHeight="16" refX="21" refY="8" orient="auto" markerUnits="userSpaceOnUse">
+      <circle cx="7" cy="8" r="4.5" fill="#fff" stroke="#222" stroke-width="1.5"/>
+      <path d="M16,1 V15" stroke="#222" stroke-width="1.6"/>
+    </marker>
+  </defs>
+  <g id="panels"></g>
+  <g id="rels"></g>
+  <g id="ents"></g>
+  <g id="legend"></g>
+</svg>
+<script>
+const NS = 'http://www.w3.org/2000/svg';
+const el = (tag, a, t) => { const e = document.createElementNS(NS, tag); for (const k in a) e.setAttribute(k, a[k]); if (t !== undefined) e.textContent = t; return e; };
+const $ = id => document.getElementById(id);
+const HH = 26, RH = 20, PAD = 6;
+const E = {};
+
+// rows: [kind, text]; kind: 'pk' | 'fk' | 'ref' | 'txt'
+function ent(id, name, x, y, w, rows = [], c = true) {
+  const h = HH + rows.length * RH + (rows.length ? PAD : 4);
+  E[id] = { x, y, w, h, rows };
+  const g = $('ents');
+  g.appendChild(el('rect', { x, y, width: w, height: h, fill: '#fff', stroke: '#222', 'stroke-width': 1.8 }));
+  g.appendChild(el('rect', { x, y, width: w, height: HH, fill: '#3a3a3a' }));
+  g.appendChild(el('text', { class: 'eh', x: x + 8, y: y + 18 }, name));
+  if (c) {
+    g.appendChild(el('circle', { cx: x + w - 14, cy: y + 13, r: 8.5, fill: '#fff' }));
+    g.appendChild(el('text', { class: 'cb', x: x + w - 14, y: y + 17, 'text-anchor': 'middle' }, 'C'));
+  }
+  rows.forEach(([k, t], i) => {
+    const ty = y + HH + i * RH + 15;
+    if (k === 'txt') { g.appendChild(el('text', { class: 'eri', x: x + 8, y: ty }, t)); return; }
+    g.appendChild(el('text', { class: 'erk', x: x + 8, y: ty }, k === 'pk' ? 'PK' : k === 'fk' ? 'FK' : 'ref'));
+    g.appendChild(el('text', { class: k === 'ref' ? 'eri' : 'er', x: x + 40, y: ty }, t));
+  });
+  return E[id];
+}
+const rowY = (id, i) => E[id].y + HH + i * RH + 10;
+const midY = id => E[id].y + HH / 2;
+const cx = id => E[id].x + E[id].w / 2;
+const L = id => E[id].x, R = id => E[id].x + E[id].w;
+const T = id => E[id].y, B = id => E[id].y + E[id].h;
+
+function path(pts, { dashed = false, start = null, end = 'many' } = {}) {
+  const a = { d: 'M' + pts.map(p => p.join(',')).join(' L'), fill: 'none', stroke: '#222', 'stroke-width': 1.7 };
+  if (dashed) a['stroke-dasharray'] = '6 4';
+  if (start) a['marker-start'] = `url(#${start})`;
+  if (end) a['marker-end'] = `url(#${end})`;
+  $('rels').appendChild(el('path', a));
+}
+const dot = (x, y) => $('rels').appendChild(el('circle', { cx: x, cy: y, r: 3.2, fill: '#222' }));
+function panel(title, x, y, w, h) {
+  $('panels').appendChild(el('rect', { x, y, width: w, height: h, rx: 8, fill: '#f6f8fc', stroke: '#c5d1e6', 'stroke-width': 1.2 }));
+  $('panels').appendChild(el('text', { class: 'pt', x: x + 10, y: y + 18 }, title));
+}
+
+// ---------------- Layout ----------------
+// Columns: left 30-320, centre 370-700, right 770-1060.
+const LX = 30, LW = 290, CX = 370, RX = 770, RW = 290;
+
+// Centre: organisation and EMPLOYEES
+panel('ORGANISATION', 360, 8, 350, 545);
+ent('companies', 'COMPANIES', CX, 34, 330, [['pk', 'id'], ['txt', '1 : N with every entity marked  C']], false);
+ent('csettings', 'COMPANY_SETTINGS', CX, 136, 190, [['pk', 'company_id (FK)']], false);
+ent('locations', 'LOCATIONS', 570, 136, 130, [['txt', 'not linked by FK']]);
+ent('roles', 'ROLES', CX, 222, 160, []);
+ent('depts', 'DEPARTMENTS', 540, 222, 160, [['ref', 'manager_id']]);
+ent('emp', 'EMPLOYEES', CX, 316, 330, [['fk', 'department_id'], ['fk', 'custom_role_id'], ['ref', 'manager_id (self)'], ['txt', 'location: free text']]);
+ent('audit', 'AUDIT_LOGS', CX, 482, 145, [['ref', 'employee_id']]);
+ent('ailog', 'AI_QUERY_LOGS', 540, 482, 160, [['ref', 'employee_id']]);
+
+// Left: time and leave; lifecycle; benefits
+panel('TIME, ATTENDANCE AND LEAVE', 20, 8, 310, 330);
+ent('att', 'ATTENDANCE_RECORDS', LX, 34, LW, [['fk', 'employee_id']]);
+ent('ot', 'OVERTIME_REQUESTS', LX, 104, LW, [['fk', 'employee_id'], ['ref', 'manager_id']]);
+ent('lreq', 'LEAVE_REQUESTS', LX, 194, LW, [['fk', 'employee_id'], ['ref', 'manager_id']]);
+ent('lbal', 'LEAVE_BALANCES', LX, 284, LW, [['fk', 'employee_id']]);   // ends ~334
+
+panel('LIFECYCLE AND RECORDS', 20, 352, 310, 352);
+ent('trans', 'TRANSITIONS', LX, 378, LW, [['fk', 'employee_id']]);
+ent('ttask', 'TRANSITION_TASKS', LX, 460, LW, [['fk', 'transition_id']]);
+ent('docs', 'EMPLOYEE_DOCUMENTS', LX, 530, LW, [['fk', 'employee_id'], ['txt', 'file_key → object in R2']]);
+ent('assets', 'EMPLOYEE_ASSETS', LX, 620, LW, [['fk', 'employee_id']]);   // ends ~670
+
+panel('BENEFITS', 20, 718, 310, 160);
+ent('bplan', 'BENEFIT_PLANS', LX, 744, LW, []);
+ent('benr', 'BENEFIT_ENROLLMENTS', LX, 804, LW, [['fk', 'plan_id'], ['fk', 'employee_id']]);   // ends ~876
+
+// Right: recruitment; performance
+panel('RECRUITMENT', 760, 8, 330, 470);
+ent('req', 'JOB_REQUISITIONS', RX, 34, RW, []);
+ent('cand', 'CANDIDATES', RX, 94, RW, [['fk', 'requisition_id'], ['fk', 'hired_employee_id']]);
+ent('intv', 'INTERVIEWS', RX, 200, RW, [['fk', 'candidate_id']]);
+ent('score', 'INTERVIEW_SCORECARDS', RX, 280, RW, [['fk', 'interview_id']]);
+ent('offer', 'OFFERS', RX, 350, RW, [['fk', 'candidate_id']]);
+ent('tline', 'CANDIDATE_TIMELINE_EVENTS', RX, 412, RW, [['fk', 'candidate_id']]);   // ends ~462
+
+panel('PERFORMANCE', 760, 492, 330, 386);
+ent('cycle', 'REVIEW_CYCLES', RX, 518, RW, []);
+ent('stage', 'CYCLE_STAGES', RX, 578, RW, [['ref', 'cycle_id']]);
+ent('assess', 'ASSESSMENTS', RX, 648, RW, [['ref', 'employee_id'], ['ref', 'cycle_id']]);
+ent('peer', 'PEER_REVIEWS', RX, 738, RW, [['ref', 'reviewee_id, reviewer_id'], ['ref', 'cycle_id']]);
+ent('goal', 'GOALS', RX, 828, RW, [['ref', 'employee_id']]);   // ends ~878 (panel grows below)
+
+// Bottom: payroll
+panel('PAYROLL', 20, 900, 1070, 278);
+ent('psettings', 'PAYROLL_SETTINGS', LX, 926, 240, [['pk', 'company_id (FK)']], false);
+ent('tax', 'TAX_BRACKETS', 280, 926, 240, []);
+ent('scomp', 'SALARY_COMPONENTS', 570, 926, 240, []);
+ent('grade', 'PAY_GRADES', 830, 926, 240, []);
+ent('loan', 'LOANS', LX, 1010, LW, [['fk', 'employee_id']]);
+ent('run', 'PAYROLL_RUNS', RX, 1010, RW, []);
+ent('rep', 'LOAN_REPAYMENTS', LX, 1096, LW, [['fk', 'loan_id'], ['ref', 'payroll_run_id']]);
+ent('slip', 'PAYSLIPS', 400, 1096, 290, [['fk', 'run_id'], ['fk', 'employee_id']], false);
+ent('ctask', 'COMPLIANCE_TASKS', RX, 1096, RW, [['ref', 'payroll_run_id']]);
+
+// panel for performance ends at 878; extend
+// ---------------- Relationships ----------------
+// Organisation
+path([[450, B('companies')], [450, T('csettings')]], { start: 'one', end: 'one' });
+path([[450, B('roles')], [450, T('emp')]], { start: 'one' });
+path([[620, B('depts')], [620, T('emp')]], { start: 'one' });
+// manager_id self-reference (no constraint)
+path([[620, B('emp')], [620, B('emp') + 18], [680, B('emp') + 18], [680, B('emp')]], { dashed: true, start: 'one' });
+path([[400, B('emp')], [400, T('audit')]], { dashed: true, start: 'one' });
+path([[590, B('emp')], [590, T('ailog')]], { dashed: true, start: 'one' });
+
+// EMPLOYEES -> left column (trunk at x = 345)
+const TL = 345, ey = rowY('emp', 0);
+path([[L('emp'), ey], [TL, ey]], { start: 'one', end: null });
+const leftKids = [['att', 0], ['ot', 0], ['lreq', 0], ['lbal', 0], ['trans', 0], ['docs', 0], ['assets', 0], ['benr', 1]];
+const ys = leftKids.map(([id, i]) => rowY(id, i));
+path([[TL, Math.min(...ys, ey)], [TL, Math.max(...ys, ey)]], { end: null });
+dot(TL, ey);
+for (const [id, i] of leftKids) { const y = rowY(id, i); path([[TL, y], [R(id), y]]); dot(TL, y); }
+
+// Within-left chains
+path([[cx('trans'), B('trans')], [cx('trans'), T('ttask')]], { start: 'one' });
+path([[cx('bplan'), B('bplan')], [cx('bplan'), T('benr')]], { start: 'one' });
+
+// EMPLOYEES -> right column: solid trunk (x=740) to CANDIDATES, dashed trunk (x=752) to performance
+const TR1 = 738, TR2 = 752;
+const ey1 = rowY('emp', 1), ey2 = rowY('emp', 2);
+path([[R('emp'), ey1], [TR1, ey1], [TR1, rowY('cand', 1)], [L('cand'), rowY('cand', 1)]], { start: 'one', end: 'zeroOne' });
+path([[R('emp'), ey2], [TR2, ey2]], { dashed: true, start: 'one', end: null });
+const perfKids = [['assess', 0], ['peer', 0], ['goal', 0]];
+path([[TR2, ey2], [TR2, rowY('goal', 0)]], { dashed: true, end: null });
+for (const [id, i] of perfKids) { const y = rowY(id, i); path([[TR2, y], [L(id), y]], { dashed: true }); dot(TR2, y); }
+
+// Recruitment chain
+path([[cx('req'), B('req')], [cx('req'), T('cand')]], { start: 'one' });
+path([[cx('cand'), B('cand')], [cx('cand'), T('intv')]], { start: 'one' });
+path([[cx('intv'), B('intv')], [cx('intv'), T('score')]], { start: 'one' });
+const LN = 1074;
+path([[R('cand'), midY('cand')], [LN, midY('cand')], [LN, rowY('tline', 0)]], { start: 'one', end: null });
+for (const id of ['offer', 'tline']) { const y = rowY(id, 0); path([[LN, y], [R(id), y]]); dot(LN, y); }
+
+// Performance: cycles -> stages / assessments / peer reviews (no constraints)
+path([[cx('cycle'), B('cycle')], [cx('cycle'), T('stage')]], { dashed: true, start: 'one' });
+const LP = 1074;
+path([[R('cycle'), midY('cycle')], [LP, midY('cycle')], [LP, rowY('peer', 1)]], { dashed: true, start: 'one', end: null });
+for (const [id, i] of [['assess', 1], ['peer', 1]]) { const y = rowY(id, i); path([[LP, y], [R(id), y]], { dashed: true }); dot(LP, y); }
+
+// Payroll
+const TP = 527;   // trunk from EMPLOYEES straight down between audit and AI logs
+path([[TP, B('emp')], [TP, T('slip')]], { start: 'one' });
+path([[TP, rowY('loan', 0)], [R('loan'), rowY('loan', 0)]]); dot(TP, rowY('loan', 0));
+path([[cx('loan'), B('loan')], [cx('loan'), T('rep')]], { start: 'one' });
+path([[850, B('run')], [850, B('run') + 22], [650, B('run') + 22], [650, T('slip')]], { start: 'one' });
+path([[1000, B('run')], [1000, T('ctask')]], { dashed: true, start: 'one' });
+
+// ---------------- Legend ----------------
+const lg = $('legend'), ly = 1200;
+const sample = (x, y, dashed, end) => {
+  const a = { d: `M${x},${y} L${x + 70},${y}`, fill: 'none', stroke: '#222', 'stroke-width': 1.7, 'marker-start': 'url(#one)', 'marker-end': `url(#${end})` };
+  if (dashed) a['stroke-dasharray'] = '6 4';
+  lg.appendChild(el('path', a));
+};
+sample(30, ly, false, 'many');
+lg.appendChild(el('text', { class: 'lg', x: 112, y: ly + 5 }, 'one to many, foreign key constraint declared'));
+sample(30, ly + 28, true, 'many');
+lg.appendChild(el('text', { class: 'lg', x: 112, y: ly + 33 }, 'one to many, reference column without a constraint (Section 3.6.2)'));
+sample(30, ly + 56, false, 'zeroOne');
+lg.appendChild(el('text', { class: 'lg', x: 112, y: ly + 61 }, 'one to zero-or-one'));
+lg.appendChild(el('circle', { cx: 600, cy: ly, r: 8.5, fill: '#fff', stroke: '#0b3d91', 'stroke-width': 1.5 }));
+lg.appendChild(el('text', { class: 'cb', x: 600, y: ly + 4, 'text-anchor': 'middle' }, 'C'));
+lg.appendChild(el('text', { class: 'lg', x: 616, y: ly + 5 }, 'carries company_id, FK to COMPANIES (1 : N)'));
+lg.appendChild(el('text', { class: 'lg', x: 592, y: ly + 33 }, 'Every entity has a text primary key id unless shown'));
+lg.appendChild(el('text', { class: 'lg', x: 592, y: ly + 61 }, 'otherwise. Only key columns are listed.'));
+</script>
+</body>
+</html>

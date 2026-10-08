@@ -1,0 +1,117 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Figure 3.2</title>
+<!--
+  Figure 3.2: Layered architecture of the Workers backend.
+  Grounded in api/src/index.ts, api/src/routes/*, api/src/middlewares/{auth,role}.middleware.ts.
+  Tenant resolution happens inside authMiddleware (companyId taken from the verified JWT);
+  there is no separate tenantMiddleware in the current code.
+  Render: scripts/figures/render.sh figure_3_2 1100 900
+-->
+<style>
+  html, body { margin: 0; padding: 0; background: #fff; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #111; width: 1100px; height: 900px; position: relative; }
+  .band {
+    position: absolute; left: 190px; width: 640px; box-sizing: border-box;
+    border: 2.5px solid #222; border-radius: 8px; background: #f2f2f2;
+    display: flex; align-items: center; padding: 0 16px;
+  }
+  .band .name { width: 170px; flex: none; font-size: 22px; font-weight: 700; line-height: 1.2; }
+  .band .desc { font-size: 18px; line-height: 1.35; }
+  .band code { font-family: Menlo, Consolas, monospace; font-size: 16px; }
+  .band.mw { background: #dbe6f7; border-color: #0b3d91; border-width: 3.5px; }
+  .band.mw .note { font-style: italic; color: #0b3d91; font-weight: 700; margin-top: 4px; }
+  .side { position: absolute; font-size: 17px; line-height: 1.3; }
+  .reject { left: 880px; top: 268px; width: 200px; box-sizing: border-box; border: 2.5px solid #9b1c1c;
+            border-radius: 8px; padding: 10px 12px; color: #9b1c1c; background: #fff; }
+  .reject b { font-size: 19px; }
+  .dev { left: 880px; top: 440px; width: 205px; color: #333; font-style: italic; font-size: 16px; }
+  .vlabel { position: absolute; font-size: 18px; font-weight: 700; color: #333; transform-origin: left top; white-space: nowrap; }
+  svg.overlay { position: absolute; left: 0; top: 0; }
+</style>
+</head>
+<body>
+  <!-- (1) HTTP request -->
+  <div class="band" style="top:20px;height:80px">
+    <div class="name">HTTP request</div>
+    <div class="desc">From the SPA, with the bearer token in the <code>Authorization</code> header</div>
+  </div>
+
+  <!-- (2) Routes -->
+  <div class="band" style="top:125px;height:95px">
+    <div class="name">Routes</div>
+    <div class="desc">Map path and method to a middleware chain and a controller; no logic<br>
+      <code>/auth /public /employee /admin /ai /support</code></div>
+  </div>
+
+  <!-- (3) Middlewares -->
+  <div class="band mw" style="top:245px;height:160px">
+    <div class="name">Middlewares</div>
+    <div class="desc">
+      <code>authMiddleware</code>: verify JWT; set employee, company (tenant), and role<br>
+      <code>requireRole</code>: fixed-role allow-list<br>
+      <code>requirePermission</code>: custom-role narrowing
+      <div class="note">Rejection here short-circuits the request</div>
+    </div>
+  </div>
+
+  <!-- (4) Controllers -->
+  <div class="band" style="top:430px;height:80px">
+    <div class="name">Controllers</div>
+    <div class="desc">Parse request · call one service · shape response</div>
+  </div>
+
+  <!-- (5) Services -->
+  <div class="band" style="top:535px;height:95px">
+    <div class="name">Services</div>
+    <div class="desc">All business logic and computation: payroll engine, leave rules, transition state, assistant tools</div>
+  </div>
+
+  <!-- (6) Models -->
+  <div class="band" style="top:655px;height:80px">
+    <div class="name">Models<br>(Drizzle)</div>
+    <div class="desc">Typed table schemas; the only layer that knows table shape</div>
+  </div>
+
+  <!-- Rejection box -->
+  <div class="side reject"><b>401 / 403 response</b><br>No controller, service, or query runs</div>
+
+  <!-- Deviation note -->
+  <div class="side dev">Settings and Control Centre routes call their services directly (documented deviation, Section 3.2.2)</div>
+
+  <svg class="overlay" width="1100" height="900" viewBox="0 0 1100 900">
+    <defs>
+      <marker id="ah" markerWidth="12" markerHeight="12" refX="11" refY="6" orient="auto" markerUnits="userSpaceOnUse">
+        <path d="M0,0 L12,6 L0,12 z" fill="#222"/>
+      </marker>
+      <marker id="ahr" markerWidth="12" markerHeight="12" refX="11" refY="6" orient="auto" markerUnits="userSpaceOnUse">
+        <path d="M0,0 L12,6 L0,12 z" fill="#9b1c1c"/>
+      </marker>
+    </defs>
+
+    <!-- Request (down) and response (up) spines -->
+    <line x1="95" y1="25" x2="95" y2="800" stroke="#222" stroke-width="3" marker-end="url(#ah)"/>
+    <line x1="138" y1="800" x2="138" y2="25" stroke="#777" stroke-width="3" stroke-dasharray="8 5" marker-end="url(#ah)"/>
+    <text x="0" y="0" transform="translate(83,420) rotate(-90)" font-size="18" font-weight="700" fill="#222" text-anchor="middle">Request passes down</text>
+    <text x="0" y="0" transform="translate(164,420) rotate(-90)" font-size="18" font-weight="700" fill="#555" text-anchor="middle">Response returns up</text>
+
+    <!-- Short-circuit -->
+    <line x1="830" y1="305" x2="877" y2="305" stroke="#9b1c1c" stroke-width="3" marker-end="url(#ahr)"/>
+
+    <!-- Documented bypass of the controller layer -->
+    <path d="M830,390 H858 V560 H834" fill="none" stroke="#555" stroke-width="2.5" stroke-dasharray="7 5" marker-end="url(#ah)"/>
+
+    <!-- Models -> D1 -->
+    <line x1="510" y1="735" x2="510" y2="772" stroke="#222" stroke-width="3" marker-end="url(#ah)"/>
+
+    <!-- D1 cylinder -->
+    <g>
+      <path d="M380,790 V860 A130,18 0 0 0 640,860 V790" fill="#fff" stroke="#222" stroke-width="2.5"/>
+      <ellipse cx="510" cy="790" rx="130" ry="18" fill="#fff" stroke="#222" stroke-width="2.5"/>
+      <text x="510" y="845" text-anchor="middle" font-size="22" font-weight="700" fill="#111">Cloudflare D1</text>
+    </g>
+  </svg>
+</body>
+</html>

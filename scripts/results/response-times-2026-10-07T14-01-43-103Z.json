@@ -1,0 +1,210 @@
+{
+  "baseUrl": "http://localhost:8788",
+  "ranAt": "2026-10-07T14:02:26.470Z",
+  "employeeCount": 50,
+  "idleMinutes": 0.02,
+  "companyId": "comp-6FB7AEBC",
+  "results": [
+    {
+      "operation": "Authenticate and issue token",
+      "category": "Interactive (authentication)",
+      "coldMs": 19.680624999999964,
+      "coldConnectMs": 1.0677089999999225,
+      "coldServerMs": 10,
+      "coldVerified": false,
+      "coldIsolateRequest": 5,
+      "warmP50": 29.13745899999958,
+      "warmP95": 35.15474559999939,
+      "warmServerP50": 21,
+      "warmN": 3,
+      "warmFreshIsolates": 0,
+      "warmSamplesMs": [
+        35.823332999999366,
+        28.444166999999652,
+        29.13745899999958
+      ],
+      "errors": []
+    },
+    {
+      "operation": "Retrieve employee directory (50 records)",
+      "category": "Interactive read",
+      "coldMs": 22.622459000000163,
+      "coldConnectMs": 2.5742090000003373,
+      "coldServerMs": 15,
+      "coldVerified": false,
+      "coldIsolateRequest": 10,
+      "warmP50": 8.581749999999374,
+      "warmP95": 9.165924699999596,
+      "warmServerP50": 6,
+      "warmN": 3,
+      "warmFreshIsolates": 0,
+      "warmSamplesMs": [
+        8.581749999999374,
+        6.871708000000581,
+        9.23083299999962
+      ],
+      "errors": []
+    },
+    {
+      "operation": "Retrieve single employee profile",
+      "category": "Interactive read",
+      "coldMs": 10.864083000000392,
+      "coldConnectMs": 2.656291000001147,
+      "coldServerMs": 6,
+      "coldVerified": false,
+      "coldIsolateRequest": 15,
+      "warmP50": 6.384874999999738,
+      "warmP95": 14.676912500000798,
+      "warmServerP50": 5,
+      "warmN": 3,
+      "warmFreshIsolates": 0,
+      "warmSamplesMs": [
+        5.545042000001558,
+        15.598250000000917,
+        6.384874999999738
+      ],
+      "errors": []
+    },
+    {
+      "operation": "Retrieve own leave balance",
+      "category": "Interactive read",
+      "coldMs": 14.97595800000272,
+      "coldConnectMs": 2.104166000000987,
+      "coldServerMs": 7,
+      "coldVerified": false,
+      "coldIsolateRequest": 20,
+      "warmP50": 5.087124999998196,
+      "warmP95": 6.703786900000341,
+      "warmServerP50": 3,
+      "warmN": 3,
+      "warmFreshIsolates": 0,
+      "warmSamplesMs": [
+        6.8834160000005795,
+        5.087124999998196,
+        4.328000000001339
+      ],
+      "errors": []
+    },
+    {
+      "operation": "Submit leave request",
+      "category": "Interactive write",
+      "coldMs": 12.040499999999156,
+      "coldConnectMs": 3.8259580000012647,
+      "coldServerMs": 6,
+      "coldVerified": false,
+      "coldIsolateRequest": 25,
+      "warmP50": 5.566874999996799,
+      "warmP95": 5.630137800000375,
+      "warmServerP50": 4,
+      "warmN": 3,
+      "warmFreshIsolates": 0,
+      "warmSamplesMs": [
+        5.6371670000007725,
+        5.064957999999024,
+        5.566874999996799
+      ],
+      "errors": []
+    },
+    {
+      "operation": "Record attendance clock-in",
+      "category": "Interactive write",
+      "coldMs": 43.021208999998635,
+      "coldConnectMs": 2.429458999999042,
+      "coldServerMs": 38,
+      "coldVerified": false,
+      "coldIsolateRequest": 30,
+      "warmP50": 5.187333000001672,
+      "warmP95": 5.6140076999992745,
+      "warmServerP50": 4,
+      "warmN": 3,
+      "warmFreshIsolates": 0,
+      "warmSamplesMs": [
+        5.187333000001672,
+        5.661415999999008,
+        4.507499999999709
+      ],
+      "errors": []
+    },
+    {
+      "operation": "Retrieve manager pending-approvals queue",
+      "category": "Interactive read",
+      "coldMs": 14.047958999999537,
+      "coldConnectMs": 4.983250000001135,
+      "coldServerMs": 5,
+      "coldVerified": false,
+      "coldIsolateRequest": 39,
+      "warmP50": 4.865375000001222,
+      "warmP95": 5.486562200001208,
+      "warmServerP50": 2,
+      "warmN": 3,
+      "warmFreshIsolates": 0,
+      "warmSamplesMs": [
+        4.865375000001222,
+        4.261207999999897,
+        5.5555830000012065
+      ],
+      "errors": []
+    },
+    {
+      "operation": "Preview payroll run (50 employees)",
+      "category": "Batch computation",
+      "coldMs": 12.71741700000348,
+      "coldConnectMs": 1.3851250000006985,
+      "coldServerMs": 8,
+      "coldVerified": false,
+      "coldIsolateRequest": 44,
+      "warmP50": 9.569374999999127,
+      "warmP95": 10.948774399998365,
+      "warmServerP50": 7,
+      "warmN": 3,
+      "warmFreshIsolates": 0,
+      "warmSamplesMs": [
+        11.10204099999828,
+        9.569374999999127,
+        9.277541999999812
+      ],
+      "errors": []
+    },
+    {
+      "operation": "Submit payroll run (50 employees)",
+      "category": "Batch computation",
+      "coldMs": 41.327250000002095,
+      "coldConnectMs": 5.841042000000016,
+      "coldServerMs": 33,
+      "coldVerified": false,
+      "coldIsolateRequest": 49,
+      "warmP50": 15.85058299999946,
+      "warmP95": 21.245108299999266,
+      "warmServerP50": 15,
+      "warmN": 3,
+      "warmFreshIsolates": 0,
+      "warmSamplesMs": [
+        21.844499999999243,
+        15.85058299999946,
+        15.69774999999936
+      ],
+      "errors": []
+    },
+    {
+      "operation": "Assistant query (single tool call)",
+      "category": "Interactive read (AI)",
+      "coldMs": 11817.150125000004,
+      "coldConnectMs": 2.78741699999955,
+      "coldServerMs": 11802,
+      "coldVerified": false,
+      "coldIsolateRequest": 58,
+      "warmP50": 7179.340792000003,
+      "warmP95": 7179.340792000003,
+      "warmServerP50": 7172,
+      "warmN": 1,
+      "warmFreshIsolates": 0,
+      "toolsUsed": [
+        "getHeadcount"
+      ],
+      "warmSamplesMs": [
+        7179.340792000003
+      ],
+      "errors": []
+    }
+  ]
+}

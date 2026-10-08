@@ -1,0 +1,152 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Figure 3.4</title>
+<!--
+  Figure 3.4: Use case diagram of the ZenHR system.
+  Associations follow Table 3.1 (the intended role design). Code changes needed for the
+  route guards to match are listed in TODO.md ("Role guards").
+  Edit USE_CASES / ACTORS below; lines are generated.
+  Render: scripts/figures/render.sh figure_3_4 1100 1275
+-->
+<style>
+  html, body { margin: 0; padding: 0; background: #fff; }
+  svg { display: block; font-family: Arial, Helvetica, sans-serif; }
+  .uc   { font-size: 17px; fill: #111; }
+  .act  { font-size: 18px; font-weight: 700; fill: #111; }
+  .sys  { font-size: 24px; font-weight: 700; fill: #111; }
+  .band { font-size: 17px; font-weight: 700; fill: #0b3d91; }
+  .note { font-size: 16px; fill: #333; }
+</style>
+</head>
+<body>
+<svg id="d" width="1100" height="1275" viewBox="0 0 1100 1275" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="gen" markerWidth="22" markerHeight="22" refX="20" refY="11" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L20,11 L0,22 z" fill="#fff" stroke="#222" stroke-width="2"/>
+    </marker>
+  </defs>
+  <!-- System boundary -->
+  <rect x="300" y="20" width="500" height="1140" fill="none" stroke="#222" stroke-width="2.5"/>
+  <text class="sys" x="550" y="54" text-anchor="middle">ZenHR</text>
+  <!-- Tenant and role resolution band -->
+  <rect x="318" y="72" width="464" height="66" rx="6" fill="#dbe6f7" stroke="#0b3d91" stroke-width="2"/>
+  <text class="band" x="550" y="99" text-anchor="middle">Tenant and role resolution:</text>
+  <text class="band" x="550" y="122" text-anchor="middle">every request passes through this first</text>
+  <g id="lines"></g>
+  <g id="ovals"></g>
+  <g id="actors"></g>
+  <text class="note" x="40" y="1200">Generalisation: the Super Administrator inherits every HR Administrator use case.</text>
+  <text class="note" x="40" y="1226">Every actor is also an Employee and can use the Employee use cases; those associations</text>
+  <text class="note" x="40" y="1250">are drawn once, from the Employee actor. Manager associations apply to direct reports only.</text>
+</svg>
+<script>
+const NS = 'http://www.w3.org/2000/svg';
+const el = (tag, attrs, text) => {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (text !== undefined) e.textContent = text;
+  return e;
+};
+
+// Use cases, top to bottom. L = left-side actors, R = right-side actors.
+const USE_CASES = [
+  ['Configure company settings, roles and API keys', ['super'], []],
+  ['Review audit log and control centre',            ['hr'], []],
+  ['Manage workforce and organisation',              ['hr'], []],
+  ['Run onboarding and offboarding',                 ['hr'], []],
+  ['Manage recruitment pipeline',                    ['hr'], ['recruiter', 'manager']],
+  ['Record and approve attendance',                  ['hr'], ['manager', 'employee']],
+  ['Apply for and approve leave',                    ['hr'], ['manager', 'employee']],
+  ['Conduct performance reviews',                    ['hr'], ['manager', 'employee']],
+  ['Administer benefits and wellness',               ['hr'], ['employee']],
+  ['Manage assets, learning and surveys',            ['hr'], ['employee']],
+  ['Raise and resolve support tickets',              ['hr'], ['employee']],
+  ['Configure and run payroll',                      ['hr', 'payroll'], []],
+  ['View own payslips',                              [], ['employee']],
+  ['Query the AI assistant',                         [], ['employee']],
+];
+
+const CX = 550, RX = 210, RY = 24, Y0 = 192, DY = 70;
+const ucY = i => Y0 + i * DY;
+const TIP_L = CX - RX, TIP_R = CX + RX;
+// x where a horizontal line at vertical offset dy from the centre meets the ellipse
+const edgeDx = dy => RX * Math.sqrt(1 - (dy / RY) ** 2);
+
+const TRUNK = { hr: 280, employee: 822, manager: 862 };   // orthogonal "bus" per actor
+const OFFSET = { employee: 8, manager: -8 };              // keep shared ovals' branches apart
+
+const ACTORS = {
+  super:     { x: 150, y: ucY(0) + 10,  name: ['Super', 'Administrator'] },
+  hr:        { x: 150, y: ucY(6) + 10,  name: ['HR', 'Administrator'] },
+  payroll:   { x: 150, y: ucY(12) + 40, name: ['Payroll', 'Officer'] },
+  recruiter: { x: 975, y: ucY(2) + 10,  name: ['Recruiter'] },
+  manager:   { x: 975, y: ucY(6) + 10,  name: ['Manager'] },
+  employee:  { x: 975, y: ucY(10) + 10, name: ['Employee'] },
+};
+
+const lines = document.getElementById('lines');
+const ovals = document.getElementById('ovals');
+const actors = document.getElementById('actors');
+const LINE = { stroke: '#333', 'stroke-width': 1.8, fill: 'none' };
+const dot = (x, y) => lines.appendChild(el('circle', { cx: x, cy: y, r: 4, fill: '#333' }));
+
+const span = {};   // per trunk actor: min/max y of its branches
+const reach = (a, y) => { span[a] = span[a] || [Infinity, -Infinity]; span[a][0] = Math.min(span[a][0], y); span[a][1] = Math.max(span[a][1], y); };
+
+USE_CASES.forEach(([label, L, R], i) => {
+  const y = ucY(i);
+  for (const a of L) {
+    if (a === 'hr') {
+      lines.appendChild(el('path', { d: `M${TRUNK.hr},${y} H${TIP_L}`, ...LINE })); dot(TRUNK.hr, y); reach('hr', y);
+    } else if (a === 'super') {
+      const A = ACTORS.super;
+      lines.appendChild(el('path', { d: `M${A.x + 32},${y} H${TIP_L}`, ...LINE }));
+    } else if (a === 'payroll') {
+      // short diagonal from below to the oval's lower-left perimeter, clear of the HR trunk
+      const A = ACTORS.payroll, px = CX - edgeDx(14) , py = y + 14;
+      lines.appendChild(el('line', { x1: A.x + 30, y1: A.y - 14, x2: px, y2: py, ...LINE }));
+    }
+  }
+  for (const a of R) {
+    if (a === 'recruiter') {
+      const A = ACTORS.recruiter, py = y - 16, px = CX + edgeDx(16);
+      lines.appendChild(el('line', { x1: A.x - 30, y1: A.y - 10, x2: px, y2: py, ...LINE }));
+    } else {
+      const dy = OFFSET[a], yy = y + dy;
+      lines.appendChild(el('path', { d: `M${TRUNK[a]},${yy} H${CX + edgeDx(dy)}`, ...LINE })); dot(TRUNK[a], yy); reach(a, yy);
+    }
+  }
+  ovals.appendChild(el('ellipse', { cx: CX, cy: y, rx: RX, ry: RY, fill: '#fff', stroke: '#222', 'stroke-width': 2 }));
+  ovals.appendChild(el('text', { class: 'uc', x: CX, y: y + 6, 'text-anchor': 'middle' }, label));
+});
+
+// Trunks, and each trunk actor's connection to its trunk
+for (const a of ['hr', 'manager', 'employee']) {
+  const [y1, y2] = span[a], A = ACTORS[a], x = TRUNK[a];
+  lines.appendChild(el('path', { d: `M${x},${y1} V${y2}`, ...LINE }));
+  const ay = Math.min(Math.max(A.y - 10, y1), y2);
+  const ax = a === 'hr' ? A.x + 32 : A.x - 32;
+  lines.appendChild(el('path', { d: `M${ax},${ay} H${x}`, ...LINE })); dot(x, ay);
+}
+
+// Stick figures
+for (const key in ACTORS) {
+  const { x, y, name } = ACTORS[key];
+  const g = el('g', { stroke: '#222', 'stroke-width': 2.5, fill: 'none' });
+  g.appendChild(el('circle', { cx: x, cy: y - 42, r: 13, fill: '#fff' }));
+  g.appendChild(el('line', { x1: x, y1: y - 29, x2: x, y2: y + 8 }));
+  g.appendChild(el('line', { x1: x - 24, y1: y - 16, x2: x + 24, y2: y - 16 }));
+  g.appendChild(el('line', { x1: x, y1: y + 8, x2: x - 18, y2: y + 40 }));
+  g.appendChild(el('line', { x1: x, y1: y + 8, x2: x + 18, y2: y + 40 }));
+  actors.appendChild(g);
+  name.forEach((n, k) => actors.appendChild(el('text', { class: 'act', x, y: y + 64 + k * 21, 'text-anchor': 'middle' }, n)));
+}
+
+// Generalisation: Super Administrator -> HR Administrator (hollow triangle at the general actor)
+const s = ACTORS.super, h = ACTORS.hr, gx = 60;
+lines.appendChild(el('path', { d: `M${s.x - 34},${s.y - 10} H${gx} V${h.y - 10} H${h.x - 34}`, stroke: '#222', 'stroke-width': 2, fill: 'none', 'marker-end': 'url(#gen)' }));
+</script>
+</body>
+</html>

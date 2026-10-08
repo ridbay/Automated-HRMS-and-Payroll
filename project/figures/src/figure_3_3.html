@@ -1,0 +1,98 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Figure 3.3</title>
+<!--
+  Figure 3.3: Conceptual framework of the proposed system (Section 3.3).
+  Render: scripts/figures/render.sh figure_3_3 1100 890
+-->
+<style>
+  html, body { margin: 0; padding: 0; background: #fff; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #111; width: 1100px; height: 890px; position: relative; }
+  .layer { position: absolute; left: 90px; width: 920px; box-sizing: border-box; border: 2.5px solid #222;
+           border-radius: 10px; padding: 14px 18px 16px; }
+  .layer .t { font-size: 22px; font-weight: 700; margin-bottom: 12px; }
+  .layer .t span { font-weight: 400; font-style: italic; font-size: 17px; color: #444; margin-left: 10px; }
+  .access { top: 20px; height: 170px; background: #dbe6f7; border-color: #0b3d91; border-width: 3px; }
+  .process { top: 225px; height: 372px; background: #f2f2f2; }
+  .persist { top: 632px; height: 165px; background: #fff; }
+
+  .steps { display: flex; align-items: center; gap: 8px; }
+  .step { flex: 1; background: #fff; border: 2px solid #0b3d91; border-radius: 6px; text-align: center;
+          font-size: 18px; font-weight: 700; padding: 12px 6px; line-height: 1.2; }
+  .chev { font-size: 26px; color: #0b3d91; font-weight: 700; }
+  .fail { margin-top: 10px; font-size: 16px; font-style: italic; color: #9b1c1c; }
+
+  .mods { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .mod { background: #fff; border: 2px solid #444; border-radius: 6px; height: 92px; box-sizing: border-box;
+         display: flex; align-items: center; justify-content: center; text-align: center;
+         font-size: 18px; line-height: 1.25; padding: 4px 8px; }
+
+  .stores { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .store { border: 2px solid #222; border-radius: 6px; padding: 12px; text-align: center; height: 92px; box-sizing: border-box; }
+  .store b { display: block; font-size: 20px; margin-bottom: 6px; }
+  .store div { font-size: 16px; color: #333; line-height: 1.3; }
+  svg.overlay { position: absolute; left: 0; top: 0; }
+</style>
+</head>
+<body>
+  <div class="layer access">
+    <div class="t">Tenant and access layer</div>
+    <div class="steps">
+      <div class="step">Identity<br>verification</div><div class="chev">›</div>
+      <div class="step">Company<br>resolution</div><div class="chev">›</div>
+      <div class="step">Role<br>resolution</div><div class="chev">›</div>
+      <div class="step">Permission<br>narrowing</div>
+    </div>
+    <div class="fail">A failure at any step terminates the request; nothing below is reached.</div>
+  </div>
+
+  <div class="layer process">
+    <div class="t">HR process layer<span>each module applies state transitions to employee-related records</span></div>
+    <div class="mods">
+      <div class="mod">Workforce and organisation</div>
+      <div class="mod">Transitions (onboarding / offboarding)</div>
+      <div class="mod">Attendance and overtime</div>
+      <div class="mod">Leave</div>
+      <div class="mod">Recruitment and ATS</div>
+      <div class="mod">Payroll and statutory compliance</div>
+      <div class="mod">Performance</div>
+      <div class="mod">Benefits and wellness</div>
+      <div class="mod">Assets, learning, surveys and support</div>
+      <div class="mod">Control centre and audit</div>
+      <div class="mod">AI assistant</div>
+    </div>
+  </div>
+
+  <div class="layer persist">
+    <div class="t">Data persistence layer<span>passive: records outcomes, holds no business rules</span></div>
+    <div class="stores">
+      <div class="store"><b>Structured state — D1</b><div>Companies, employees, attendance, leave, payroll, audit</div></div>
+      <div class="store"><b>Unstructured artefacts — R2</b><div>Employee documents, résumés, company documents</div></div>
+    </div>
+  </div>
+
+  <svg class="overlay" width="1100" height="890" viewBox="0 0 1100 890">
+    <defs>
+      <marker id="ah" markerWidth="13" markerHeight="13" refX="11" refY="6.5" orient="auto" markerUnits="userSpaceOnUse">
+        <path d="M0,0 L13,6.5 L0,13 z" fill="#222"/>
+      </marker>
+    </defs>
+    <!-- Connectors through the layer boundaries: request down, response up -->
+    <g stroke="#222" stroke-width="3">
+      <line x1="530" y1="192" x2="530" y2="222" marker-end="url(#ah)"/>
+      <line x1="570" y1="222" x2="570" y2="192" marker-end="url(#ah)"/>
+      <line x1="530" y1="599" x2="530" y2="629" marker-end="url(#ah)"/>
+      <line x1="570" y1="629" x2="570" y2="599" marker-end="url(#ah)"/>
+    </g>
+    <!-- One loop: down the left margin through all three layers, round the bottom, back up the right -->
+    <path d="M45,30 V822 Q45,847 70,847 H1030 Q1055,847 1055,822 V40"
+          fill="none" stroke="#222" stroke-width="3.5" marker-end="url(#ah)"/>
+    <text transform="translate(33,420) rotate(-90)" text-anchor="middle" font-size="17" font-weight="700" fill="#222">Request</text>
+    <text transform="translate(1075,420) rotate(90)" text-anchor="middle" font-size="17" font-weight="700" fill="#222">Response</text>
+    <rect x="370" y="832" width="360" height="30" fill="#fff"/>
+    <text x="550" y="854" text-anchor="middle" font-size="19" font-weight="700" font-style="italic" fill="#222">Every request follows this path</text>
+  </svg>
+</body>
+</html>

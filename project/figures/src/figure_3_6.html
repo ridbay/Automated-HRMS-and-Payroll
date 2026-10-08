@@ -1,0 +1,156 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Figure 3.6</title>
+<!--
+  Figure 3.6: Level 1 data flow diagram for the payroll process.
+  Grounded in api/src/services/payroll.service.ts:
+    previewRun  -> reads employees, payroll_settings, tax_brackets, attendance_records, loans (nothing written)
+    submitRun   -> re-runs the preview, blocks on red exceptions, batch-writes payroll_runs + payslips
+    markRunPaid -> updates loans, inserts loan_repayments, inserts compliance_tasks (reads paid runs for NSITF/ITF)
+    getBankFile / getRemittanceSchedule -> read payroll_runs + payslips on request
+  salary_components is NOT read by the computation (basic/allowance split is fixed in code).
+  Render: scripts/figures/render.sh figure_3_6 1100 1400
+-->
+<style>
+  html, body { margin: 0; padding: 0; background: #fff; }
+  svg { display: block; font-family: Arial, Helvetica, sans-serif; }
+  .pn   { font-size: 17px; font-weight: 700; fill: #0b3d91; }
+  .pl   { font-size: 19px; font-weight: 700; fill: #111; }
+  .st   { font-size: 18px; fill: #111; }
+  .sid  { font-size: 15px; font-weight: 700; fill: #555; }
+  .ent  { font-size: 20px; font-weight: 700; fill: #111; }
+  .fl   { font-size: 17px; fill: #222; }
+  .flp  { font-size: 17px; fill: #0b3d91; font-style: italic; }
+  .key  { font-size: 16px; fill: #333; }
+</style>
+</head>
+<body>
+<svg id="d" width="1100" height="1400" viewBox="0 0 1100 1400" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="ah" markerWidth="11" markerHeight="11" refX="10" refY="5.5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L11,5.5 L0,11 z" fill="#222"/>
+    </marker>
+    <marker id="ahp" markerWidth="11" markerHeight="11" refX="10" refY="5.5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L11,5.5 L0,11 z" fill="#0b3d91"/>
+    </marker>
+  </defs>
+  <g id="flows"></g>
+  <g id="nodes"></g>
+  <g id="labels"></g>
+</svg>
+<script>
+const NS = 'http://www.w3.org/2000/svg';
+const el = (tag, attrs, text) => {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (text !== undefined) e.textContent = text;
+  return e;
+};
+const flows = document.getElementById('flows');
+const nodes = document.getElementById('nodes');
+const labels = document.getElementById('labels');
+const N = {};
+
+const PR = 78;     // process radius
+const SW = 240, SH = 44;
+function proc(id, num, lines, x, y) {
+  N[id] = { kind: 'c', x, y, r: PR };
+  nodes.appendChild(el('circle', { cx: x, cy: y, r: PR, fill: '#fff', stroke: '#222', 'stroke-width': 2.5 }));
+  nodes.appendChild(el('text', { class: 'pn', x, y: y - 32, 'text-anchor': 'middle' }, num));
+  lines.forEach((t, i) => nodes.appendChild(el('text', { class: 'pl', x, y: y - 2 + i * 22 - (lines.length - 2) * 11, 'text-anchor': 'middle' }, t)));
+}
+function store(id, sid, name, x, y, w = SW, dup = false) {
+  N[id] = { kind: 'r', x, y, w, h: SH };
+  const L = x - w / 2, T = y - SH / 2;
+  // open-ended rectangle: top, bottom and left edges, plus the id compartment
+  nodes.appendChild(el('rect', { x: L, y: T, width: w, height: SH, fill: '#f2f2f2', stroke: 'none' }));
+  nodes.appendChild(el('path', { d: `M${L + w},${T} H${L} V${T + SH} H${L + w}`, fill: 'none', stroke: '#222', 'stroke-width': 2.2 }));
+  nodes.appendChild(el('line', { x1: L + 42, y1: T, x2: L + 46, y2: T + SH, stroke: '#222', 'stroke-width': 1.6 }));
+  nodes.appendChild(el('text', { class: 'sid', x: L + 23, y: y + 6, 'text-anchor': 'middle' }, sid + (dup ? '*' : '')));
+  nodes.appendChild(el('text', { class: 'st', x: L + 58, y: y + 6 }, name));
+}
+function entity(id, lines, x, y, w = 230, h = 58, dup = false) {
+  N[id] = { kind: 'r', x, y, w, h };
+  nodes.appendChild(el('rect', { x: x - w / 2, y: y - h / 2, width: w, height: h, fill: '#e6e6e6', stroke: '#222', 'stroke-width': 2.5 }));
+  if (dup) nodes.appendChild(el('line', { x1: x - w / 2, y1: y + h / 2 - 14, x2: x - w / 2 + 14, y2: y + h / 2, stroke: '#222', 'stroke-width': 2 }));
+  lines.forEach((t, i) => nodes.appendChild(el('text', { class: 'ent', x, y: y + 6 - (lines.length - 1) * 10 + i * 20, 'text-anchor': 'middle' }, t)));
+}
+// boundary point of node n in the direction of (tx,ty)
+function edge(n, tx, ty) {
+  const dx = tx - n.x, dy = ty - n.y, d = Math.hypot(dx, dy);
+  if (n.kind === 'c') return [n.x + dx / d * (n.r + 3), n.y + dy / d * (n.r + 3)];
+  const s = Math.min((n.w / 2 + 3) / Math.abs(dx || 1e-9), (n.h / 2 + 3) / Math.abs(dy || 1e-9));
+  return [n.x + dx * s, n.y + dy * s];
+}
+// flow from a to b; opts: preview (dashed blue), via [x,y] bend, label lines, lx/ly offset from midpoint, anchor
+function flow(a, b, text, o = {}) {
+  const A = N[a], B = N[b];
+  const pts = o.via ? [edge(A, ...o.via), o.via, edge(B, ...o.via)] : [edge(A, B.x, B.y), edge(B, A.x, A.y)];
+  const d = 'M' + pts.map(p => p.join(',')).join(' L');
+  flows.appendChild(el('path', { d, fill: 'none', stroke: o.preview ? '#0b3d91' : '#222', 'stroke-width': 2.2,
+    'stroke-dasharray': o.preview ? '8 5' : 'none', 'marker-end': o.preview ? 'url(#ahp)' : 'url(#ah)' }));
+  if (!text) return;
+  const m = o.via ? o.via : [(pts[0][0] + pts[1][0]) / 2, (pts[0][1] + pts[1][1]) / 2];
+  const ls = text.split('|');
+  ls.forEach((t, i) => labels.appendChild(el('text', { class: o.preview ? 'flp' : 'fl', x: m[0] + (o.lx || 0), y: m[1] + (o.ly || 0) + i * 20, 'text-anchor': o.anchor || 'middle' }, t)));
+}
+
+// ---------- Nodes ----------
+entity('po', ['Payroll Officer'], 425, 55, 260, 64);
+
+proc('p1', '1.0', ['Validate run', 'inputs and flag', 'exceptions'], 210, 300);
+proc('p2', '2.0', ['Compute', 'payslip per', 'employee'], 640, 300);
+store('emp', 'D1', 'employees', 135, 500);
+store('set', 'D2', 'payroll_settings', 395, 570);
+store('tax', 'D3', 'tax_brackets', 960, 175);
+store('att', 'D4', 'attendance_records', 960, 300);
+store('loan', 'D5', 'loans', 960, 425);
+
+proc('p3', '3.0', ['Persist run', 'and payslips'], 520, 680);
+store('slips', 'D7', 'payslips', 520, 850);
+store('runs', 'D6', 'payroll_runs', 880, 760);
+
+proc('p4', '4.0', ['Apply loan', 'repayments'], 170, 1030);
+proc('p6', '6.0', ['Produce', 'export files'], 520, 1060);
+proc('p5', '5.0', ['Generate', 'remittance', 'obligations'], 880, 1030);
+store('loan2', 'D5', 'loans', 125, 1215, SW, true);
+store('rep', 'D8', 'loan_repayments', 330, 1280);
+entity('po2', ['Payroll Officer'], 615, 1250, 230, 60, true);
+store('ct', 'D9', 'compliance_tasks', 905, 1220);
+
+// ---------- Preview path (nothing persisted) ----------
+flow('po', 'p1', 'pay period,|bonus overrides', { preview: true, lx: -84, ly: -14 });
+flow('p1', 'p2', 'active employees,|settings, exceptions', { preview: true, ly: -34 });
+flow('p2', 'po', 'preview: payslips and|exceptions (not saved)', { preview: true, lx: 96, ly: -14 });
+
+// ---------- Reads feeding 1.0 and 2.0 ----------
+flow('emp', 'p1', 'active|employees', { lx: -62, ly: -6 });
+flow('set', 'p1', 'rates, proration,|relief settings', { lx: 34, ly: -4, anchor: 'start' });
+flow('tax', 'p2', 'tax bands', { lx: -6, ly: -14 });
+flow('att', 'p2', 'attendance', { lx: 0, ly: -10 });
+flow('loan', 'p2', 'active loan', { lx: 4, ly: 30 });
+
+// ---------- Persistence path ----------
+flow('p2', 'p3', 'computed payslips, on|submission, unless a|blocking exception exists', { lx: 26, ly: -14, anchor: 'start' });
+flow('p3', 'slips', 'payslip rows', { lx: 14, ly: 4, anchor: 'start' });
+flow('p3', 'runs', 'run header', { lx: 14, ly: -16, anchor: 'start' });
+
+flow('slips', 'p4', 'loan deductions', { lx: -20, ly: -14, anchor: 'end' });
+flow('slips', 'p6', 'payslip rows', { lx: 12, ly: 6, anchor: 'start' });
+flow('runs', 'p5', 'run and|paid-period|totals', { lx: 14, ly: -12, anchor: 'start' });
+flow('p4', 'loan2', 'reduced|balance', { lx: -40, ly: -6, anchor: 'end' });
+flow('p4', 'rep', 'repayment|record', { lx: 16, ly: -10, anchor: 'start' });
+flow('p6', 'po2', 'bank file,|remittance|schedules', { lx: 16, ly: -20, anchor: 'start' });
+flow('p5', 'ct', 'PAYE, pension, NHF;|NSITF and ITF at|period end; due dates', { lx: 16, ly: -22, anchor: 'start' });
+
+// ---------- Key ----------
+[
+  'Dashed blue: preview path. Nothing is written until the run is submitted.',
+  'Solid: persistence path. 3.0 runs on submission; 4.0 and 5.0 run when the approved run',
+  'is marked paid; 6.0 runs on request. * marks a store drawn twice to avoid crossing lines.',
+].forEach((t, i) => labels.appendChild(el('text', { class: 'key', x: 30, y: 1340 + i * 22 }, t)));
+</script>
+</body>
+</html>

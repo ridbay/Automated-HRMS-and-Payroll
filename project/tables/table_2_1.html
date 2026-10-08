@@ -1,0 +1,65 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Table 2.1</title>
+<!--
+  Table 2.1: Cloud service delivery models compared.
+  Paste-ready for Google Docs: open in a browser, select from the title to the
+  end of the table (Cmd+A), copy, and paste into the document.
+-->
+<style>
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 10pt; color: #000; background: #fff; margin: 24px; max-width: 6.5in; }
+  p.caption { font-weight: bold; font-size: 11pt; margin: 0 0 6pt 0; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { border: 1px solid #000; padding: 4pt 5pt; vertical-align: top; text-align: left; line-height: 1.25; }
+  th { background: #d9d9d9; font-weight: bold; }
+  td.model { font-weight: bold; }
+  tr.adopted td { background: #eaf0fa; }
+</style>
+</head>
+<body>
+<p class="caption">Table 2.1: Cloud service delivery models compared</p>
+<table>
+  <thead>
+    <tr>
+      <th style="width:15%">Delivery model</th>
+      <th style="width:23%">What the provider manages</th>
+      <th style="width:23%">What the consumer manages</th>
+      <th style="width:20%">Billing basis</th>
+      <th style="width:19%">Representative example</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="model">Infrastructure as a Service (IaaS)</td>
+      <td>Physical hardware, data centre, networking, and the virtualisation layer</td>
+      <td>Operating system, patching, runtime, middleware, application, data, and capacity sizing and scaling</td>
+      <td>Allocated capacity (instance size) per unit of time, charged whether or not it is used</td>
+      <td>Amazon EC2; DigitalOcean Droplets</td>
+    </tr>
+    <tr>
+      <td class="model">Platform as a Service (PaaS)</td>
+      <td>Everything in IaaS, plus the operating system and runtime environment</td>
+      <td>Application code and data, and the number and size of running instances</td>
+      <td>Provisioned instances or plan tier per unit of time</td>
+      <td>Heroku; Google App Engine</td>
+    </tr>
+    <tr>
+      <td class="model">Software as a Service (SaaS)</td>
+      <td>The complete application, including its infrastructure, runtime, data storage, and updates</td>
+      <td>Configuration of the application and the data entered into it</td>
+      <td>Subscription, typically per user or per employee per month</td>
+      <td>Commercial cloud HRMS suites of the kind reviewed in Section 2.10.2</td>
+    </tr>
+    <tr class="adopted">
+      <td class="model">Function as a Service (FaaS) / Serverless</td>
+      <td>Everything below the code: runtime, scaling, and capacity, with execution environments started on demand and released when idle</td>
+      <td>Function code and the data it reads and writes only</td>
+      <td>Per invocation and execution time consumed, rather than allocated capacity; no usage charge while idle, though some plans carry a fixed minimum fee</td>
+      <td>Cloudflare Workers (the platform adopted in this project); AWS Lambda</td>
+    </tr>
+  </tbody>
+</table>
+</body>
+</html>

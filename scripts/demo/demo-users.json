@@ -1,0 +1,13 @@
+{
+  "companyId": "comp-73F42AE6",
+  "password": "DemoPass#2026",
+  "users": {
+    "superAdmin": "ngozi.adebayo@ebonycrest.example",
+    "folake": "folake.ogunleye@ebonycrest.example",
+    "emeka": "emeka.nwankwo@ebonycrest.example",
+    "zainab": "zainab.bello@ebonycrest.example",
+    "tunde": "tunde.okonkwo@ebonycrest.example",
+    "amaka": "amaka.eze@ebonycrest.example",
+    "chinedu": "chinedu.obi@ebonycrest.example"
+  }
+}

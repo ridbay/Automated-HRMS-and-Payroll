@@ -1,0 +1,33 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Figure 4.1</title>
+<!--
+  Figure 4.1: Login and forced password change on first sign-in.
+  Real screenshots (local stack, demo company). (b) is the state after Halima Yusuf signs in
+  with a temporary password issued by HR via POST /admin/employees/:id/reset-temporary-password.
+  Capture: node scripts/demo/capture.mjs anon project/figures/screens/fig4_1a_login.png --eval scripts/demo/shots/fig4_1a_login.js --wait 2500
+           node scripts/demo/capture.mjs anon project/figures/screens/fig4_1b_force_change.png --eval scripts/demo/shots/fig4_1b_force_change.js --wait 2500
+  then crop to the sign-in panel ((a) sips -c 1232 1146 --cropOffset 284 1446; (b) sips -c 1414 1146 --cropOffset 193 1446).
+  Render: scripts/figures/render.sh figure_4_1 1100 760
+-->
+<style>
+  html, body { margin: 0; padding: 0; background: #fff; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #111; width: 1100px; }
+  .wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; padding: 16px 20px; align-items: start; }
+  .shot { border: 1.5px solid #999; border-radius: 6px; overflow: hidden; line-height: 0; }
+  .shot img { width: 100%; display: block; }
+  .lab { font-size: 18px; margin-top: 10px; text-align: center; line-height: 1.35; }
+  .lab b { font-size: 18px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div><div class="shot"><img src="../screens/fig4_1a_login_crop.png"></div>
+    <div class="lab"><b>(a)</b> Sign-in with email and password</div></div>
+  <div><div class="shot"><img src="../screens/fig4_1b_force_change_crop.png"></div>
+    <div class="lab"><b>(b)</b> First sign-in with a temporary password: a new password is required before any view is reachable</div></div>
+</div>
+</body>
+</html>

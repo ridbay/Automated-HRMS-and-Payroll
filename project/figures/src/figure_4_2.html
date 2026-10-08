@@ -1,0 +1,37 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Figure 4.2</title>
+<!--
+  Figure 4.2: Employee directory and consolidated employee profile.
+  Real screenshots (local stack, demo company; profile detail from scripts/demo/seed-profile.mjs,
+  audit entries produced through PUT /admin/employees/:id).
+  Capture (signed in as HR Administrator Folake Ogunleye):
+    node scripts/demo/capture.mjs folake project/figures/screens/fig4_2a_directory.png --tab "employee mgmt" --eval scripts/demo/shots/fig4_2a_roster.js --wait 3000
+    node scripts/demo/capture.mjs folake project/figures/screens/fig4_2_leave.png --tab "employee mgmt" --eval scripts/demo/shots/fig4_2_leave.js --wait 2500 --height 1180
+    node scripts/demo/capture.mjs folake project/figures/screens/fig4_2_audit.png --tab "employee mgmt" --eval scripts/demo/shots/fig4_2_audit.js --wait 2500 --height 1180
+  Crops (2x px): roster -c 1236 2368 --cropOffset 140 512; leave -c 1236 2368 --cropOffset 1064 512; audit -c 604 2368 --cropOffset 1276 512.
+  Render: scripts/figures/render.sh figure_4_2 1100 1530
+-->
+<style>
+  html, body { margin: 0; padding: 0; background: #fff; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #111; width: 1100px; }
+  .wrap { padding: 14px 20px; }
+  .shot { border: 1.5px solid #999; border-radius: 6px; overflow: hidden; line-height: 0; }
+  .shot img { width: 100%; display: block; }
+  .lab { font-size: 17px; margin: 8px 0 16px; text-align: center; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="shot"><img src="../screens/fig4_2a_directory_crop.png"></div>
+  <div class="lab"><b>(a)</b> Workforce roster: department, location, status, join date and line manager per employee</div>
+  <div class="shot"><img src="../screens/fig4_2_leave_crop.png"></div>
+  <div class="lab"><b>(b)</b> Profile of Amaka Eze, Leave tab: entitlement by leave type and leave history</div>
+  <div class="shot"><img src="../screens/fig4_2_audit_crop.png"></div>
+  <div class="lab"><b>(c)</b> The same profile, Audit tab: which field was changed, by whom, and when</div>
+</div>
+</body>
+</html>

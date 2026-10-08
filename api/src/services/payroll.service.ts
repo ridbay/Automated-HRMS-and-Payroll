@@ -1,5 +1,5 @@
 import { drizzle } from 'drizzle-orm/d1';
-import { eq, and, gte, lte, asc, desc, inArray } from 'drizzle-orm';
+import { eq, and, gte, lte, asc, desc, inArray, getTableColumns } from 'drizzle-orm';
 import * as schema from '../db/schema';
 
 const genId = (prefix: string) => `${prefix}-${crypto.randomUUID().split('-')[0].toUpperCase()}`;
@@ -594,7 +594,7 @@ export class PayrollService {
     const settings = await this.getSettings(companyId);
     const runId = genId('RUN');
 
-    await this.db.insert(schema.payrollRuns).values({
+    const runInsert = this.db.insert(schema.payrollRuns).values({
       id: runId,
       companyId,
       periodMonth,
@@ -615,46 +615,44 @@ export class PayrollService {
       notes: notes || null,
     });
 
-    if (preview.payslips.length > 0) {
-      const rows = preview.payslips.map((ps: any) => ({
-        id: ps.id,
-        runId,
-        employeeId: ps.employeeId,
-        employeeName: ps.employeeName,
-        department: ps.department,
-        bankName: ps.bankName,
-        accountNumber: ps.accountNumber,
-        accountName: ps.accountName,
-        basicSalary: ps.basicSalary,
-        allowances: ps.allowances,
-        bonuses: ps.bonuses,
-        grossPay: ps.grossPay,
-        taxDeductions: ps.taxDeductions,
-        pensionDeductions: ps.pensionDeductions,
-        nhfDeductions: ps.nhfDeductions,
-        nsitfContribution: ps.nsitfContribution,
-        itfContribution: ps.itfContribution,
-        loanDeductions: ps.loanDeductions,
-        otherDeductions: ps.otherDeductions,
-        netPay: ps.netPay,
-        isProrated: ps.isProrated,
-        workingDays: ps.workingDays,
-        presentDays: ps.presentDays,
-        absentDays: ps.absentDays,
-        overtimeHours: ps.overtimeHours,
-      }));
+    const rows = preview.payslips.map((ps: any) => ({
+      id: ps.id,
+      runId,
+      employeeId: ps.employeeId,
+      employeeName: ps.employeeName,
+      department: ps.department,
+      bankName: ps.bankName,
+      accountNumber: ps.accountNumber,
+      accountName: ps.accountName,
+      basicSalary: ps.basicSalary,
+      allowances: ps.allowances,
+      bonuses: ps.bonuses,
+      grossPay: ps.grossPay,
+      taxDeductions: ps.taxDeductions,
+      pensionDeductions: ps.pensionDeductions,
+      nhfDeductions: ps.nhfDeductions,
+      nsitfContribution: ps.nsitfContribution,
+      itfContribution: ps.itfContribution,
+      loanDeductions: ps.loanDeductions,
+      otherDeductions: ps.otherDeductions,
+      netPay: ps.netPay,
+      isProrated: ps.isProrated,
+      workingDays: ps.workingDays,
+      presentDays: ps.presentDays,
+      absentDays: ps.absentDays,
+      overtimeHours: ps.overtimeHours,
+    }));
 
-      // D1 caps bound parameters at 100 per statement. Each payslip row binds
-      // ~24 params, so a single multi-row VALUES insert breaks past ~4-5
-      // employees. Chunk into a batch of smaller inserts (still one atomic
-      // D1 round trip) instead.
-      const CHUNK_SIZE = 4;
-      const chunks: (typeof rows)[] = [];
-      for (let i = 0; i < rows.length; i += CHUNK_SIZE) chunks.push(rows.slice(i, i + CHUNK_SIZE));
-
-      const statements = chunks.map((chunk) => this.db.insert(schema.payslips).values(chunk));
-      await this.db.batch(statements as [any, ...any[]]);
+    // D1 caps bound parameters at 100 per statement, and Drizzle binds every
+    // column of the table (not just the fields supplied), so size chunks from
+    // the column count. The run header goes in the same batch so a failed
+    // payslip insert can't leave an orphaned run locking the period.
+    const CHUNK_SIZE = Math.floor(100 / Object.keys(getTableColumns(schema.payslips)).length);
+    const payslipInserts = [];
+    for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
+      payslipInserts.push(this.db.insert(schema.payslips).values(rows.slice(i, i + CHUNK_SIZE)));
     }
+    await this.db.batch([runInsert, ...payslipInserts]);
 
     return this.getRun(companyId, runId);
   }

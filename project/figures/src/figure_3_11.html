@@ -1,0 +1,164 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Figure 3.11</title>
+<!--
+  Figure 3.11: AI assistant request sequence with authorisation re-derivation.
+  Grounded in api/src/controllers/ai.controller.ts and api/src/services/ai.service.ts:
+  MAX_TOOL_ITERATIONS = 4; tools receive `caller` (from the verified token), never trust
+  model arguments for identity/role/company; refusals are returned as { error } objects;
+  ai_query_logs is written before the answer is returned (also when the bound is hit).
+  Render: scripts/figures/render.sh figure_3_11 1100 1300
+-->
+<style>
+  html, body { margin: 0; padding: 0; background: #fff; }
+  svg { display: block; font-family: Arial, Helvetica, sans-serif; }
+  .ph  { font-size: 17px; font-weight: 700; fill: #111; }
+  .phs { font-size: 14px; fill: #444; }
+  .m   { font-size: 15.5px; fill: #111; }
+  .mn  { font-size: 15.5px; font-weight: 700; fill: #0b3d91; }
+  .fr  { font-size: 14.5px; font-weight: 700; fill: #333; }
+  .frc { font-size: 14.5px; fill: #333; font-style: italic; }
+  .key { font-size: 15px; font-weight: 700; fill: #9b1c1c; }
+  .ft  { font-size: 14px; fill: #444; }
+</style>
+</head>
+<body>
+<svg id="d" width="1100" height="1300" viewBox="0 0 1100 1300" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="ah" markerWidth="12" markerHeight="12" refX="11" refY="6" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L12,6 L0,12 z" fill="#222"/>
+    </marker>
+    <marker id="ao" markerWidth="12" markerHeight="12" refX="11" refY="6" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L12,6 L0,12" fill="none" stroke="#222" stroke-width="1.6"/>
+    </marker>
+  </defs>
+  <g id="frames"></g>
+  <g id="life"></g>
+  <g id="msgs"></g>
+  <g id="heads"></g>
+</svg>
+<script>
+const NS = 'http://www.w3.org/2000/svg';
+const el = (t, a, s) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); if (s !== undefined) e.textContent = s; return e; };
+const $ = id => document.getElementById(id);
+
+// Participants (lifeline x positions)
+const P = { emp: 64, wk: 270, ai: 500, tool: 730, d1: 980 };
+const TOP = 20, HEAD_H = 64; let END = 1190;
+
+const LIFE = [];
+function head(x, title, sub, actor = false) {
+  const g = $('heads');
+  if (actor) {
+    const s = el('g', { stroke: '#222', 'stroke-width': 2.4, fill: 'none' });
+    s.appendChild(el('circle', { cx: x, cy: TOP + 10, r: 10, fill: '#fff' }));
+    s.appendChild(el('line', { x1: x, y1: TOP + 20, x2: x, y2: TOP + 44 }));
+    s.appendChild(el('line', { x1: x - 16, y1: TOP + 29, x2: x + 16, y2: TOP + 29 }));
+    s.appendChild(el('line', { x1: x, y1: TOP + 44, x2: x - 13, y2: TOP + 62 }));
+    s.appendChild(el('line', { x1: x, y1: TOP + 44, x2: x + 13, y2: TOP + 62 }));
+    g.appendChild(s);
+    g.appendChild(el('text', { class: 'ph', x, y: TOP + 86, 'text-anchor': 'middle' }, title));
+  } else {
+    g.appendChild(el('rect', { x: x - 92, y: TOP, width: 184, height: HEAD_H, rx: 6, fill: '#f2f2f2', stroke: '#222', 'stroke-width': 2.2 }));
+    g.appendChild(el('text', { class: 'ph', x, y: TOP + 27, 'text-anchor': 'middle' }, title));
+    g.appendChild(el('text', { class: 'phs', x, y: TOP + 48, 'text-anchor': 'middle' }, sub));
+  }
+  LIFE.push([x, TOP + (actor ? 94 : HEAD_H)]);
+}
+head(P.emp, 'Employee', '', true);
+head(P.wk, 'Worker', 'POST /ai/ask');
+head(P.ai, 'Inference service', 'Workers AI (LLM)');
+head(P.tool, 'Tool implementation', 'ai.service.ts');
+head(P.d1, 'D1', 'company data');
+
+function bg(t) {
+  const b = t.getBBox();
+  t.parentNode.insertBefore(el('rect', { x: b.x - 3, y: b.y - 1, width: b.width + 6, height: b.height + 2, fill: '#fff', opacity: 0.92 }), t);
+}
+function msg(n, from, to, y, label, { reply = false, lines = null } = {}) {
+  const x1 = P[from], x2 = P[to], dir = Math.sign(x2 - x1);
+  $('msgs').appendChild(el('line', { x1: x1 + dir * 3, y1: y, x2: x2 - dir * 3, y2: y, stroke: '#222', 'stroke-width': 2,
+    'stroke-dasharray': reply ? '7 5' : 'none', 'marker-end': reply ? 'url(#ao)' : 'url(#ah)' }));
+  const tx = Math.min(x1, x2) + 12;
+  const t = el('text', { class: 'm', x: tx, y: y - 8 });
+  t.appendChild(el('tspan', { class: 'mn' }, n + ' '));
+  t.appendChild(el('tspan', {}, label));
+  $('msgs').appendChild(t); bg(t);
+  (lines || []).forEach((l, i) => { const e = el('text', { class: 'm', x: tx + 22, y: y + 20 + i * 18 }, l); $('msgs').appendChild(e); bg(e); });
+}
+function self(n, at, y, label, extra = [], { key = false } = {}) {
+  const x = P[at];
+  $('msgs').appendChild(el('path', { d: `M${x + 3},${y} H${x + 40} V${y + 26} H${x + 6}`, fill: 'none', stroke: key ? '#9b1c1c' : '#222', 'stroke-width': key ? 2.6 : 2, 'marker-end': 'url(#ah)' }));
+  const t = el('text', { class: key ? 'key' : 'm', x: x + 50, y: y + 8 });
+  t.appendChild(el('tspan', { class: 'mn' }, n + ' '));
+  t.appendChild(el('tspan', {}, label));
+  $('msgs').appendChild(t); bg(t);
+  extra.forEach((l, i) => { const e = el('text', { class: key ? 'key' : 'm', x: x + 72, y: y + 28 + i * 19 }, l); $('msgs').appendChild(e); bg(e); });
+}
+function frame(kind, cond, x, y, w, h, dividers = []) {
+  const f = $('frames');
+  f.appendChild(el('rect', { x, y, width: w, height: h, fill: 'none', stroke: '#555', 'stroke-width': 1.8 }));
+  const tw = kind.length * 10 + 26;
+  f.appendChild(el('path', { d: `M${x},${y + 24} H${x + tw - 10} L${x + tw},${y + 14} V${y}`, fill: '#eee', stroke: '#555', 'stroke-width': 1.6 }));
+  f.appendChild(el('text', { class: 'fr', x: x + 8, y: y + 17 }, kind));
+  f.appendChild(el('text', { class: 'frc', x: x + tw + 8, y: y + 17 }, cond));
+  dividers.forEach(([dy, label]) => {
+    f.appendChild(el('line', { x1: x, y1: dy, x2: x + w, y2: dy, stroke: '#555', 'stroke-width': 1.6, 'stroke-dasharray': '8 5' }));
+    f.appendChild(el('text', { class: 'frc', x: x + 10, y: dy + 18 }, label));
+  });
+}
+
+// ---------------- Sequence ----------------
+let y = 150;
+msg(1, 'emp', 'wk', y, 'question, with bearer token');
+y += 46;
+self(2, 'wk', y, 'verify token; take employee, company and role', ['from it (the caller); reject if missing (401)']);
+y += 100;
+const loopTop = y - 52;
+msg(3, 'wk', 'ai', y, 'prompt + tool definitions');
+y += 50;
+msg(4, 'ai', 'wk', y, 'tool call: name, arguments', { reply: true });
+y += 50;
+msg(5, 'wk', 'tool', y, 'invoke tool with (caller, model arguments)');
+y += 40;
+self(6, 'tool', y, 'RE-DERIVE AUTHORISATION', ['from the verified caller,', "NOT from the model's arguments"], { key: true });
+y += 110;
+const altTop = y - 46;
+msg(7, 'tool', 'd1', y, "query scoped to caller's company");
+y += 44;
+msg('', 'd1', 'tool', y, 'rows', { reply: true });
+y += 44;
+msg('', 'tool', 'wk', y, 'permitted fields only', { reply: true });
+y += 30;
+const altDiv = y;
+y += 56;
+msg('', 'tool', 'wk', y, '{ error: "Only HR Admin/Super Admin can', { reply: true, lines: ['access payroll data." }  (structured refusal)'] });
+y += 48;
+frame('alt', '[authorised]', 300, altTop, 770, y - altTop, [[altDiv, '[not authorised]']]);
+y += 46;
+msg(8, 'wk', 'ai', y, 'tool result appended to the conversation');
+y += 36;
+const n9 = el('text', { class: 'frc', x: 290, y: y + 8 }, '9  repeat from 3 until the model answers or 4 iterations are used');
+$('msgs').appendChild(n9); bg(n9);
+y += 52;
+msg(10, 'ai', 'wk', y, 'final answer (no further tool calls)', { reply: true });
+y += 26;
+frame('loop', '[at most 4 iterations, while the model returns tool calls]', 222, loopTop, 860, y - loopTop);
+y += 46;
+msg(11, 'wk', 'd1', y, 'write ai_query_logs: caller, question, tools used');
+y += 50;
+msg(12, 'wk', 'emp', y, 'answer', { reply: true });
+END = y + 30;
+LIFE.forEach(([x, y1]) => $('life').appendChild(el('line', { x1: x, y1, x2: x, y2: END, stroke: '#888', 'stroke-width': 1.6, 'stroke-dasharray': '6 5' })));
+const FT_Y = END + 34;
+const ft = [
+  'searchCompanyDocuments queries the AI Search index instead of D1. If the bound is reached, the query is still logged',
+  'and a fixed "too many steps" reply is returned. Solid arrows: calls; dashed arrows: returns.',
+];
+ft.forEach((t, i) => $('heads').appendChild(el('text', { class: 'ft', x: 30, y: FT_Y + i * 20 }, t)));
+document.getElementById('d').setAttribute('height', FT_Y + 40); document.getElementById('d').setAttribute('viewBox', `0 0 1100 ${FT_Y + 40}`);
+</script>
+</body>
+</html>

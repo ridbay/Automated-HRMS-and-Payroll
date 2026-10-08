@@ -1,0 +1,31 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Figure 4.8</title>
+<!--
+  Figure 4.8: Payroll run preview with pre-run exceptions.
+  Real screenshot (local stack, demo company Ebony Crest Foods Ltd), signed in as Payroll Officer Emeka Nwankwo.
+  Pre-run preview for October 2026 computes company-wide gross, deductions, and net totals while flagging
+  compliance blocking exceptions (Chinedu Obi missing bank details) before submission for approval.
+  Capture:
+    node scripts/demo/capture.mjs emeka project/figures/screens/fig4_8b_payroll_main.png --tab "payroll" --wait 4000 --width 1440 --height 1000
+  Crop (2x): sips -c 1200 2300 --cropOffset 130 536 project/figures/screens/fig4_8b_payroll_main.png --out project/figures/screens/fig4_8_payroll_crop.png
+  Render: scripts/figures/render.sh figure_4_8 1100 660
+-->
+<style>
+  html, body { margin: 0; padding: 0; background: #fff; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #111; width: 1100px; }
+  .wrap { padding: 14px 20px; }
+  .shot { border: 1.5px solid #999; border-radius: 6px; overflow: hidden; line-height: 0; }
+  .shot img { width: 100%; display: block; }
+  .lab { font-size: 16.5px; margin: 12px 0 6px; text-align: center; line-height: 1.35; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="shot"><img src="../screens/fig4_8_payroll_crop.png"></div>
+  <div class="lab">Payroll run preview with pre-run exceptions: live calculations and blocking exceptions for unconfigured bank details before run submission</div>
+</div>
+</body>
+</html>

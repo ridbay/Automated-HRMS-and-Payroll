@@ -1,0 +1,40 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Figure 4.4</title>
+<!--
+  Figure 4.4: Attendance clock-in with punctuality classification.
+  Real screenshots (local stack, demo company). Employee Chinedu Obi clocked in through the UI
+  (scripts/demo/shots/fig4_4_clockin.js) with the browser position fixed to Ikeja, Lagos
+  (capture.mjs --geo 6.6018,3.3515); the server stored status "late" against the 09:00 start + 15 min grace.
+  Capture:
+    node scripts/demo/capture.mjs chinedu project/figures/screens/fig4_4a_employee.png --tab "time & attendance" --geo 6.6018,3.3515 --wait 6000 --height 1100
+    node scripts/demo/capture.mjs folake  project/figures/screens/fig4_4b_register.png --tab "time & attendance" --wait 3500 --height 1100
+    node scripts/demo/capture.mjs folake  project/figures/screens/fig4_4c_policy.png --tab "time & attendance" --eval scripts/demo/shots/fig4_4_policy.js --wait 2500 --height 1100
+  Crops (2x): a -c 1900 2240 --cropOffset 180 576; b -c 1240 2240 --cropOffset 540 576; c -c 852 1152 --cropOffset 548 576
+  Render: scripts/figures/render.sh figure_4_4 1100 1300
+-->
+<style>
+  html, body { margin: 0; padding: 0; background: #fff; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #111; width: 1100px; }
+  .wrap { padding: 14px 20px; }
+  .row { display: grid; grid-template-columns: 1.55fr 1fr; gap: 20px; align-items: start; }
+  .shot { border: 1.5px solid #999; border-radius: 6px; overflow: hidden; line-height: 0; }
+  .shot img { width: 100%; display: block; }
+  .lab { font-size: 16.5px; margin: 8px 0 16px; text-align: center; line-height: 1.35; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="row">
+    <div><div class="shot"><img src="../screens/fig4_4a_employee_crop.png"></div>
+      <div class="lab"><b>(a)</b> Employee view shortly after clocking in at 20:39; today's timeline records the clock-in as location-verified</div></div>
+    <div><div class="shot"><img src="../screens/fig4_4c_policy_crop.png"></div>
+      <div class="lab"><b>(c)</b> The company's attendance policy: 09:00 start with a 15-minute grace period</div></div>
+  </div>
+  <div class="shot"><img src="../screens/fig4_4b_register_crop.png"></div>
+  <div class="lab"><b>(b)</b> HR attendance register for the same day: the 20:39 clock-in is classified LATE against the policy in (c); arrivals before 09:15 are PRESENT</div>
+</div>
+</body>
+</html>

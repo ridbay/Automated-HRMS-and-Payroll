@@ -40,3 +40,8 @@ binding = "AI"
 binding = "AI_SEARCH"
 instance_name = "zenhr-company-docs"
 remote = true
+
+# Workers Logs: records CPU time and wall time per invocation, used for the
+# payroll execution-limit check in the Chapter 4 response-time evaluation.
+[observability]
+enabled = true

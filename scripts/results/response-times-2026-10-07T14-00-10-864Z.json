@@ -1,0 +1,211 @@
+{
+  "baseUrl": "http://localhost:8788",
+  "ranAt": "2026-10-07T14:00:50.175Z",
+  "employeeCount": 50,
+  "idleMinutes": 0.02,
+  "companyId": "comp-5E737E5A",
+  "results": [
+    {
+      "operation": "Authenticate and issue token",
+      "category": "Interactive (authentication)",
+      "coldMs": 19.78512499999988,
+      "coldConnectMs": 4.054208000000017,
+      "coldServerMs": 13,
+      "coldVerified": false,
+      "coldIsolateRequest": 6,
+      "warmP50": 32.22216600000047,
+      "warmP95": 33.5362793999996,
+      "warmServerP50": 18,
+      "warmN": 3,
+      "warmFreshIsolates": 0,
+      "warmSamplesMs": [
+        32.22216600000047,
+        13.397749999998268,
+        33.68229199999951
+      ],
+      "errors": []
+    },
+    {
+      "operation": "Retrieve employee directory (50 records)",
+      "category": "Interactive read",
+      "coldMs": 36.259916999999405,
+      "coldConnectMs": 4.074791999999434,
+      "coldServerMs": 24,
+      "coldVerified": false,
+      "coldIsolateRequest": 11,
+      "warmP50": 7.3289999999997235,
+      "warmP95": 10.169699700000455,
+      "warmServerP50": 5,
+      "warmN": 3,
+      "warmFreshIsolates": 0,
+      "warmSamplesMs": [
+        10.485333000000537,
+        7.3289999999997235,
+        6.33337500000016
+      ],
+      "errors": []
+    },
+    {
+      "operation": "Retrieve single employee profile",
+      "category": "Interactive read",
+      "coldMs": 9.83191700000134,
+      "coldConnectMs": 1.5008750000015425,
+      "coldServerMs": 6,
+      "coldVerified": false,
+      "coldIsolateRequest": 16,
+      "warmP50": 6.0167920000003505,
+      "warmP95": 9.088528900000165,
+      "warmServerP50": 5,
+      "warmN": 3,
+      "warmFreshIsolates": 0,
+      "warmSamplesMs": [
+        6.007417000000714,
+        9.429833000000144,
+        6.0167920000003505
+      ],
+      "errors": []
+    },
+    {
+      "operation": "Retrieve own leave balance",
+      "category": "Interactive read",
+      "coldMs": 7.267875000001368,
+      "coldConnectMs": 1.328457999999955,
+      "coldServerMs": 3,
+      "coldVerified": false,
+      "coldIsolateRequest": 21,
+      "warmP50": 4.0697499999987485,
+      "warmP95": 4.0787131000011865,
+      "warmServerP50": 3,
+      "warmN": 3,
+      "warmFreshIsolates": 0,
+      "warmSamplesMs": [
+        4.0697499999987485,
+        3.734875000001921,
+        4.079709000001458
+      ],
+      "errors": []
+    },
+    {
+      "operation": "Submit leave request",
+      "category": "Interactive write",
+      "coldMs": 15.046666999998706,
+      "coldConnectMs": 2.5582920000015292,
+      "coldServerMs": 9,
+      "coldVerified": false,
+      "coldIsolateRequest": 26,
+      "warmP50": 7.42308299999786,
+      "warmP95": 8.705058299999655,
+      "warmServerP50": 4,
+      "warmN": 3,
+      "warmFreshIsolates": 0,
+      "warmSamplesMs": [
+        8.847499999999854,
+        7.42308299999786,
+        6.192083999998431
+      ],
+      "errors": []
+    },
+    {
+      "operation": "Record attendance clock-in",
+      "category": "Interactive write",
+      "coldMs": 41.587374999999156,
+      "coldConnectMs": 1.925375000002532,
+      "coldServerMs": 37,
+      "coldVerified": false,
+      "coldIsolateRequest": 31,
+      "warmP50": 5.042207999998936,
+      "warmP95": 7.638707999997496,
+      "warmServerP50": 4,
+      "warmN": 3,
+      "warmFreshIsolates": 0,
+      "warmSamplesMs": [
+        4.818665999999212,
+        7.927207999997336,
+        5.042207999998936
+      ],
+      "errors": []
+    },
+    {
+      "operation": "Retrieve manager pending-approvals queue",
+      "category": "Interactive read",
+      "coldMs": 8.243540999999823,
+      "coldConnectMs": 1.2118330000012065,
+      "coldServerMs": 2,
+      "coldVerified": false,
+      "coldIsolateRequest": 40,
+      "warmP50": 4.271208000001934,
+      "warmP95": 4.4086083000005605,
+      "warmServerP50": 2,
+      "warmN": 3,
+      "warmFreshIsolates": 0,
+      "warmSamplesMs": [
+        4.4238750000004075,
+        2.4856669999971928,
+        4.271208000001934
+      ],
+      "errors": []
+    },
+    {
+      "operation": "Preview payroll run (50 employees)",
+      "category": "Batch computation",
+      "coldMs": 16.07733300000109,
+      "coldConnectMs": 1.7269579999992857,
+      "coldServerMs": 11,
+      "coldVerified": false,
+      "coldIsolateRequest": 45,
+      "warmP50": 9.124917000001005,
+      "warmP95": 9.61256670000039,
+      "warmServerP50": 7,
+      "warmN": 3,
+      "warmFreshIsolates": 0,
+      "warmSamplesMs": [
+        9.66675000000032,
+        8.4373749999977,
+        9.124917000001005
+      ],
+      "errors": []
+    },
+    {
+      "operation": "Submit payroll run (50 employees)",
+      "category": "Batch computation",
+      "coldMs": 69.58233300000211,
+      "coldConnectMs": 11.389250000000175,
+      "coldServerMs": 40,
+      "coldVerified": false,
+      "coldIsolateRequest": 50,
+      "warmP50": null,
+      "warmP95": null,
+      "warmServerP50": null,
+      "warmN": 0,
+      "warmFreshIsolates": 0,
+      "warmSamplesMs": [],
+      "errors": [
+        "cold: HTTP 500 {\"error\":\"D1_ERROR: too many SQL variables at offset 816: SQLITE_ERROR\"}",
+        "warm 1: HTTP 500 {\"error\":\"A payroll run for 10/2026 already exists (status: pending_approval). Reject it before submitting a new one.\"}",
+        "warm 2: HTTP 500 {\"error\":\"A payroll run for 10/2026 already exists (status: pending_approval). Reject it before submitting a new one.\"}",
+        "warm 3: HTTP 500 {\"error\":\"A payroll run for 10/2026 already exists (status: pending_approval). Reject it before submitting a new one.\"}"
+      ]
+    },
+    {
+      "operation": "Assistant query (single tool call)",
+      "category": "Interactive read (AI)",
+      "coldMs": 6854.407332999999,
+      "coldConnectMs": 2.0923750000001746,
+      "coldServerMs": 6840,
+      "coldVerified": false,
+      "coldIsolateRequest": 55,
+      "warmP50": 7913.659666999996,
+      "warmP95": 7913.659666999996,
+      "warmServerP50": 7896,
+      "warmN": 1,
+      "warmFreshIsolates": 0,
+      "toolsUsed": [
+        "getHeadcount"
+      ],
+      "warmSamplesMs": [
+        7913.659666999996
+      ],
+      "errors": []
+    }
+  ]
+}

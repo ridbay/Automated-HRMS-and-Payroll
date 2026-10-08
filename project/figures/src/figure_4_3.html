@@ -1,0 +1,50 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Figure 4.3</title>
+<!--
+  Figure 4.3: Offboarding clearance board showing per-function sign-off.
+  Real screenshot (local stack, demo company). Tobi Bello's offboarding case (created by seed-demo.mjs);
+  three of five tasks completed through PATCH /admin/transitions/:id/tasks/:taskId {status:"completed"}.
+  Capture: node scripts/demo/capture.mjs folake project/figures/screens/fig4_3_offboarding.png --tab onboarding
+           --eval scripts/demo/shots/fig4_3_offboarding.js --wait 2500 --height 1100
+  Crop: sips -c 2096 1344 --cropOffset 84 1536. Render: scripts/figures/render.sh figure_4_3 1100 1080
+-->
+<style>
+  html, body { margin: 0; padding: 0; background: #fff; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #111; width: 1100px; height: 1080px; position: relative; }
+  .shot { position: absolute; left: 20px; top: 16px; width: 640px; border: 1.5px solid #999; border-radius: 6px; overflow: hidden; line-height: 0; }
+  .shot img { width: 100%; display: block; }
+  .call { position: absolute; left: 700px; width: 380px; font-size: 16px; line-height: 1.4; padding: 10px 12px; border-left: 4px solid #0b3d91; background: #f3f6fc; }
+  .call b { display: block; font-size: 16.5px; margin-bottom: 2px; }
+  .call.out { border-color: #9b1c1c; background: #fbf3f3; }
+  svg { position: absolute; left: 0; top: 0; }
+</style>
+</head>
+<body>
+  <div class="shot"><img src="../screens/fig4_3_offboarding_crop.png"></div>
+
+  <div class="call" style="top:120px;">
+    <b>Derived stage</b>
+    "Asset Return" is computed from task completion (3 of 5 = 60%). It cannot be edited directly, so it cannot run ahead of the board.
+  </div>
+  <div class="call" style="top:455px;">
+    <b>Signed off</b>
+    HR (transition plan, exit interview) and Admin (handover). Each task carries its function, due date and assignee.
+  </div>
+  <div class="call out" style="top:752px;">
+    <b>Outstanding</b>
+    IT (revoke access) and Finance (final settlement). Until both are completed, the case stays Active and cannot be recorded as cleared.
+  </div>
+
+  <svg width="1100" height="1080" viewBox="0 0 1100 1080">
+    <g stroke="#555" stroke-width="1.8" fill="none" stroke-dasharray="5 4">
+      <path d="M697,170 H560"/>
+      <path d="M697,500 H600"/>
+      <path d="M697,800 H600"/>
+    </g>
+    <g fill="#555"><circle cx="560" cy="170" r="4"/><circle cx="600" cy="500" r="4"/><circle cx="600" cy="800" r="4"/></g>
+  </svg>
+</body>
+</html>

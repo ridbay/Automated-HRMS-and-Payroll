@@ -1,0 +1,64 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Table 2.2</title>
+<!--
+  Table 2.2: Multi-tenant data isolation models compared.
+  Paste-ready for Google Docs: open in a browser, Cmd+A, copy, paste.
+  Wording kept consistent with Table 3.2 (Section 3.6.1).
+-->
+<style>
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 10pt; color: #000; background: #fff; margin: 24px; max-width: 6.5in; }
+  p.caption { font-weight: bold; font-size: 11pt; margin: 0 0 6pt 0; }
+  p.note { font-size: 9pt; margin: 4pt 0 0 0; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { border: 1px solid #000; padding: 4pt 5pt; vertical-align: top; text-align: left; line-height: 1.25; }
+  th { background: #d9d9d9; font-weight: bold; }
+  td.model { font-weight: bold; }
+  tr.adopted td { background: #eaf0fa; }
+</style>
+</head>
+<body>
+<p class="caption">Table 2.2: Multi-tenant data isolation models compared</p>
+<table>
+  <thead>
+    <tr>
+      <th style="width:14%">Isolation model</th>
+      <th style="width:18%">Data separation mechanism</th>
+      <th style="width:14%">Isolation strength</th>
+      <th style="width:19%">Operational complexity</th>
+      <th style="width:13%">Per-tenant cost</th>
+      <th style="width:22%">Principal risk</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="model">Silo: database per tenant</td>
+      <td>A dedicated database instance for each tenant</td>
+      <td>Strongest; physical separation</td>
+      <td>High: every migration, backup, and monitoring task is repeated per tenant</td>
+      <td>High; a fixed overhead for every tenant regardless of size</td>
+      <td>Operational drift, as a migration that partially fails leaves tenants on different schema versions</td>
+    </tr>
+    <tr>
+      <td class="model">Bridge: schema per tenant</td>
+      <td>A shared database instance, with a separate schema for each tenant</td>
+      <td>Intermediate; logical, schema-bounded</td>
+      <td>Moderate to high: migrations are applied schema by schema, and per-tenant customisation multiplies the variants to maintain</td>
+      <td>Moderate</td>
+      <td>Schema divergence between tenants, complicating upgrades and cross-tenant reporting</td>
+    </tr>
+    <tr class="adopted">
+      <td class="model">Pool: shared schema with tenant discriminator column &#8224;</td>
+      <td>Shared database and schema; every tenant-owned row carries a tenant identifier</td>
+      <td>Weakest; logical, query-bounded</td>
+      <td>Low: a single schema and a single migration path for all tenants</td>
+      <td>Lowest; cost grows with data volume rather than tenant count</td>
+      <td>An unfiltered query that omits the tenant condition returns other tenants' rows, producing cross-tenant data leakage</td>
+    </tr>
+  </tbody>
+</table>
+<p class="note">&#8224; Model adopted in this project. The compensating controls it requires are set out in Section 3.6.1 and their implementation and testing in Sections 4.3.1 and 4.4.3.</p>
+</body>
+</html>

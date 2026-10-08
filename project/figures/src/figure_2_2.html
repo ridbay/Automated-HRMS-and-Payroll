@@ -1,0 +1,97 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Figure 2.2</title>
+<!--
+  Figure 2.2: Intersection of literature streams and the research gap addressed by this project.
+  Canvas 1100 px wide (1 px ~ 0.41 pt at 6.3 in). Render: scripts/figures/render.sh figure_2_2 1100 860
+  Geometry: r = 270; centres form an equilateral triangle of side 320.
+    A (390,440)  B (710,440)  C (550,717)  centroid (550,532)
+-->
+<style>
+  html, body { margin: 0; padding: 0; background: #fff; }
+  svg { display: block; font-family: Arial, Helvetica, sans-serif; }
+  .title { font-size: 23px; font-weight: 700; fill: #111; }
+  .cite  { font-size: 20px; fill: #222; }
+  .letter { font-size: 26px; font-weight: 700; fill: #444; }
+  .pair  { font-size: 19px; font-style: italic; fill: #333; }
+  .gap-h { font-size: 15px; font-weight: 700; fill: #fff; letter-spacing: 1px; }
+  .gap   { font-size: 19px; font-weight: 700; fill: #fff; }
+</style>
+</head>
+<body>
+<svg width="1100" height="860" viewBox="0 150 1100 860" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <clipPath id="clipA"><circle cx="390" cy="440" r="270"/></clipPath>
+    <clipPath id="clipB"><circle cx="710" cy="440" r="270"/></clipPath>
+  </defs>
+
+  <!-- Circle fills (translucent so overlaps darken) -->
+  <circle cx="390" cy="440" r="270" fill="#9e9e9e" fill-opacity="0.22"/>
+  <circle cx="710" cy="440" r="270" fill="#6f8fc4" fill-opacity="0.22"/>
+  <circle cx="550" cy="717" r="270" fill="#c4a46f" fill-opacity="0.22"/>
+
+  <!-- Three-way intersection: C clipped by A and by B -->
+  <g clip-path="url(#clipA)">
+    <g clip-path="url(#clipB)">
+      <circle cx="550" cy="717" r="270" fill="#0b3d91"/>
+    </g>
+  </g>
+
+  <!-- Outlines -->
+  <circle cx="390" cy="440" r="270" fill="none" stroke="#333" stroke-width="2.5"/>
+  <circle cx="710" cy="440" r="270" fill="none" stroke="#333" stroke-width="2.5" stroke-dasharray="12 6"/>
+  <circle cx="550" cy="717" r="270" fill="none" stroke="#333" stroke-width="2.5" stroke-dasharray="3 5"/>
+
+  <!-- Circle letters, outside the boundary -->
+  <text class="letter" x="148" y="210">A</text>
+  <text class="letter" x="934" y="210">B</text>
+  <text class="letter" x="770" y="990">C</text>
+
+  <!-- A only -->
+  <g text-anchor="middle">
+    <text class="title" x="270" y="300">Multi-tenant HRMS</text>
+    <text class="title" x="270" y="328">functionality</text>
+    <text class="cite"  x="270" y="372">Ammupriya et al. (2025);</text>
+    <text class="cite"  x="270" y="398">commercial platforms</text>
+  </g>
+
+  <!-- B only -->
+  <g text-anchor="middle">
+    <text class="title" x="830" y="300">Serverless, edge-native</text>
+    <text class="title" x="830" y="328">architecture</text>
+    <text class="cite"  x="830" y="372">Wen et al. (2023);</text>
+    <text class="cite"  x="830" y="398">Raith et al. (2023);</text>
+    <text class="cite"  x="830" y="424">Golec et al. (2024)</text>
+  </g>
+
+  <!-- C only -->
+  <g text-anchor="middle">
+    <text class="title" x="550" y="800">Statutory payroll automation</text>
+    <text class="title" x="550" y="828">and governed AI access</text>
+    <text class="cite"  x="550" y="872">Zhao and Rabiei (2023);</text>
+    <text class="cite"  x="550" y="898">Falana et al. (2024); OWASP (2025)</text>
+  </g>
+
+  <!-- Pairwise overlaps -->
+  <g text-anchor="middle">
+    <text class="pair" x="550" y="330">Partially</text>
+    <text class="pair" x="550" y="354">addressed</text>
+
+    <text class="pair" x="385" y="625">Partially</text>
+    <text class="pair" x="385" y="649">addressed</text>
+
+    <text class="pair" x="715" y="625">Partially</text>
+    <text class="pair" x="715" y="649">addressed</text>
+  </g>
+
+  <!-- Research gap -->
+  <g text-anchor="middle">
+    <text class="gap-h" x="550" y="510">RESEARCH GAP</text>
+    <text class="gap"   x="550" y="540">ZenHR —</text>
+    <text class="gap"   x="550" y="564">this project</text>
+  </g>
+</svg>
+</body>
+</html>

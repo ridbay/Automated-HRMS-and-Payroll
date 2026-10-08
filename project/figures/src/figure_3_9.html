@@ -1,0 +1,124 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Figure 3.9</title>
+<!--
+  Figure 3.9: Gross-to-net payroll computation sequence.
+  Drawn for the TARGET implementation recorded in TODO.md ("Tax 2026" and "Salary component
+  catalogue"): Nigeria Tax Act 2025 PAYE (no CRA, no 1% minimum tax; rent relief; new bands)
+  and a gross split driven by the salary component catalogue.
+  Rates shown are the configurable defaults in payroll settings.
+  Render: scripts/figures/render.sh figure_3_9 1100 1420
+-->
+<style>
+  html, body { margin: 0; padding: 0; background: #fff; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #111; width: 1100px; height: 1420px; position: relative; }
+  .b { position: absolute; box-sizing: border-box; border: 2.3px solid #222; border-radius: 6px; background: #fff;
+       display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
+       font-size: 18px; line-height: 1.3; padding: 6px 12px; }
+  .term { border-radius: 30px; background: #f2f2f2; font-weight: 700; }
+  .ded  { background: #dbe6f7; border-color: #0b3d91; }
+  .rep  { border-style: dashed; border-color: #666; color: #333;
+          background: repeating-linear-gradient(45deg, #f4f4f4 0 8px, #e6e6e6 8px 16px); }
+  .tag  { font-size: 14px; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 4px; }
+  .ded .tag { color: #0b3d91; }
+  .rep .tag { color: #555; }
+  .small { font-size: 16px; }
+  .bands { display: grid; grid-template-columns: auto auto; column-gap: 18px; row-gap: 1px; font-size: 16px; text-align: left; margin-top: 4px; }
+  .bands span:nth-child(odd) { text-align: right; font-weight: 700; }
+  .lbl { position: absolute; font-size: 16px; font-weight: 700; color: #222; }
+  .dia { position: absolute; z-index: 2; }
+  .legend { position: absolute; left: 30px; top: 1360px; font-size: 16px; color: #222; display: flex; gap: 40px; align-items: center; }
+  .sw { display: inline-block; width: 38px; height: 22px; vertical-align: middle; margin-right: 8px; box-sizing: border-box; }
+  svg { position: absolute; left: 0; top: 0; }
+</style>
+</head>
+<body>
+  <!-- Main column: x 300..800 -->
+  <div class="b term" style="left:400px; top:16px; width:300px; height:50px;">Annual salary</div>
+  <div class="b" style="left:330px; top:96px; width:440px; height:52px;">Monthly gross = annual salary ÷ 12</div>
+
+  <!-- decision diamond drawn in SVG; text here -->
+  <div class="dia" style="left:400px; top:211px; width:300px; text-align:center; font-size:18px; font-weight:700; line-height:1.3;">Hire date within<br>this period?</div>
+
+  <div class="b" style="left:820px; top:196px; width:250px; height:76px;"><span class="small">Prorate: × days from hire date<br>÷ days in month</span></div>
+
+  <div class="b" style="left:330px; top:320px; width:440px; height:52px;">Gross pay (+ any bonus for the period)</div>
+  <div class="b" style="left:300px; top:402px; width:500px; height:78px;">Split gross per the salary component catalogue:<br><b>basic, housing, transport, other allowances</b></div>
+
+  <!-- Four parallel branches -->
+  <div class="b rep" style="left:20px;  top:530px; width:245px; height:118px;"><div class="tag">REPORTED ONLY</div><span class="small">Employer pension<br>10% × (basic + housing<br>+ transport)</span></div>
+  <div class="b ded" style="left:290px; top:530px; width:245px; height:118px;"><div class="tag">DEDUCTED</div><span class="small">Employee pension<br>8% × (basic + housing<br>+ transport)</span></div>
+  <div class="b ded" style="left:565px; top:530px; width:245px; height:118px;"><div class="tag">DEDUCTED</div><span class="small">National Housing Fund<br>2.5% × basic</span></div>
+  <div class="b rep" style="left:835px; top:530px; width:245px; height:118px;"><div class="tag">REPORTED ONLY</div><span class="small">Employer levies<br>NSITF 1% and ITF 1%<br>× gross</span></div>
+
+  <div class="b rep" style="left:20px;  top:690px; width:245px; height:64px;"><span class="small">To remittance obligations;<br>never deducted from pay</span></div>
+  <div class="b rep" style="left:835px; top:690px; width:245px; height:64px;"><span class="small">To remittance obligations;<br>never deducted from pay</span></div>
+
+  <div class="b" style="left:330px; top:700px; width:440px; height:52px;">Annualise gross (× 12)</div>
+  <div class="b" style="left:300px; top:782px; width:500px; height:120px;">
+    Subtract annual eligible deductions:<br>
+    <span class="small">employee pension, NHF, rent relief = lesser of<br>20% of annual rent and ₦500,000, and any other<br>recorded reliefs (NHIS, mortgage interest, life insurance)</span></div>
+  <div class="b" style="left:300px; top:932px; width:500px; height:178px;">
+    Apply Nigeria Tax Act 2025 bands in order
+    <div class="bands">
+      <span>0%</span><span>first ₦800,000</span>
+      <span>15%</span><span>next ₦2,200,000</span>
+      <span>18%</span><span>next ₦9,000,000</span>
+      <span>21%</span><span>next ₦13,000,000</span>
+      <span>23%</span><span>next ₦25,000,000</span>
+      <span>25%</span><span>above ₦50,000,000</span>
+    </div></div>
+  <div class="b" style="left:330px; top:1140px; width:440px; height:52px;">Monthly PAYE = annual tax ÷ 12</div>
+  <div class="b" style="left:300px; top:1222px; width:500px; height:52px;">Loan deduction = lesser of instalment and balance</div>
+  <div class="b term" style="left:250px; top:1300px; width:600px; height:46px; font-size:17px;">Net pay = gross − PAYE − employee pension − NHF − loan − other</div>
+
+  <div class="lbl" style="left:712px; top:212px;">Yes</div>
+  <div class="lbl" style="left:560px; top:288px;">No</div>
+
+  <div class="legend">
+    <span><span class="sw" style="background:#dbe6f7;border:2px solid #0b3d91;"></span>deducted from the employee's pay</span>
+    <span><span class="sw" style="background:repeating-linear-gradient(45deg,#f4f4f4 0 6px,#e6e6e6 6px 12px);border:2px dashed #666;"></span>computed and reported; borne by the employer</span>
+    <span style="color:#555">Rates are configurable defaults.</span>
+  </div>
+
+  <svg width="1100" height="1420" viewBox="0 0 1100 1420">
+    <defs>
+      <marker id="ah" markerWidth="12" markerHeight="12" refX="11" refY="6" orient="auto" markerUnits="userSpaceOnUse">
+        <path d="M0,0 L12,6 L0,12 z" fill="#222"/>
+      </marker>
+    </defs>
+    <!-- decision diamond -->
+    <polygon points="550,178 700,234 550,290 400,234" fill="#fff" stroke="#222" stroke-width="2.3"/>
+    <g stroke="#222" stroke-width="2.3" fill="none">
+      <line x1="550" y1="66"  x2="550" y2="94"  marker-end="url(#ah)"/>
+      <line x1="550" y1="148" x2="550" y2="176" marker-end="url(#ah)"/>
+      <!-- yes: right to prorate, then back into gross -->
+      <line x1="700" y1="234" x2="818" y2="234" marker-end="url(#ah)"/>
+      <path d="M945,272 V300 H660 V318" marker-end="url(#ah)"/>
+      <!-- no: straight down -->
+      <line x1="550" y1="290" x2="550" y2="318" marker-end="url(#ah)"/>
+      <line x1="550" y1="372" x2="550" y2="400" marker-end="url(#ah)"/>
+      <!-- fan-out to the four branches -->
+      <line x1="550" y1="480" x2="550" y2="500"/>
+      <path d="M142,500 H958"/>
+      <line x1="142" y1="500" x2="142" y2="528" marker-end="url(#ah)"/>
+      <line x1="412" y1="500" x2="412" y2="528" marker-end="url(#ah)"/>
+      <line x1="687" y1="500" x2="687" y2="528" marker-end="url(#ah)"/>
+      <line x1="958" y1="500" x2="958" y2="528" marker-end="url(#ah)"/>
+      <!-- reported-only branches go to remittance -->
+      <line x1="142" y1="648" x2="142" y2="688" marker-end="url(#ah)" stroke-dasharray="6 4"/>
+      <line x1="958" y1="648" x2="958" y2="688" marker-end="url(#ah)" stroke-dasharray="6 4"/>
+      <!-- deducted branches merge and continue -->
+      <path d="M412,648 V674 H687 V648"/>
+      <line x1="550" y1="674" x2="550" y2="698" marker-end="url(#ah)"/>
+      <line x1="550" y1="752"  x2="550" y2="780"  marker-end="url(#ah)"/>
+      <line x1="550" y1="902"  x2="550" y2="930"  marker-end="url(#ah)"/>
+      <line x1="550" y1="1110" x2="550" y2="1138" marker-end="url(#ah)"/>
+      <line x1="550" y1="1192" x2="550" y2="1220" marker-end="url(#ah)"/>
+      <line x1="550" y1="1274" x2="550" y2="1298" marker-end="url(#ah)"/>
+    </g>
+  </svg>
+</body>
+</html>
