@@ -22,7 +22,9 @@ export interface AiCaller {
 }
 
 const PRIVILEGED_ROLES = ['SUPER_ADMIN', 'HR_ADMIN'];
+const PAYROLL_ROLES = ['SUPER_ADMIN', 'HR_ADMIN', 'PAYROLL_OFFICER'];
 const isPrivileged = (role: string) => PRIVILEGED_ROLES.includes(role);
+const hasPayrollAccess = (role: string) => PAYROLL_ROLES.includes(role);
 
 const TOOL_SCHEMAS = [
   {
@@ -61,12 +63,12 @@ const TOOL_SCHEMAS = [
   },
   {
     name: 'getHeadcount',
-    description: 'Current employee headcount and total staff numbers (total staff, plus breakdown by status like active, notice, probation, etc.). Managers get their own team size; HR Admin/Super Admin get the whole company (optionally filtered by departmentId).',
+    description: 'Current employee headcount and total staff numbers (total staff, plus breakdown by status like active, notice, probation, etc.). Company-scoped for general staff; managers reflect team headcount; administrative roles can filter by departmentId.',
     parameters: { type: 'object', properties: { departmentId: { type: 'string' } } },
   },
   {
     name: 'getPayrollSummary',
-    description: 'Aggregate payroll totals (gross, net, tax, pension, employee count) for a given month — never individual salaries. HR Admin / Super Admin only.',
+    description: 'Aggregate payroll totals (gross, net, tax, pension, employee count) for a given month — never individual salaries. Administrative and payroll roles only.',
     parameters: {
       type: 'object',
       properties: { month: { type: 'number', description: '1-12' }, year: { type: 'number' } },
@@ -79,7 +81,7 @@ const TOOL_SCHEMAS = [
   },
   {
     name: 'getComplianceTasksDue',
-    description: 'List pending statutory compliance/remittance tasks (PAYE, pension, NHF, NSITF, ITF) with due dates and amounts. HR Admin / Super Admin only.',
+    description: 'List pending statutory compliance/remittance tasks (PAYE, pension, NHF, NSITF, ITF) with due dates and amounts. Administrative and payroll roles only.',
     parameters: { type: 'object', properties: {} },
   },
   {
@@ -259,10 +261,6 @@ export class AiService {
   }
 
   private async getHeadcount(caller: AiCaller, args: { departmentId?: string }) {
-    if (!isPrivileged(caller.role) && caller.role !== 'MANAGER') {
-      return { error: 'Only managers and HR Admin/Super Admin can view headcount.' };
-    }
-
     let employees = await this.db.query.employees.findMany({
       where: and(
         eq(schema.employees.companyId, caller.companyId),
@@ -273,7 +271,7 @@ export class AiService {
     if (caller.role === 'MANAGER') {
       const reports = await this.getManagedEmployeeIds(caller.employeeId);
       employees = (employees as any[]).filter((e) => reports.has(e.id));
-    } else if (args.departmentId) {
+    } else if (args.departmentId && (isPrivileged(caller.role) || caller.role === 'PAYROLL_OFFICER')) {
       employees = (employees as any[]).filter((e) => e.departmentId === args.departmentId);
     }
 
@@ -296,7 +294,7 @@ export class AiService {
   }
 
   private async getPayrollSummary(caller: AiCaller, args: { month?: number; year?: number }) {
-    if (!isPrivileged(caller.role)) return { error: 'Only HR Admin/Super Admin can access payroll data.' };
+    if (!hasPayrollAccess(caller.role)) return { error: 'Only administrative and payroll roles can access payroll data.' };
 
     const now = new Date();
     const month = args.month || now.getMonth() + 1;
@@ -329,7 +327,7 @@ export class AiService {
   }
 
   private async getComplianceTasksDue(caller: AiCaller) {
-    if (!isPrivileged(caller.role)) return { error: 'Only HR Admin/Super Admin can access compliance data.' };
+    if (!hasPayrollAccess(caller.role)) return { error: 'Only administrative and payroll roles can access compliance data.' };
     const rows = await this.db.query.complianceTasks.findMany({
       where: and(eq(schema.complianceTasks.companyId, caller.companyId), eq(schema.complianceTasks.status, 'pending')),
     });

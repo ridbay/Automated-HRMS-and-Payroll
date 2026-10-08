@@ -178,12 +178,31 @@ describe('Ai Service', () => {
       expect(mockDb.query.complianceTasks.findMany).not.toHaveBeenCalled();
     });
 
-    it('allows compliance data for HR Admin', async () => {
-      mockDb.query.complianceTasks.findMany.mockResolvedValueOnce([{ title: 'PAYE Filing', type: 'tax', dueDate: '2024-11-10', amount: 5000 }]);
-      mockAi.run = mockAiRun([{ name: 'getComplianceTasksDue', arguments: {} }], 'One task due.');
-      const result = await service.ask(admin, 'What compliance tasks are due?');
-      expect(result.answer).toBe('One task due.');
+    it('allows compliance and payroll data for Payroll Officer', async () => {
+      const payrollOfficer = { companyId: 'comp-1', employeeId: 'po-1', role: 'PAYROLL_OFFICER' };
+      mockDb.query.complianceTasks.findMany.mockResolvedValueOnce([{ title: 'Pension Remittance', type: 'pension', dueDate: '2024-11-10', amount: 8000 }]);
+      mockAi.run = mockAiRun([{ name: 'getComplianceTasksDue', arguments: {} }], 'Compliance task found.');
+      const result = await service.ask(payrollOfficer, 'What compliance tasks are due?');
+      expect(result.answer).toBe('Compliance task found.');
       expect(mockDb.query.complianceTasks.findMany).toHaveBeenCalled();
+    });
+  });
+
+  describe('getHeadcount', () => {
+    it('allows regular employee to get company-wide headcount', async () => {
+      mockDb.query.employees.findMany.mockResolvedValueOnce([
+        { id: 'emp-1', status: 'active', companyId: 'comp-1' },
+        { id: 'emp-2', status: 'active', companyId: 'comp-1' },
+        { id: 'emp-3', status: 'on_leave', companyId: 'comp-1' },
+      ]);
+      mockAi.run = mockAiRun([{ name: 'getHeadcount', arguments: {} }], 'Total headcount is 3.');
+      const result = await service.ask(employee, 'What is our headcount?');
+      expect(result.answer).toBe('Total headcount is 3.');
+      expect(getToolOutput()).toEqual(expect.objectContaining({
+        totalStaff: 3,
+        activeStaff: 2,
+        onLeave: 1,
+      }));
     });
   });
 

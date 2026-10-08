@@ -1505,7 +1505,7 @@ const Payroll: React.FC<PayrollProps> = ({ initialTab = "dashboard" }) => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {[
                         { key: "prorationEnabled", label: "Proration Logic", sub: "Auto-calc for joiners and leavers based on attendance days" },
-                        { key: "applyConsolidatedReliefAllowance", label: "Apply CRA", sub: "Statutory Consolidated Relief Allowance in PAYE tax engine" },
+                        { key: "minWageCheckEnabled", label: "Minimum Wage Guard", sub: "Flag pre-run exception if salary is below statutory minimum wage" },
                         { key: "nhfEnabled", label: "NHF Deduction", sub: "National Housing Fund — deducted from staff net pay" },
                         { key: "nsitfEnabled", label: "NSITF Contribution", sub: "Employer-paid statutory cost, tracked for remittance" },
                         { key: "itfEnabled", label: "ITF Levy", sub: "Employer-paid statutory cost, tracked for remittance" },

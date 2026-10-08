@@ -385,4 +385,120 @@ describe('Payroll Service', () => {
       );
     });
   });
+
+  describe('Nigeria Tax Act 2025 & PRA 2014 Worked Examples', () => {
+    it('Case A: Salary below ₦800,000 pays 0% PAYE under the NTA 2025 first tax bracket', async () => {
+      mockDb.query.employees.findMany.mockResolvedValueOnce([
+        { id: 'emp-low', name: 'Amaka', lastName: 'Eze', status: 'active', salary: 720000, bankName: 'GTB', accountNumber: '123' },
+      ]);
+      mockDb.query.payrollSettings.findFirst.mockResolvedValueOnce({
+        companyId: 'comp-1',
+        prorationEnabled: false,
+        nhfEnabled: false,
+      });
+
+      const preview = await service.previewRun('comp-1', 10, 2026);
+      const ps = preview.payslips[0];
+      expect(ps.grossPay).toBe(60000); // 720,000 / 12
+      expect(ps.taxDeductions).toBe(0); // 0% PAYE on first ₦800k
+    });
+
+    it('Case B & C: Non-renter vs Renter at ₦6,000,000 salary under NTA 2025', async () => {
+      // Non-renter: ₦6,000,000 gross annual
+      // Renter: ₦6,000,000 gross annual with ₦2,000,000 annual rent (qualifying for ₦400,000 rent relief)
+      mockDb.query.employees.findMany.mockResolvedValueOnce([
+        { id: 'emp-non-renter', name: 'Biodun', lastName: 'Ade', status: 'active', salary: 6000000, bankName: 'Zenith', accountNumber: '111', annualRent: 0 },
+        { id: 'emp-renter', name: 'Chioma', lastName: 'Okeke', status: 'active', salary: 6000000, bankName: 'GTB', accountNumber: '222', annualRent: 2000000 },
+      ]);
+      mockDb.query.payrollSettings.findFirst.mockResolvedValueOnce({
+        companyId: 'comp-1',
+        prorationEnabled: false,
+        nhfEnabled: false,
+        pensionEmployeeRate: 8,
+      });
+
+      const preview = await service.previewRun('comp-1', 10, 2026);
+      const psNonRenter = preview.payslips.find((p: any) => p.employeeId === 'emp-non-renter');
+      const psRenter = preview.payslips.find((p: any) => p.employeeId === 'emp-renter');
+
+      expect(psNonRenter).toBeDefined();
+      expect(psRenter).toBeDefined();
+
+      // Both have gross 500,000/mo
+      expect(psNonRenter.grossPay).toBe(500000);
+      expect(psRenter.grossPay).toBe(500000);
+
+      // Pension base = basic (200k) + housing (100k) + transport (50k) = 350,000
+      expect(psNonRenter.pensionableBase).toBe(350000);
+      expect(psNonRenter.pensionDeductions).toBe(28000); // 8% of 350,000
+      expect(psRenter.pensionDeductions).toBe(28000);
+
+      // Non-renter taxable annual: 6,000,000 - 336,000 = 5,664,000
+      // Tax: 0 on first 800k + 15% on 2.2m (330k) + 18% on (5,664,000 - 3,000,000 = 2,664,000) (479,520) = 809,520 / 12 = 67,460
+      expect(psNonRenter.taxDeductions).toBe(67460);
+
+      // Renter gets 20% of 2m rent = 400,000 rent relief
+      // Renter taxable annual: 6,000,000 - 336,000 - 400,000 = 5,264,000
+      // Tax: 0 on first 800k + 15% on 2.2m (330k) + 18% on (5,264,000 - 3,000,000 = 2,264,000) (407,520) = 737,520 / 12 = 61,460
+      expect(psRenter.taxDeductions).toBe(61460);
+
+      // Monthly tax savings for renter: 67,460 - 61,460 = ₦6,000/mo (Annual: ₦72,000 = 18% of ₦400,000)
+      expect(psNonRenter.taxDeductions - psRenter.taxDeductions).toBe(6000);
+      expect(psRenter.netPay).toBeGreaterThan(psNonRenter.netPay);
+    });
+
+    it('caps rent relief at statutory ₦500,000 maximum for high rent amounts', async () => {
+      // Annual rent ₦3,500,000 -> 20% is ₦700,000, but capped at ₦500,000
+      mockDb.query.employees.findMany.mockResolvedValueOnce([
+        { id: 'emp-high-rent', name: 'Femi', lastName: 'Kuti', status: 'active', salary: 10000000, bankName: 'Access', accountNumber: '333', annualRent: 3500000 },
+      ]);
+      mockDb.query.payrollSettings.findFirst.mockResolvedValueOnce({
+        companyId: 'comp-1',
+        prorationEnabled: false,
+        nhfEnabled: false,
+      });
+
+      const preview = await service.previewRun('comp-1', 10, 2026);
+      const ps = preview.payslips[0];
+
+      // Monthly gross: 10m / 12 = 833,333
+      // Pension base = basic (40% = 333,333) + housing (50% of basic = 166,667) + transport (10% of gross = 83,333) = 583,333
+      // Pension deductions = 8% of 583,333 = 46,667 / month -> 560,004 / year
+      // Total reliefs = 560,004 (pension) + 500,000 (capped rent relief) = 1,060,004
+      // Taxable = 10,000,000 - 1,060,004 = 8,939,996
+      // Tax: 0 on 800k + 15% on 2.2m (330k) + 18% on (8,939,996 - 3,000,000 = 5,939,996) (1,069,199) = 1,399,199 / 12 = 116,600
+      expect(ps.taxDeductions).toBe(116600);
+    });
+
+    it('calculates pension base strictly from component catalogue basic + housing + transport', async () => {
+      // Custom salary components: basic 50%, housing 25%, transport 10%, other 15%
+      mockDb.query.salaryComponents.findMany.mockResolvedValueOnce([
+        { name: 'Basic Salary', type: 'earning', calculationType: 'percentage_of_gross', value: 50, active: true },
+        { name: 'Housing Allowance', type: 'earning', calculationType: 'percentage_of_gross', value: 25, active: true },
+        { name: 'Transport Allowance', type: 'earning', calculationType: 'percentage_of_gross', value: 10, active: true },
+        { name: 'Utility Allowance', type: 'earning', calculationType: 'percentage_of_gross', value: 15, active: true },
+      ]);
+      mockDb.query.employees.findMany.mockResolvedValueOnce([
+        { id: 'emp-custom', name: 'Zainab', lastName: 'Bello', status: 'active', salary: 12000000, bankName: 'GTB', accountNumber: '444' },
+      ]);
+      mockDb.query.payrollSettings.findFirst.mockResolvedValueOnce({
+        companyId: 'comp-1',
+        prorationEnabled: false,
+        nhfEnabled: false,
+        pensionEmployeeRate: 8,
+      });
+
+      const preview = await service.previewRun('comp-1', 10, 2026);
+      const ps = preview.payslips[0];
+
+      // Monthly gross = 1,000,000
+      expect(ps.basicSalary).toBe(500000); // 50%
+      expect(ps.housingAllowance).toBe(250000); // 25%
+      expect(ps.transportAllowance).toBe(100000); // 10%
+      expect(ps.otherAllowances).toBe(150000); // 15% utility
+      // PRA 2014 pension base = basic + housing + transport = 500k + 250k + 100k = 850k (utility is excluded!)
+      expect(ps.pensionableBase).toBe(850000);
+      expect(ps.pensionDeductions).toBe(68000); // 8% of 850,000
+    });
+  });
 });

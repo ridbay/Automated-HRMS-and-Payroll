@@ -4,15 +4,15 @@ import * as schema from '../db/schema';
 
 const genId = (prefix: string) => `${prefix}-${crypto.randomUUID().split('-')[0].toUpperCase()}`;
 
-// Nigeria PAYE bands (Finance Act) — used to seed a company's editable tax
-// bracket table the first time it's requested.
+// Nigeria Tax Act 2025 statutory PAYE progressive bands (effective 1 January 2026)
+// First ₦800k at 0%, next ₦2.2m at 15%, next ₦9m at 18%, next ₦13m at 21%, next ₦25m at 23%, above ₦50m at 25%
 const DEFAULT_TAX_BRACKETS = [
-  { minIncome: 0, maxIncome: 300000, ratePercent: 7 },
-  { minIncome: 300001, maxIncome: 600000, ratePercent: 11 },
-  { minIncome: 600001, maxIncome: 1100000, ratePercent: 15 },
-  { minIncome: 1100001, maxIncome: 1600000, ratePercent: 19 },
-  { minIncome: 1600001, maxIncome: 3200000, ratePercent: 21 },
-  { minIncome: 3200001, maxIncome: null as number | null, ratePercent: 24 },
+  { minIncome: 0, maxIncome: 800000, ratePercent: 0 },
+  { minIncome: 800001, maxIncome: 3000000, ratePercent: 15 },
+  { minIncome: 3000001, maxIncome: 12000000, ratePercent: 18 },
+  { minIncome: 12000001, maxIncome: 25000000, ratePercent: 21 },
+  { minIncome: 25000001, maxIncome: 50000000, ratePercent: 23 },
+  { minIncome: 50000001, maxIncome: null as number | null, ratePercent: 25 },
 ];
 
 const DEFAULT_SETTINGS = {
@@ -25,7 +25,6 @@ const DEFAULT_SETTINGS = {
   minWageAnnual: 840000,
   pensionEmployeeRate: 8,
   pensionEmployerRate: 10,
-  applyConsolidatedReliefAllowance: true,
   nhfEnabled: true,
   nhfRate: 2.5,
   nsitfEnabled: true,
@@ -84,7 +83,7 @@ export class PayrollService {
       'payCycle', 'cutoffDay', 'paymentDay', 'workingDaysPerMonth',
       'prorationEnabled', 'minWageCheckEnabled', 'minWageAnnual',
       'pensionEmployeeRate', 'pensionEmployerRate',
-      'applyConsolidatedReliefAllowance', 'nhfEnabled', 'nhfRate',
+      'nhfEnabled', 'nhfRate',
       'nsitfEnabled', 'nsitfRate', 'itfEnabled', 'itfRate', 'currency'
     ];
     const updateData: Record<string, any> = {};
@@ -115,9 +114,14 @@ export class PayrollService {
       where: eq(schema.taxBrackets.companyId, companyId),
       orderBy: [asc(schema.taxBrackets.sortOrder)],
     });
-    if (existing.length > 0) return existing;
+    // If existing brackets are still using repealed PITA 2011/Finance Act bands (0-300k @ 7%), auto-upgrade to NTA 2025
+    const isOldPita = existing.length > 0 && existing[0].maxIncome === 300000 && existing[0].ratePercent === 7;
+    if (existing.length > 0 && !isOldPita) return existing;
 
     const rows = DEFAULT_TAX_BRACKETS.map((b, i) => ({ id: genId('TB'), companyId, ...b, sortOrder: i }));
+    if (isOldPita) {
+      await this.db.delete(schema.taxBrackets).where(eq(schema.taxBrackets.companyId, companyId));
+    }
     await this.db.insert(schema.taxBrackets).values(rows);
     return rows;
   }
@@ -134,6 +138,10 @@ export class PayrollService {
     }));
     if (rows.length > 0) await this.db.insert(schema.taxBrackets).values(rows);
     return rows;
+  }
+
+  async resetTaxBracketsToDefaults(companyId: string) {
+    return this.replaceTaxBrackets(companyId, DEFAULT_TAX_BRACKETS);
   }
 
   // ---------------- Salary components ----------------
@@ -412,7 +420,17 @@ export class PayrollService {
   }
 
   // ---------------- Core computation ----------------
-  private computePayslip(emp: any, settings: any, brackets: any[], month: number, year: number, attendance: { present: number; overtime: number } | undefined, loan: any, overrides: any) {
+  private computePayslip(
+    emp: any,
+    settings: any,
+    brackets: any[],
+    components: any[],
+    month: number,
+    year: number,
+    attendance: { present: number; overtime: number } | undefined,
+    loan: any,
+    overrides: any
+  ) {
     const workingDays = settings.workingDaysPerMonth || 22;
     const daysInMonth = new Date(year, month, 0).getDate();
 
@@ -431,45 +449,89 @@ export class PayrollService {
     const grossMonthlyFull = Math.round(annualSalary / 12);
     const proratedGross = Math.round(grossMonthlyFull * prorationFactor);
 
-    const basicSalary = Math.round(proratedGross * 0.4);
-    const allowances = proratedGross - basicSalary;
+    // Split gross per the company salary component catalogue (FR35, Sections 3.6.7 and 4.3.7)
+    const activeEarnings = (components || []).filter((c: any) => c.type === 'earning' && c.active !== false);
+    const basicComp = activeEarnings.find((c: any) => /basic/i.test(c.name));
+    const housingComp = activeEarnings.find((c: any) => /housing/i.test(c.name));
+    const transportComp = activeEarnings.find((c: any) => /transport/i.test(c.name));
+
+    let basicSalary: number;
+    if (basicComp) {
+      if (basicComp.calculationType === 'percentage_of_gross') {
+        basicSalary = Math.round(proratedGross * ((basicComp.value || 40) / 100));
+      } else if (basicComp.calculationType === 'fixed') {
+        basicSalary = Math.min(proratedGross, Math.round(basicComp.value * prorationFactor));
+      } else {
+        basicSalary = Math.round(proratedGross * 0.4);
+      }
+    } else {
+      basicSalary = Math.round(proratedGross * 0.4);
+    }
+
+    let housingAllowance = 0;
+    if (housingComp) {
+      if (housingComp.calculationType === 'percentage_of_basic') {
+        housingAllowance = Math.round(basicSalary * ((housingComp.value || 50) / 100));
+      } else if (housingComp.calculationType === 'percentage_of_gross') {
+        housingAllowance = Math.round(proratedGross * ((housingComp.value || 20) / 100));
+      } else if (housingComp.calculationType === 'fixed') {
+        housingAllowance = Math.round(housingComp.value * prorationFactor);
+      }
+    } else {
+      housingAllowance = Math.round(basicSalary * 0.5); // Statutory baseline: 50% of basic
+    }
+
+    let transportAllowance = 0;
+    if (transportComp) {
+      if (transportComp.calculationType === 'percentage_of_basic') {
+        transportAllowance = Math.round(basicSalary * ((transportComp.value || 25) / 100));
+      } else if (transportComp.calculationType === 'percentage_of_gross') {
+        transportAllowance = Math.round(proratedGross * ((transportComp.value || 10) / 100));
+      } else if (transportComp.calculationType === 'fixed') {
+        transportAllowance = Math.round(transportComp.value * prorationFactor);
+      }
+    } else {
+      transportAllowance = Math.round(proratedGross * 0.1); // Statutory baseline: 10% of gross
+    }
+
+    const otherAllowances = Math.max(0, proratedGross - basicSalary - housingAllowance - transportAllowance);
+    const allowances = housingAllowance + transportAllowance + otherAllowances;
     const bonuses = Math.max(0, Math.round(Number(overrides?.bonuses) || 0));
 
     const grossPay = proratedGross + bonuses;
-    const pensionableBase = basicSalary + allowances;
+
+    // Pension Reform Act 2014: statutory pension base = basic + housing + transport
+    const pensionableBase = basicSalary + housingAllowance + transportAllowance;
     const pensionDeductions = Math.round(pensionableBase * ((settings.pensionEmployeeRate ?? 8) / 100));
 
-    // NHF: employee deduction (National Housing Fund, remitted to FMBN),
-    // reduces net pay like pension does. NSITF/ITF are employer-only
-    // statutory costs — computed for remittance/compliance tracking but
-    // deliberately excluded from the netPay subtraction below.
+    // NHF: 2.5% of basic salary
     const nhfDeductions = settings.nhfEnabled ? Math.round(basicSalary * ((settings.nhfRate ?? 2.5) / 100)) : 0;
     const nsitfContribution = settings.nsitfEnabled ? Math.round(grossPay * ((settings.nsitfRate ?? 1) / 100)) : 0;
     const itfContribution = settings.itfEnabled ? Math.round(grossPay * ((settings.itfRate ?? 1) / 100)) : 0;
 
+    // Nigeria Tax Act 2025: Deduct eligible statutory and personal reliefs before bands
+    // 1. Pension contribution (employee)
+    // 2. NHF (National Housing Fund)
+    // 3. NHIS (National Health Insurance Scheme)
+    // 4. Mortgage interest on owner-occupied residence
+    // 5. Life insurance / annuity premiums
+    // 6. Rent relief: 20% of annual rent paid, capped at ₦500,000
     const grossAnnual = grossPay * 12;
-    // PITA Section 33(2) statutory deductions allowable as relief: Pension + NHF
     const statutoryReliefAnnual = (pensionDeductions + nhfDeductions) * 12;
-    let taxableAnnual;
-    if (settings.applyConsolidatedReliefAllowance) {
-      const cra = Math.max(200000, grossAnnual * 0.01) + grossAnnual * 0.2;
-      taxableAnnual = Math.max(0, grossAnnual - cra - statutoryReliefAnnual);
-    } else {
-      taxableAnnual = Math.max(0, grossAnnual - statutoryReliefAnnual);
-    }
 
-    const minWageAnnual = settings.minWageAnnual ?? 840000;
-    // Finance Act / PITA Section 37: Minimum wage earners (₦840,000/yr or less) are exempt from PAYE
-    const isMinWageExempt = settings.minWageCheckEnabled && grossAnnual <= minWageAnnual;
+    const annualRent = Number(emp.annualRent) || Number(emp.rentPaid) || 0;
+    const rentReliefAnnual = Math.min(500000, Math.round(annualRent * 0.20));
 
-    let taxDeductions = 0;
-    if (!isMinWageExempt) {
-      const calculatedAnnualPaye = calculateAnnualPaye(taxableAnnual, brackets);
-      // PITA Section 37: 1% minimum tax on gross income if computed tax is lower
-      const minTaxAnnual = grossAnnual * 0.01;
-      const annualPaye = taxableAnnual > 0 ? Math.max(calculatedAnnualPaye, minTaxAnnual) : minTaxAnnual;
-      taxDeductions = Math.round(annualPaye / 12);
-    }
+    const nhisAnnual = (Number(emp.nhisMonthly) || 0) * 12;
+    const mortgageInterestAnnual = Number(emp.mortgageInterestAnnual) || 0;
+    const lifeInsuranceAnnual = Number(emp.lifeInsuranceAnnual) || 0;
+
+    const totalEligibleReliefsAnnual = statutoryReliefAnnual + rentReliefAnnual + nhisAnnual + mortgageInterestAnnual + lifeInsuranceAnnual;
+    const taxableAnnual = Math.max(0, grossAnnual - totalEligibleReliefsAnnual);
+
+    // Progressive PAYE under NTA 2025 (first ₦800,000 has 0% tax)
+    const annualPaye = calculateAnnualPaye(taxableAnnual, brackets);
+    const taxDeductions = Math.round(annualPaye / 12);
 
     const loanDeduction = loan && loan.remainingBalance > 0 ? Math.min(loan.monthlyInstallment, loan.remainingBalance) : 0;
     const otherDeductions = Math.max(0, Math.round(Number(overrides?.otherDeductions) || 0));
@@ -485,6 +547,9 @@ export class PayrollService {
       accountNumber: emp.accountNumber || null,
       accountName: emp.accountName || null,
       basicSalary,
+      housingAllowance,
+      transportAllowance,
+      otherAllowances,
       allowances,
       bonuses,
       grossPay,
@@ -502,6 +567,9 @@ export class PayrollService {
       absentDays: Math.max(0, workingDays - (attendance?.present ?? workingDays)),
       overtimeHours: attendance?.overtime ?? 0,
       loanId: loan?.id || null,
+      pensionableBase,
+      taxableAnnual,
+      rentReliefAnnual,
     };
   }
 
@@ -510,9 +578,10 @@ export class PayrollService {
       where: and(eq(schema.employees.companyId, companyId), eq(schema.employees.status, 'active')),
     });
 
-    const [settings, brackets, attendanceMap, loanMap] = await Promise.all([
+    const [settings, brackets, components, attendanceMap, loanMap] = await Promise.all([
       this.getSettings(companyId),
       this.getTaxBrackets(companyId),
+      this.getSalaryComponents(companyId),
       this.getAttendanceSummary(companyId, month, year),
       this.getActiveLoansByEmployee(companyId),
     ]);
@@ -527,7 +596,7 @@ export class PayrollService {
     let totalLoanDeductions = 0;
 
     const payslips = activeEmployees.map((emp: any) => {
-      const ps = this.computePayslip(emp, settings, brackets, month, year, attendanceMap.get(emp.id), loanMap.get(emp.id), overrides?.[emp.id]);
+      const ps = this.computePayslip(emp, settings, brackets, components, month, year, attendanceMap.get(emp.id), loanMap.get(emp.id), overrides?.[emp.id]);
       totalGross += ps.grossPay;
       totalNet += ps.netPay;
       totalTaxes += ps.taxDeductions;
