@@ -80,12 +80,10 @@ export class AdminLearningController {
     }
 
     const learningService = new LearningService(c.env.DB);
-    
-    // Validate course exists
-    const course = await learningService.getCourseById(courseId, companyId);
-    if (!course) return c.json({ error: 'Course not found' }, 404);
+    const result = await learningService.assignCourse(courseId, companyId, body.employeeIds);
+    if (!result) return c.json({ error: 'Course not found' }, 404);
+    if ('error' in result && result.error) return c.json({ error: result.error }, 400);
 
-    const result = await learningService.assignCourse(courseId, body.employeeIds);
     return c.json({ data: result }, 201);
   }
 
@@ -96,7 +94,8 @@ export class AdminLearningController {
     if (!courseId) return c.json({ error: 'Course ID is required' }, 400);
 
     const learningService = new LearningService(c.env.DB);
-    const enrollments = await learningService.getCourseEnrollments(courseId);
+    const enrollments = await learningService.getCourseEnrollments(courseId, companyId);
+    if (enrollments === null) return c.json({ error: 'Course not found' }, 404);
     return c.json({ data: enrollments });
   }
 
@@ -112,11 +111,13 @@ export class AdminLearningController {
   static async unassignCourse(c: Context<any>) {
     const companyId = c.get('tenantId') || c.get('companyId');
     if (!companyId) return c.json({ error: 'Tenant not found' }, 400);
+    const courseId = c.req.param('id');
     const enrollmentId = c.req.param('enrollmentId');
     if (!enrollmentId) return c.json({ error: 'Enrollment ID is required' }, 400);
 
     const learningService = new LearningService(c.env.DB);
-    await learningService.unassignCourse(enrollmentId);
+    const result = await learningService.unassignCourse(enrollmentId, companyId, courseId);
+    if (!result) return c.json({ error: 'Enrollment or course not found' }, 404);
     return c.json({ success: true });
   }
 

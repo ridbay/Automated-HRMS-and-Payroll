@@ -51,26 +51,37 @@ export const updateTicketStatus = async (c: Context<AppEnv>) => {
 
 export const getTicketMessages = async (c: Context<AppEnv>) => {
   const companyId = c.get('companyId');
+  const employeeId = c.get('employeeId');
+  const role = c.get('role');
   const ticketId = c.req.param('id');
 
   if (!companyId) return c.json({ error: 'Unauthorized' }, 401);
   if (!ticketId) return c.json({ error: 'Ticket ID is required' }, 400);
 
+  const isAdmin = role === 'SUPER_ADMIN' || role === 'HR_ADMIN';
   const service = new SupportService(c.env.DB);
-  const messages = await service.getTicketMessages(ticketId);
+  const messages = await service.getTicketMessages(companyId, ticketId, employeeId, isAdmin);
+  if (messages === null) {
+    return c.json({ error: 'Ticket not found' }, 404);
+  }
   return c.json(messages);
 };
 
 export const addTicketMessage = async (c: Context<AppEnv>) => {
   const companyId = c.get('companyId');
   const senderId = c.get('employeeId');
+  const role = c.get('role');
   const ticketId = c.req.param('id');
 
   if (!companyId || !senderId) return c.json({ error: 'Unauthorized' }, 401);
   if (!ticketId) return c.json({ error: 'Ticket ID is required' }, 400);
 
   const { message } = await c.req.json();
+  const isAdmin = role === 'SUPER_ADMIN' || role === 'HR_ADMIN';
   const service = new SupportService(c.env.DB);
-  const newMessage = await service.addTicketMessage(ticketId, senderId, message);
+  const newMessage = await service.addTicketMessage(companyId, ticketId, senderId, message, isAdmin);
+  if (newMessage === null) {
+    return c.json({ error: 'Ticket not found' }, 404);
+  }
   return c.json(newMessage);
 };

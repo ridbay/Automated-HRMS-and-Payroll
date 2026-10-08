@@ -14,7 +14,7 @@ describe('Admin Employee Controller', () => {
 
     EmployeeService.prototype.getAllByCompany = vi.fn();
     EmployeeService.prototype.getDirectReports = vi.fn();
-    EmployeeService.prototype.getEmployeeProfile = vi.fn();
+    EmployeeService.prototype.getEmployeeProfile = vi.fn().mockResolvedValue({ id: 'emp-1', companyId: 'comp-1' });
     EmployeeService.prototype.createForCompany = vi.fn();
     EmployeeService.prototype.updateEmployeeByAdmin = vi.fn();
     EmployeeService.prototype.deleteEmployee = vi.fn();

@@ -87,6 +87,7 @@ adminRoutes.use("*", authMiddleware);
 // employee who's been assigned a custom role in Settings > Roles & Permissions;
 // it's a no-op for everyone else (the common case today).
 const adminOnly = requireRole("SUPER_ADMIN", "HR_ADMIN");
+const superAdminOnly = requireRole("SUPER_ADMIN");
 const view = (mod: PermissionModule) => requirePermission(mod, "view");
 const create = (mod: PermissionModule) => requirePermission(mod, "create");
 const edit = (mod: PermissionModule) => requirePermission(mod, "edit");
@@ -94,6 +95,9 @@ const del = (mod: PermissionModule) => requirePermission(mod, "delete");
 
 // Development-only seed route to create default users with known passwords
 adminRoutes.get("/dev/seed", adminOnly, async (c: any) => {
+  if (c.env.ENVIRONMENT === "production" || c.env.NODE_ENV === "production") {
+    return c.json({ error: "Endpoint disabled in production" }, 403);
+  }
   try {
     const db = drizzle(c.env.DB, { schema });
 
@@ -301,14 +305,14 @@ adminRoutes.get("/reports/recruitment", reportsRecruitmentOnly, getRecruitmentRe
 adminRoutes.get("/reports/payroll", reportsPayrollOnly, getPayrollReport);
 adminRoutes.get("/reports/export", reportsOverviewOnly, exportReport);
 
-adminRoutes.get("/settings", adminOnly, view("settings"), async (c: any) => {
+adminRoutes.get("/settings", superAdminOnly, view("settings"), async (c: any) => {
   const companyId = c.get("companyId");
   const settingsService = new SettingsService(c.env.DB);
   const settings = await settingsService.getSettings(companyId);
   return c.json(settings);
 });
 
-adminRoutes.put("/settings", adminOnly, edit("settings"), async (c: any) => {
+adminRoutes.put("/settings", superAdminOnly, edit("settings"), async (c: any) => {
   const companyId = c.get("companyId");
   const payload = await c.req.json();
   const settingsService = new SettingsService(c.env.DB);
@@ -324,7 +328,7 @@ adminRoutes.put("/settings", adminOnly, edit("settings"), async (c: any) => {
   return c.json(settings);
 });
 
-adminRoutes.get("/api-keys", adminOnly, view("settings"), async (c: any) => {
+adminRoutes.get("/api-keys", superAdminOnly, view("settings"), async (c: any) => {
   const companyId = c.get("companyId");
   const settingsService = new SettingsService(c.env.DB);
   const keys = await settingsService.getApiKeys(companyId);
@@ -333,7 +337,7 @@ adminRoutes.get("/api-keys", adminOnly, view("settings"), async (c: any) => {
 
 // Seed route moved up
 
-adminRoutes.post("/api-keys", adminOnly, edit("settings"), async (c: any) => {
+adminRoutes.post("/api-keys", superAdminOnly, edit("settings"), async (c: any) => {
   const companyId = c.get("companyId");
   const { name } = await c.req.json();
   const settingsService = new SettingsService(c.env.DB);
@@ -348,7 +352,7 @@ adminRoutes.post("/api-keys", adminOnly, edit("settings"), async (c: any) => {
   return c.json(key);
 });
 
-adminRoutes.delete("/api-keys/:id", adminOnly, edit("settings"), async (c: any) => {
+adminRoutes.delete("/api-keys/:id", superAdminOnly, edit("settings"), async (c: any) => {
   const companyId = c.get("companyId");
   const id = c.req.param("id");
   const settingsService = new SettingsService(c.env.DB);
@@ -365,14 +369,14 @@ adminRoutes.delete("/api-keys/:id", adminOnly, edit("settings"), async (c: any) 
 });
 
 // Company Profile Routes
-adminRoutes.get("/company", adminOnly, view("settings"), async (c: any) => {
+adminRoutes.get("/company", superAdminOnly, view("settings"), async (c: any) => {
   const companyId = c.get("companyId");
   const companyService = new CompanyService(c.env.DB);
   const company = await companyService.getCompany(companyId);
   return c.json(company);
 });
 
-adminRoutes.put("/company", adminOnly, edit("settings"), async (c: any) => {
+adminRoutes.put("/company", superAdminOnly, edit("settings"), async (c: any) => {
   const companyId = c.get("companyId");
   const payload = await c.req.json();
   if (payload.primaryColor && !/^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test(payload.primaryColor)) {
@@ -390,7 +394,7 @@ adminRoutes.put("/company", adminOnly, edit("settings"), async (c: any) => {
   return c.json(company);
 });
 
-adminRoutes.post("/company/logo", adminOnly, edit("settings"), async (c: any) => {
+adminRoutes.post("/company/logo", superAdminOnly, edit("settings"), async (c: any) => {
   const companyId = c.get("companyId");
   const body = await c.req.parseBody();
   const file = body["file"] as File;
@@ -415,7 +419,7 @@ adminRoutes.post("/company/logo", adminOnly, edit("settings"), async (c: any) =>
   return c.json({ data: { ...company, logoUrl, fileKey } });
 });
 
-adminRoutes.delete("/company/logo", adminOnly, edit("settings"), async (c: any) => {
+adminRoutes.delete("/company/logo", superAdminOnly, edit("settings"), async (c: any) => {
   const companyId = c.get("companyId");
   const companyService = new CompanyService(c.env.DB);
   const existing = await companyService.getCompany(companyId);
@@ -543,13 +547,13 @@ adminRoutes.delete("/locations/:id", adminOnly, del("workforce"), async (c: any)
 });
 
 // Roles Routes
-adminRoutes.get("/roles", adminOnly, view("settings"), async (c: any) => {
+adminRoutes.get("/roles", superAdminOnly, view("settings"), async (c: any) => {
   const companyId = c.get("companyId");
   const roleService = new RoleService(c.env.DB);
   return c.json(await roleService.getRoles(companyId));
 });
 
-adminRoutes.post("/roles", adminOnly, edit("settings"), async (c: any) => {
+adminRoutes.post("/roles", superAdminOnly, edit("settings"), async (c: any) => {
   const companyId = c.get("companyId");
   const payload = await c.req.json();
   const roleService = new RoleService(c.env.DB);
@@ -564,7 +568,7 @@ adminRoutes.post("/roles", adminOnly, edit("settings"), async (c: any) => {
   return c.json(role);
 });
 
-adminRoutes.put("/roles/:id", adminOnly, edit("settings"), async (c: any) => {
+adminRoutes.put("/roles/:id", superAdminOnly, edit("settings"), async (c: any) => {
   const companyId = c.get("companyId");
   const payload = await c.req.json();
   const roleService = new RoleService(c.env.DB);
@@ -579,7 +583,7 @@ adminRoutes.put("/roles/:id", adminOnly, edit("settings"), async (c: any) => {
   return c.json(role);
 });
 
-adminRoutes.delete("/roles/:id", adminOnly, edit("settings"), async (c: any) => {
+adminRoutes.delete("/roles/:id", superAdminOnly, edit("settings"), async (c: any) => {
   const companyId = c.get("companyId");
   const roleService = new RoleService(c.env.DB);
   const deleted = await roleService.deleteRole(companyId, c.req.param("id"));

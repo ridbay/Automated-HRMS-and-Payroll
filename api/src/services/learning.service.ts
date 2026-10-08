@@ -1,4 +1,4 @@
-import { eq, and } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { courses, courseEnrollments } from '../models/learning.model';
 import { employees } from '../models/employee.model';
@@ -67,8 +67,20 @@ export class LearningService {
     return true;
   }
 
-  async assignCourse(courseId: string, employeeIds: string[]) {
-    if (employeeIds.length === 0) return { success: true };
+  async assignCourse(courseId: string, companyId: string, employeeIds: string[]) {
+    const course = await this.getCourseById(courseId, companyId);
+    if (!course) return null;
+
+    if (employeeIds.length === 0) return { success: true, count: 0 };
+
+    const validEmps = await this.db
+      .select({ id: employees.id })
+      .from(employees)
+      .where(and(eq(employees.companyId, companyId), inArray(employees.id, employeeIds)));
+
+    if (validEmps.length !== employeeIds.length) {
+      return { error: 'One or more employees do not belong to this company' };
+    }
 
     const records = employeeIds.map(empId => ({
       id: `CEN-${crypto.randomUUID().split('-')[0].toUpperCase()}`,
@@ -83,8 +95,10 @@ export class LearningService {
     return { success: true, count: records.length };
   }
 
-  async getCourseEnrollments(courseId: string) {
-    // Basic join between courseEnrollments and employees
+  async getCourseEnrollments(courseId: string, companyId: string) {
+    const course = await this.getCourseById(courseId, companyId);
+    if (!course) return null;
+
     const results = await this.db
       .select({
         enrollment: courseEnrollments,
@@ -102,7 +116,24 @@ export class LearningService {
     return results;
   }
 
-  async unassignCourse(enrollmentId: string) {
+  async unassignCourse(enrollmentId: string, companyId: string, courseId?: string) {
+    const [enrollment] = await this.db
+      .select({
+        id: courseEnrollments.id,
+        courseId: courseEnrollments.courseId,
+      })
+      .from(courseEnrollments)
+      .innerJoin(courses, eq(courseEnrollments.courseId, courses.id))
+      .where(
+        and(
+          eq(courseEnrollments.id, enrollmentId),
+          eq(courses.companyId, companyId),
+          courseId ? eq(courseEnrollments.courseId, courseId) : undefined
+        )
+      );
+
+    if (!enrollment) return null;
+
     await this.db.delete(courseEnrollments).where(eq(courseEnrollments.id, enrollmentId));
     return { success: true };
   }

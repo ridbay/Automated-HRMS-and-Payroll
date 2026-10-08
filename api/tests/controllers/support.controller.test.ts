@@ -94,12 +94,29 @@ describe('Support Controller', () => {
 
   describe('getTicketMessages', () => {
     it('should get messages', async () => {
-      mockContext.get.mockReturnValue('comp-1');
+      mockContext.get.mockImplementation((key: string) => {
+        if (key === 'companyId') return 'comp-1';
+        if (key === 'employeeId') return 'emp-1';
+        if (key === 'role') return 'HR_ADMIN';
+      });
       mockContext.req.param.mockReturnValue('tic-1');
       (SupportService.prototype.getTicketMessages as any).mockResolvedValue([{ id: 'msg-1' }]);
 
       await getTicketMessages(mockContext);
-      expect(SupportService.prototype.getTicketMessages).toHaveBeenCalledWith('tic-1');
+      expect(SupportService.prototype.getTicketMessages).toHaveBeenCalledWith('comp-1', 'tic-1', 'emp-1', true);
+    });
+
+    it('should return 404 if ticket not found or wrong company', async () => {
+      mockContext.get.mockImplementation((key: string) => {
+        if (key === 'companyId') return 'comp-1';
+        if (key === 'employeeId') return 'emp-1';
+        if (key === 'role') return 'EMPLOYEE';
+      });
+      mockContext.req.param.mockReturnValue('tic-foreign');
+      (SupportService.prototype.getTicketMessages as any).mockResolvedValue(null);
+
+      const res = await getTicketMessages(mockContext);
+      expect(res.status).toBe(404);
     });
   });
 
@@ -108,12 +125,28 @@ describe('Support Controller', () => {
       mockContext.get.mockImplementation((key: string) => {
         if (key === 'companyId') return 'comp-1';
         if (key === 'employeeId') return 'emp-1';
+        if (key === 'role') return 'EMPLOYEE';
       });
       mockContext.req.param.mockReturnValue('tic-1');
       mockContext.req.json.mockResolvedValue({ message: 'Hello' });
+      (SupportService.prototype.addTicketMessage as any).mockResolvedValue({ id: 'msg-1', message: 'Hello' });
 
       await addTicketMessage(mockContext);
-      expect(SupportService.prototype.addTicketMessage).toHaveBeenCalledWith('tic-1', 'emp-1', 'Hello');
+      expect(SupportService.prototype.addTicketMessage).toHaveBeenCalledWith('comp-1', 'tic-1', 'emp-1', 'Hello', false);
+    });
+
+    it('should return 404 if ticket not found or wrong company', async () => {
+      mockContext.get.mockImplementation((key: string) => {
+        if (key === 'companyId') return 'comp-1';
+        if (key === 'employeeId') return 'emp-1';
+        if (key === 'role') return 'EMPLOYEE';
+      });
+      mockContext.req.param.mockReturnValue('tic-foreign');
+      mockContext.req.json.mockResolvedValue({ message: 'Hello' });
+      (SupportService.prototype.addTicketMessage as any).mockResolvedValue(null);
+
+      const res = await addTicketMessage(mockContext);
+      expect(res.status).toBe(404);
     });
   });
 });

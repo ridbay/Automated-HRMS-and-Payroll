@@ -46,11 +46,10 @@ const payrollRoutes = new Hono();
 // header/query param, letting an authenticated user spoof another tenant's payroll
 // data (or simply 401 every request, since the real frontend never sends that header).
 
-// Preparers + payroll staff can configure and process payroll; managers get
-// read-only visibility into aggregate budget figures for their own oversight.
+// Only administrators and payroll officers may configure or process payroll (Table 3.1).
+// Line managers have no payroll access.
 // requirePermission narrows further for anyone assigned a custom role (no-op otherwise).
 const adminOnly = requireRole('SUPER_ADMIN', 'HR_ADMIN', 'PAYROLL_OFFICER');
-const adminOrManager = requireRole('SUPER_ADMIN', 'HR_ADMIN', 'MANAGER', 'PAYROLL_OFFICER');
 
 // Settings
 payrollRoutes.get('/settings', adminOnly, requirePermission('payroll', 'view'), getPayrollSettings);
@@ -80,16 +79,16 @@ payrollRoutes.delete('/loans/:id', adminOnly, requirePermission('payroll', 'dele
 payrollRoutes.get('/loans/:id/repayments', adminOnly, requirePermission('payroll', 'view'), getLoanRepayments);
 payrollRoutes.post('/loans/:id/repayments', adminOnly, requirePermission('payroll', 'edit'), recordLoanRepayment);
 
-// Preview (budget visibility is also useful to line managers)
-payrollRoutes.get('/preview', adminOrManager, requirePermission('payroll', 'view'), previewPayroll);
+// Preview
+payrollRoutes.get('/preview', adminOnly, requirePermission('payroll', 'view'), previewPayroll);
 payrollRoutes.post('/preview', adminOnly, requirePermission('payroll', 'edit'), recomputePreview);
 
 // Dashboard
-payrollRoutes.get('/dashboard', adminOrManager, requirePermission('payroll', 'view'), getPayrollDashboard);
+payrollRoutes.get('/dashboard', adminOnly, requirePermission('payroll', 'view'), getPayrollDashboard);
 
 // Payroll runs
 payrollRoutes.post('/runs', adminOnly, requirePermission('payroll', 'create'), submitPayrollRun);
-payrollRoutes.get('/runs', adminOrManager, requirePermission('payroll', 'view'), getPayrollRuns);
+payrollRoutes.get('/runs', adminOnly, requirePermission('payroll', 'view'), getPayrollRuns);
 // Run detail includes each payslip's bank account snapshot, so it stays admin-only.
 payrollRoutes.get('/runs/:id', adminOnly, requirePermission('payroll', 'view'), getPayrollRun);
 payrollRoutes.post('/runs/:id/approve', adminOnly, requirePermission('payroll', 'approve'), approvePayrollRun);
@@ -98,8 +97,8 @@ payrollRoutes.post('/runs/:id/disburse', adminOnly, requirePermission('payroll',
 payrollRoutes.post('/runs/:id/mark-paid', adminOnly, requirePermission('payroll', 'edit'), markPayrollRunPaid);
 payrollRoutes.get('/runs/:id/bank-file', adminOnly, requirePermission('payroll', 'view'), getBankFile);
 payrollRoutes.get('/runs/:id/remittance/:type', adminOnly, requirePermission('payroll', 'view'), getRemittanceSchedule);
-payrollRoutes.get('/banks', adminOrManager, requirePermission('payroll', 'view'), getMonnifyBanks);
-payrollRoutes.get('/validate-account', adminOrManager, requirePermission('payroll', 'view'), validateBankAccount);
+payrollRoutes.get('/banks', adminOnly, requirePermission('payroll', 'view'), getMonnifyBanks);
+payrollRoutes.get('/validate-account', adminOnly, requirePermission('payroll', 'view'), validateBankAccount);
 
 // Compliance / remittances
 payrollRoutes.get('/compliance', adminOnly, requirePermission('payroll', 'view'), getComplianceTasks);

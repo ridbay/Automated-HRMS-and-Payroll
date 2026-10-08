@@ -40,13 +40,17 @@ export const employees = sqliteTable('employees', {
   passwordSalt: text('password_salt'),
   isPasswordChanged: integer('is_password_changed', { mode: 'boolean' }).default(false),
   
-  // Tax & Statutory
+  // Tax & Statutory (including Nigeria Tax Act 2025 eligible reliefs)
   tin: text('tin'),
   pfa: text('pfa'),
   pensionId: text('pension_id'),
   nin: text('nin'),
   nhf: text('nhf'),
   taxState: text('tax_state'),
+  annualRent: integer('annual_rent').default(0),
+  nhisMonthly: integer('nhis_monthly').default(0),
+  mortgageInterestAnnual: integer('mortgage_interest_annual').default(0),
+  lifeInsuranceAnnual: integer('life_insurance_annual').default(0),
   
   // Banking & Payout
   bankName: text('bank_name'),

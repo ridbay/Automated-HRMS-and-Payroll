@@ -69,7 +69,12 @@ export class SupportService {
     return result[0];
   }
 
-  async getTicketMessages(ticketId: string) {
+  async getTicketMessages(companyId: string, ticketId: string, employeeId?: string, isAdmin = false) {
+    const [ticket] = await this.db.select().from(supportTickets)
+      .where(and(eq(supportTickets.id, ticketId), eq(supportTickets.companyId, companyId)));
+    if (!ticket) return null;
+    if (!isAdmin && employeeId && ticket.employeeId !== employeeId) return null;
+
     return await this.db.select({
       id: supportTicketMessages.id,
       ticketId: supportTicketMessages.ticketId,
@@ -85,7 +90,12 @@ export class SupportService {
     .orderBy(supportTicketMessages.createdAt);
   }
 
-  async addTicketMessage(ticketId: string, senderId: string, message: string) {
+  async addTicketMessage(companyId: string, ticketId: string, senderId: string, message: string, isAdmin = false) {
+    const [ticket] = await this.db.select().from(supportTickets)
+      .where(and(eq(supportTickets.id, ticketId), eq(supportTickets.companyId, companyId)));
+    if (!ticket) return null;
+    if (!isAdmin && ticket.employeeId !== senderId) return null;
+
     const newMessage = {
       id: `msg-${randomUUID()}`,
       ticketId,

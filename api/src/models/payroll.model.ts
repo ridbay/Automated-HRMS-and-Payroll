@@ -16,7 +16,6 @@ export const payrollSettings = sqliteTable('payroll_settings', {
   minWageAnnual: integer('min_wage_annual').notNull().default(840000), // Nigeria national minimum wage baseline (₦70,000/mo)
   pensionEmployeeRate: real('pension_employee_rate').notNull().default(8), // % of basic+housing+transport
   pensionEmployerRate: real('pension_employer_rate').notNull().default(10),
-  applyConsolidatedReliefAllowance: integer('apply_cra', { mode: 'boolean' }).notNull().default(true),
   // NHF (Federal Mortgage Bank): employee deduction, reduces net pay.
   nhfEnabled: integer('nhf_enabled', { mode: 'boolean' }).notNull().default(true),
   nhfRate: real('nhf_rate').notNull().default(2.5), // % of basic salary
@@ -155,6 +154,9 @@ export const payslips = sqliteTable('payslips', {
   accountNumber: text('account_number'),
   accountName: text('account_name'),
   basicSalary: integer('basic_salary').notNull().default(0),
+  housingAllowance: integer('housing_allowance').default(0),
+  transportAllowance: integer('transport_allowance').default(0),
+  otherAllowances: integer('other_allowances').default(0),
   allowances: integer('allowances').notNull().default(0),
   bonuses: integer('bonuses').notNull().default(0),
   grossPay: integer('gross_pay').notNull().default(0),

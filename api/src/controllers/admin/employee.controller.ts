@@ -168,6 +168,9 @@ export const addDocument = async (c: Context<AppEnv>) => {
   const employeeId = c.req.param('id') as string;
   const service = new EmployeeService(c.env.DB);
   
+  const emp = await service.getEmployeeProfile(companyId, employeeId);
+  if (!emp) return c.json({ error: 'Employee not found' }, 404);
+
   const formData = await c.req.parseBody();
   const file = formData.file as File;
   const name = formData.name as string;
@@ -185,8 +188,12 @@ export const deleteDocument = async (c: Context<AppEnv>) => {
   const documentId = c.req.param('documentId') as string;
   const service = new EmployeeService(c.env.DB);
   
-  const result = await service.deleteDocument(companyId, employeeId, c.env.BUCKET, documentId);
-  return c.json(result);
+  try {
+    const result = await service.deleteDocument(companyId, employeeId, c.env.BUCKET, documentId);
+    return c.json(result);
+  } catch (err: any) {
+    return c.json({ error: err.message }, 404);
+  }
 };
 
 export const getAuditLogs = async (c: Context<AppEnv>) => {

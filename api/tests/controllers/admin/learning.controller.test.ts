@@ -55,6 +55,19 @@ describe('Admin Learning Controller', () => {
     const res: any = await AdminLearningController.assignCourse(mockContext);
     expect(res.status).toBe(201);
     expect(res.data.data.success).toBe(true);
+    expect(LearningService.prototype.assignCourse).toHaveBeenCalledWith('c1', 'company1', ['emp1']);
+  });
+
+  it('should return 404 if assigning to non-existent or foreign course', async () => {
+    (LearningService.prototype.assignCourse as any).mockResolvedValue(null);
+    const res: any = await AdminLearningController.assignCourse(mockContext);
+    expect(res.status).toBe(404);
+  });
+
+  it('should return 400 if assigning employees from another tenant', async () => {
+    (LearningService.prototype.assignCourse as any).mockResolvedValue({ error: 'One or more employees do not belong to this company' });
+    const res: any = await AdminLearningController.assignCourse(mockContext);
+    expect(res.status).toBe(400);
   });
 
   it('should delete a course', async () => {
@@ -68,11 +81,31 @@ describe('Admin Learning Controller', () => {
     expect(res.data.data.stats.totalCourses).toBe(1);
   });
 
+  it('should get course enrollments scoped to company', async () => {
+    const res: any = await AdminLearningController.getCourseEnrollments(mockContext);
+    expect(res.data.data).toHaveLength(1);
+    expect(LearningService.prototype.getCourseEnrollments).toHaveBeenCalledWith('c1', 'company1');
+  });
+
+  it('should return 404 if getting enrollments for foreign course', async () => {
+    (LearningService.prototype.getCourseEnrollments as any).mockResolvedValue(null);
+    const res: any = await AdminLearningController.getCourseEnrollments(mockContext);
+    expect(res.status).toBe(404);
+  });
+
   it('should unassign a course', async () => {
     LearningService.prototype.unassignCourse = vi.fn().mockResolvedValue({ success: true });
-    mockContext.req.param.mockReturnValue('enr1');
+    mockContext.req.param.mockImplementation((k: string) => k === 'enrollmentId' ? 'enr1' : 'c1');
     const res: any = await AdminLearningController.unassignCourse(mockContext);
     expect(res.data.success).toBe(true);
+    expect(LearningService.prototype.unassignCourse).toHaveBeenCalledWith('enr1', 'company1', 'c1');
+  });
+
+  it('should return 404 if unassigning from foreign enrollment or course', async () => {
+    LearningService.prototype.unassignCourse = vi.fn().mockResolvedValue(null);
+    mockContext.req.param.mockImplementation((k: string) => k === 'enrollmentId' ? 'enr-foreign' : 'c1');
+    const res: any = await AdminLearningController.unassignCourse(mockContext);
+    expect(res.status).toBe(404);
   });
 
   it('should assign course by department', async () => {

@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
+import { leaveClient } from "../api/leave.client";
 import { NAV_ITEMS } from "./navConfig";
 import {
   ChevronLeft,
@@ -88,7 +89,6 @@ const Sidebar: React.FC = () => {
       path: "performance",
     },
     { name: "Team Calendar", icon: <Calendar size={20} />, path: "attendance" },
-    { name: "Budget & Payroll", icon: <Wallet size={20} />, path: "payroll" },
     { name: "Assets", icon: <Box size={20} />, path: "assets" }, // Added Assets menu item
     { name: "Benefits", icon: <Heart size={20} />, path: "benefits" },
     { name: "Surveys", icon: <MessageSquare size={20} />, path: "surveys" },
@@ -166,6 +166,21 @@ const Sidebar: React.FC = () => {
   const isAdmin = userRole === "SUPER_ADMIN" || userRole === "HR_ADMIN";
   const isManager = userRole === "MANAGER";
   const isRecruiter = userRole === "RECRUITER";
+
+  const [pendingApprovalsCount, setPendingApprovalsCount] = useState<number>(2);
+
+  useEffect(() => {
+    if (isManager) {
+      leaveClient
+        .getMyTeamPendingLeaves()
+        .then((reqs) => {
+          if (Array.isArray(reqs)) {
+            setPendingApprovalsCount(reqs.length);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [isManager]);
 
   let navToUse = NAV_ITEMS;
   if (userRole === "EMPLOYEE") {
@@ -294,11 +309,11 @@ const Sidebar: React.FC = () => {
                   {item.name}
                 </div>
               )}
-              {item.name === "Approvals" && isManager && (
+              {item.name === "Approvals" && isManager && pendingApprovalsCount > 0 && (
                 <div
                   className={`absolute ${isOpen ? "right-3" : "right-1 top-1"} px-1.5 py-0.5 bg-rose-500 text-white text-[8px] font-black rounded-full`}
                 >
-                  3
+                  {pendingApprovalsCount}
                 </div>
               )}
             </button>

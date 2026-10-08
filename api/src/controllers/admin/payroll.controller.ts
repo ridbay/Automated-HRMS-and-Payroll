@@ -415,6 +415,11 @@ export const getEmployeePayslips = async (c: Context<AppEnv>) => {
     const companyId = (c.get('companyId') as string) as string;
     const db = drizzle(c.env.DB, { schema });
 
+    const emp = await db.query.employees.findFirst({
+      where: and(eq(schema.employees.id, employeeId), eq(schema.employees.companyId, companyId)),
+    });
+    if (!emp) return c.json({ error: 'Employee not found' }, 404);
+
     const records = await db
       .select({
         id: schema.payslips.id,
