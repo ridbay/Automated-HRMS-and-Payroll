@@ -62,6 +62,14 @@ export const useTeamPendingLeaves = () => {
   });
 };
 
+export const leaveClient = {
+  getMyTeamPendingLeaves: async () => {
+    const res = await fetchWithTenant(`${API_URL}/employee/leave/team-requests`);
+    if (!res.ok) throw new Error('Failed to fetch pending team leave requests');
+    return res.json();
+  },
+};
+
 export const useUpdateTeamLeaveStatus = () => {
   const queryClient = useQueryClient();
   return useMutation({

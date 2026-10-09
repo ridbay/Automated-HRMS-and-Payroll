@@ -33,22 +33,25 @@ Project: *Design and Implementation of a Scalable Human Resource Management Syst
 | Figure 4.9 Payslip & compliance calendar | `figure_4_9.png` | Real screenshots (Amaka Eze itemised payslip + statutory compliance remittance calendar) |
 | Figure 4.10 Review cycle configuration | `figure_4_10.png` | Real screenshots (active Q3 2026 Review stage progression bar + stage window timeline editor) |
 | Figure 4.11 AI assistant scoped & refusal | `figure_4_11.png` | Real screenshots using Workers AI ((a) HR Admin headcount query, (b) Manager payroll refusal) |
+| Figure 4.12 Test suite execution | `figure_4_12.png` | Light terminal capture of joint test suites (113 files, 934 tests passed) |
+| Figure 4.13 Response-time curves | `figure_4_13.png` | Cold-start and warm-path response times by operation category |
 | Figure 4.14 Cost curve | `figure_4_14.png` | Matplotlib curve (`scripts/figures/figure_4_3_cost_curve.py`) |
 
 Every figure's source is `project/figures/src/figure_X_Y.html`. Its header comment records the exact capture, crop and render commands. Captions go below figures; table titles above. Each figure on its own page.
 
-Text revisions written (paste into the report once the matching TODO items are done):
-- `project/chapter4-revisions.md` (pre-existing: Chapter 4 corrections, Table 4.3, cost section, shot list).
-- `project/tenant-isolation-revisions.md`: rewrites of Sections 2.6, 3.5.4, 3.6.1, 3.8.3, 4.3.1, 4.4.3, Table 4.6 so the text matches the code (scoping by convention; NFR6 partially met).
+Text revisions written (ready for drop-in paste into the report):
+- `project/chapter4-revisions.md`: Chapter 4 corrections, Table 4.2 (updated test metrics), Table 4.3 (measured response times), cost section, platform constraints, and shot list.
+- `project/tenant-isolation-revisions.md`: rewrites of Sections 2.6, 3.5.4, 3.6.1, 3.8.3, 4.3.1, 4.4.3, Table 4.6 so the text matches the code (scoping by convention; 11 cross-tenant tests; NFR6 partially met).
+- `project/nta-2025-payroll-revisions.md`: rewrites of Section 1.3 (Objective 5), Section 3.4.1 (FR35, FR36, FR39), Section 3.6.7, Table 3.8, Section 4.3.7, Table 3.7 schema reconciliation, Table 3.9 AI assistant scoping, and primary statutory citations for Nigeria Tax Act 2025.
 
 ## 2. What is left
 
-| Artefact | Notes |
-|---|---|
-| Figure 4.12 Test-suite terminal | Do this **after** the code TODOs; counts change. |
-| Section 3.6.7 / Table 3.8 text | Rewrite for the Nigeria Tax Act 2025 (no CRA; rent relief; new bands) to match Figure 3.9. |
+All code implementations, test suites, figures, and draft text revisions are **complete**.
 
-`TODO.md` (repo root) lists every code and text mismatch found: cross-tenant gaps, role guards, NTA 2025 payroll, salary components, schema tables, assistant Table 3.9, and UI placeholders. Several figures assume those fixes.
+The only remaining actions for submission are:
+1. **Report Document Integration**: Copy and paste the drop-in text blocks from `project/tenant-isolation-revisions.md`, `project/chapter4-revisions.md`, and `project/nta-2025-payroll-revisions.md` into the thesis Google Doc.
+2. **Embed Generated Figures**: Insert the 17 PNG figures from `project/figures/` (Figures 2.1–2.2, 3.1–3.11, 4.1–4.14) into their designated figure placeholders.
+3. **Optional CPU Log Check**: (Optional) In Cloudflare Dashboard → Workers & Pages → zenhr-api → Logs, note the exact CPU time (typically < 3 ms) for `POST /admin/payroll/runs` if you wish to fill the bracketed sentence in Section 4.5.1.
 
 ## 3. How to reproduce or continue the screenshots
 
