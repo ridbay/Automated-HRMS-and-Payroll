@@ -4,7 +4,7 @@ import { Umbrella, History } from "lucide-react";
 
 interface ApprovalCenterProps {
   approvals: any;
-  onLeaveAction?: (id: string, status: "approved" | "rejected") => void;
+  onLeaveAction?: (id: string, status: "approved" | "rejected", managerComment?: string) => void;
   isLeaveActionPending?: boolean;
 }
 
@@ -14,6 +14,16 @@ const ApprovalCenter: React.FC<ApprovalCenterProps> = ({
   isLeaveActionPending,
 }) => {
   const [activeTab, setActiveTab] = useState<"pending" | "history">("pending");
+  const [comments, setComments] = useState<Record<string, string>>({});
+
+  const handleAction = (id: string, status: "approved" | "rejected") => {
+    const comment = comments[id]?.trim();
+    if (comment) {
+      onLeaveAction?.(id, status, comment);
+    } else {
+      onLeaveAction?.(id, status);
+    }
+  };
 
   const renderLeaveCard = (req: any) => (
     <motion.div
@@ -51,20 +61,34 @@ const ApprovalCenter: React.FC<ApprovalCenterProps> = ({
         )}
       </div>
 
-      <div className="p-4 bg-slate-50 rounded-2xl mb-8">
+      <div className="p-4 bg-slate-50 rounded-2xl mb-4">
         <p className="text-xs text-slate-600 italic">"{req.reason}"</p>
+      </div>
+
+      <div className="mb-6">
+        <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5">
+          Manager Comment (Optional)
+        </label>
+        <input
+          type="text"
+          value={comments[req.id] || ""}
+          onChange={(e) => setComments({ ...comments, [req.id]: e.target.value })}
+          placeholder="Add reason or handover note..."
+          disabled={isLeaveActionPending}
+          className="w-full px-4 py-2.5 text-xs bg-slate-50/70 border border-slate-200 rounded-xl text-slate-700 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:bg-white transition-all"
+        />
       </div>
 
       <div className="flex gap-3">
         <button
-          onClick={() => onLeaveAction?.(req.id, "rejected")}
+          onClick={() => handleAction(req.id, "rejected")}
           disabled={isLeaveActionPending}
           className="flex-1 py-3 bg-white border border-slate-200 text-rose-500 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-rose-50 transition-colors disabled:opacity-50"
         >
           Reject
         </button>
         <button
-          onClick={() => onLeaveAction?.(req.id, "approved")}
+          onClick={() => handleAction(req.id, "approved")}
           disabled={isLeaveActionPending}
           className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
         >

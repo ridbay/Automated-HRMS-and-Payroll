@@ -76,6 +76,7 @@ vi.mock('../api/client', () => ({
   useDeleteEmployeeAsset: vi.fn(() => ({ mutate: mockDeleteAsset })),
   useReviewCycles: vi.fn(() => ({ data: { cycles: [], ratingScale: [] } })),
   useResetTemporaryPassword: vi.fn(() => ({ mutateAsync: mockResetTempPassword, isPending: false })),
+  useAdminAttendance: vi.fn(() => ({ data: [] })),
 }));
 
 const baseEmployee = {

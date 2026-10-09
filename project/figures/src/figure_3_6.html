@@ -6,11 +6,11 @@
 <!--
   Figure 3.6: Level 1 data flow diagram for the payroll process.
   Grounded in api/src/services/payroll.service.ts:
-    previewRun  -> reads employees, payroll_settings, tax_brackets, attendance_records, loans (nothing written)
+    previewRun  -> reads employees, payroll_settings, salary_components, tax_brackets, attendance_records, loans (nothing written)
     submitRun   -> re-runs the preview, blocks on red exceptions, batch-writes payroll_runs + payslips
     markRunPaid -> updates loans, inserts loan_repayments, inserts compliance_tasks (reads paid runs for NSITF/ITF)
     getBankFile / getRemittanceSchedule -> read payroll_runs + payslips on request
-  salary_components is NOT read by the computation (basic/allowance split is fixed in code).
+  salary_components is read by computation to split gross per catalogue.
   Render: scripts/figures/render.sh figure_3_6 1100 1400
 -->
 <style>
@@ -104,9 +104,10 @@ proc('p1', '1.0', ['Validate run', 'inputs and flag', 'exceptions'], 210, 300);
 proc('p2', '2.0', ['Compute', 'payslip per', 'employee'], 640, 300);
 store('emp', 'D1', 'employees', 135, 500);
 store('set', 'D2', 'payroll_settings', 395, 570);
-store('tax', 'D3', 'tax_brackets', 960, 175);
-store('att', 'D4', 'attendance_records', 960, 300);
-store('loan', 'D5', 'loans', 960, 425);
+store('tax', 'D3', 'tax_brackets', 960, 140);
+store('comp', 'D10', 'salary_components', 960, 250);
+store('att', 'D4', 'attendance_records', 960, 360);
+store('loan', 'D5', 'loans', 960, 470);
 
 proc('p3', '3.0', ['Persist run', 'and payslips'], 520, 680);
 store('slips', 'D7', 'payslips', 520, 850);
@@ -129,8 +130,9 @@ flow('p2', 'po', 'preview: payslips and|exceptions (not saved)', { preview: true
 flow('emp', 'p1', 'active|employees', { lx: -62, ly: -6 });
 flow('set', 'p1', 'rates, proration,|relief settings', { lx: 34, ly: -4, anchor: 'start' });
 flow('tax', 'p2', 'tax bands', { lx: -6, ly: -14 });
+flow('comp', 'p2', 'component split', { lx: -45, ly: -14 });
 flow('att', 'p2', 'attendance', { lx: 0, ly: -10 });
-flow('loan', 'p2', 'active loan', { lx: 4, ly: 30 });
+flow('loan', 'p2', 'active loan', { lx: 4, ly: 20 });
 
 // ---------- Persistence path ----------
 flow('p2', 'p3', 'computed payslips, on|submission, unless a|blocking exception exists', { lx: 26, ly: -14, anchor: 'start' });

@@ -243,7 +243,7 @@ const AttendanceManagement: React.FC = () => {
                     <tr key={r.id} className="hover:bg-slate-50 transition-colors">
                       <td className="p-4">
                         <div className="flex items-center gap-3">
-                          <img src={r.avatar || `https://i.pravatar.cc/150?u=${r.employeeId}`} className="w-8 h-8 rounded-lg object-cover" />
+                          <img src={r.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(r.name + ' ' + (r.lastName || ''))}&background=6366f1&color=fff`} className="w-8 h-8 rounded-lg object-cover" />
                           <div>
                             <div className="font-bold text-slate-800 text-sm">{r.name} {r.lastName}</div>
                             <div className="text-[10px] text-slate-400 uppercase font-bold">{r.department || '—'}</div>
@@ -266,7 +266,7 @@ const AttendanceManagement: React.FC = () => {
                     <tr key={t.employeeId} className="hover:bg-slate-50 transition-colors">
                       <td className="p-4">
                         <div className="flex items-center gap-3">
-                          <img src={t.avatar || `https://i.pravatar.cc/150?u=${t.employeeId}`} className="w-8 h-8 rounded-lg object-cover opacity-60" />
+                          <img src={t.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(t.name + ' ' + (t.lastName || ''))}&background=94a3b8&color=fff`} className="w-8 h-8 rounded-lg object-cover opacity-60" />
                           <div>
                             <div className="font-bold text-slate-800 text-sm">{t.name} {t.lastName}</div>
                             <div className="text-[10px] text-slate-400 uppercase font-bold">{t.department || '—'}</div>

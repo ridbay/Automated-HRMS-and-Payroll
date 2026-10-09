@@ -43,7 +43,7 @@ import {
   XCircle,
   KeyRound,
 } from "lucide-react";
-import { getDocumentDownloadUrl, downloadAuthenticatedBlob, useEmployeeLeaveBalances, useUpdateLeaveBalances, useEmployeeProfile, useEmployeeDirectReports, useAddAdminEmergencyContact, useDeleteAdminEmergencyContact, useUploadEmployeeDocument, useDeleteEmployeeDocument, useUpdateAdminEmployee, useEmployeeAssessments, useCreateAssessment, useEmployeePayslips, useEmployeeBenefits, useUpdateEmployeeBenefits, useEmployeeTrainings, useAddEmployeeTraining, useEmployeeLeaveRequests, useEmployeeAuditLogs, useEmployeeAssets, useAddEmployeeAsset, useDeleteEmployeeAsset, useReviewCycles, useResetTemporaryPassword } from "../../api/client";
+import { getDocumentDownloadUrl, downloadAuthenticatedBlob, useEmployeeLeaveBalances, useUpdateLeaveBalances, useEmployeeProfile, useEmployeeDirectReports, useAddAdminEmergencyContact, useDeleteAdminEmergencyContact, useUploadEmployeeDocument, useDeleteEmployeeDocument, useUpdateAdminEmployee, useEmployeeAssessments, useCreateAssessment, useEmployeePayslips, useEmployeeBenefits, useUpdateEmployeeBenefits, useEmployeeTrainings, useAddEmployeeTraining, useEmployeeLeaveRequests, useEmployeeAuditLogs, useEmployeeAssets, useAddEmployeeAsset, useDeleteEmployeeAsset, useReviewCycles, useResetTemporaryPassword, useAdminAttendance } from "../../api/client";
 import { usePopup } from "../../components/PopupProvider";
 import { Employee } from "../../types/index";
 import {
@@ -93,6 +93,7 @@ const EmployeeDetail: React.FC<Props> = ({ employee: initialEmployee, onBack }) 
 
   const { data: leaveRequestsData } = useEmployeeLeaveRequests(initialEmployee.id);
   const { data: auditLogsData } = useEmployeeAuditLogs(initialEmployee.id);
+  const { data: attendanceRecords = [] } = useAdminAttendance({ employeeId: initialEmployee.id });
 
   const { alert, confirm, prompt } = usePopup();
 
@@ -881,28 +882,84 @@ const EmployeeDetail: React.FC<Props> = ({ employee: initialEmployee, onBack }) 
                 </div>
               )}
 
-            {activeTab === "attendance" && (
+            {activeTab === "attendance" && (() => {
+              const presentCount = attendanceRecords.filter((r: any) => r.status === "present" || r.status === "early").length;
+              const score = attendanceRecords.length > 0 ? Math.round((presentCount / attendanceRecords.length) * 100) : null;
+              const fmtTime = (iso?: string | null) => iso ? new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--';
+              return (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                  <section className="lg:col-span-2 bg-white p-10 rounded-[3rem] border border-slate-200 shadow-sm flex items-center justify-center">
-                    <p className="text-slate-400 font-bold text-sm uppercase tracking-widest text-center">Timesheets and Attendance Logs<br/><span className="text-[10px]">No records for the current period.</span></p>
+                  <section className="lg:col-span-2 bg-white p-10 rounded-[3rem] border border-slate-200 shadow-sm">
+                    <h3 className="text-xl font-black text-slate-800 uppercase tracking-widest flex items-center gap-2 mb-6">
+                      <Clock className="text-emerald-500" /> Timesheets and Attendance Logs
+                    </h3>
+                    {attendanceRecords.length === 0 ? (
+                      <div className="p-12 text-center text-slate-400 font-bold text-sm uppercase tracking-widest">
+                        No records logged for this employee yet.
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left">
+                          <thead>
+                            <tr className="border-b border-slate-100 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                              <th className="pb-3">Date</th>
+                              <th className="pb-3">Clock In</th>
+                              <th className="pb-3">Clock Out</th>
+                              <th className="pb-3">Status</th>
+                              <th className="pb-3">Location</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 text-xs">
+                            {attendanceRecords.map((r: any) => (
+                              <tr key={r.id} className="hover:bg-slate-50 transition-colors">
+                                <td className="py-3 font-bold text-slate-800">{r.date}</td>
+                                <td className="py-3 font-medium text-slate-600">{fmtTime(r.clockIn)}</td>
+                                <td className="py-3 font-medium text-slate-600">{fmtTime(r.clockOut)}</td>
+                                <td className="py-3">
+                                  <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${r.status === 'present' ? 'bg-emerald-50 text-emerald-600' : r.status === 'late' ? 'bg-amber-50 text-amber-600' : 'bg-slate-100 text-slate-600'}`}>
+                                    {r.status}
+                                  </span>
+                                </td>
+                                <td className="py-3 text-slate-400">{r.locationIn || '—'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                   </section>
                   <section className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm flex flex-col items-center justify-center text-center">
-                    <div className="w-40 h-40 rounded-full border-[12px] border-emerald-100 flex items-center justify-center relative mb-6">
-                      <span className="text-4xl font-black text-emerald-600">
-                        98%
-                      </span>
-                      <div className="absolute top-0 left-0 w-full h-full border-[12px] border-emerald-500 rounded-full border-t-transparent border-l-transparent rotate-45" />
-                    </div>
-                    <h4 className="text-lg font-black text-slate-800">
-                      Punctuality Score
-                    </h4>
-                    <p className="text-xs font-medium text-slate-500 mt-2 max-w-[200px]">
-                      Consistently clocks in before 9:00 AM. Top 5% of
-                      workforce.
-                    </p>
+                    {score !== null ? (
+                      <>
+                        <div className="w-40 h-40 rounded-full border-[12px] border-emerald-100 flex items-center justify-center relative mb-6">
+                          <span className="text-4xl font-black text-emerald-600">
+                            {score}%
+                          </span>
+                          <div className="absolute top-0 left-0 w-full h-full border-[12px] border-emerald-500 rounded-full border-t-transparent border-l-transparent rotate-45" />
+                        </div>
+                        <h4 className="text-lg font-black text-slate-800">
+                          Punctuality Score
+                        </h4>
+                        <p className="text-xs font-medium text-slate-500 mt-2 max-w-[200px]">
+                          {score >= 90 ? "Consistently clocks in on time." : "Attendance records recorded."}
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <div className="w-40 h-40 rounded-full border-[12px] border-slate-100 flex items-center justify-center relative mb-6">
+                          <span className="text-2xl font-black text-slate-300">--</span>
+                        </div>
+                        <h4 className="text-lg font-black text-slate-800">
+                          Punctuality Score
+                        </h4>
+                        <p className="text-xs font-medium text-slate-400 mt-2 max-w-[200px]">
+                          No records for the current period.
+                        </p>
+                      </>
+                    )}
                   </section>
                 </div>
-              )}
+              );
+            })()}
 
               {activeTab === "leave" && (
                 <div className="space-y-10">

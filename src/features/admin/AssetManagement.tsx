@@ -194,7 +194,7 @@ const AssetManagement: React.FC = () => {
         <div className="divide-y divide-slate-50">
           {assets.map((asset) => {
             const assignee = employees.find(
-              (e: any) => e.id === asset.assignedTo,
+              (e: any) => e.id === (asset.assignedTo || asset.employeeId),
             );
 
             return (

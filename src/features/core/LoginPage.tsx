@@ -188,8 +188,8 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onNavigateRegister }) =>
                 <Building2 size={24} />
               </div>
               <div>
-                <p className="text-sm font-bold">Trusted by 250+ Enterprises</p>
-                <p className="text-xs text-slate-400 font-medium">Compliance-ready in 12 jurisdictions.</p>
+                <p className="text-sm font-bold">Multi-Tenant Cloud HRMS</p>
+                <p className="text-xs text-slate-400 font-medium">Built for Nigerian statutory compliance and payroll automation.</p>
               </div>
             </div>
           </div>
@@ -503,7 +503,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onNavigateRegister }) =>
       )}
 
       <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-6 opacity-30">
-         <span className="text-[10px] font-black uppercase tracking-widest">© 2024 ZenHR OS</span>
+         <span className="text-[10px] font-black uppercase tracking-widest">© 2026 ZenHR OS</span>
          <span className="text-[10px] font-black uppercase tracking-widest">•</span>
          <span className="text-[10px] font-black uppercase tracking-widest hover:underline cursor-pointer">Privacy</span>
          <span className="text-[10px] font-black uppercase tracking-widest hover:underline cursor-pointer">Security</span>

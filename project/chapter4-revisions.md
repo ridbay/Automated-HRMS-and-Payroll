@@ -87,20 +87,20 @@ Table 4.2: Automated test suite execution results
 
 | Metric | Backend (API) | Frontend (UI) |
 |---|---:|---:|
-| Test files executed | 63 | 49 |
-| Test files passed | 63 | 49 |
+| Test files executed | 64 | 49 |
+| Test files passed | 64 | 49 |
 | Test files failed | 0 | 0 |
-| Individual test cases executed | 404 | 507 |
-| Individual test cases passed | 404 | 507 |
+| Individual test cases executed | 427 | 507 |
+| Individual test cases passed | 427 | 507 |
 | Individual test cases failed | 0 | 0 |
 | Pass rate | 100% | 100% |
-| Total wall-clock duration | 6.17 s | 36.04 s |
+| Total wall-clock duration | 6.87 s | 59.89 s |
 
 [Take these numbers from the same run as your Figure 4.12 screenshot. Durations vary slightly between runs.]
 
 **Replace the paragraph beginning "All 57 test files…" and the "execution time" paragraph after it with:**
 
-> All 112 test files and all 911 individual test cases passed. The backend suite completed in 6.17 seconds of wall-clock time, of which the tests themselves accounted for 1.35 seconds. That figure is a property of the architecture rather than an incidental detail: because the service layer is testable in isolation from both the database and the HTTP layer, as NFR15 requires, no backend test provisions a database, starts a server, or waits on a network call, and running the full suite is a routine step during development rather than an occasional exercise. The frontend suite is slower, at 36.04 seconds, and the difference lies in set-up rather than in the tests: each test file constructs its own simulated browser environment, and Vitest attributes roughly 30% of the suite's tracked time to that construction alone.
+> All 113 test files and all 934 individual test cases passed. The backend suite completed in 6.87 seconds of wall-clock time, of which the tests themselves accounted for 1.48 seconds. That figure is a property of the architecture rather than an incidental detail: because the service layer is testable in isolation from both the database and the HTTP layer, as NFR15 requires, no backend test provisions a database, starts a server, or waits on a network call, and running the full suite is a routine step during development rather than an occasional exercise. The frontend suite is slower, at 59.89 seconds, and the difference lies in set-up rather than in the tests: each test file constructs its own simulated browser environment, and Vitest attributes roughly 30% of the suite's tracked time to that construction alone.
 
 **Replace the "Coverage boundary" paragraph with:**
 

@@ -663,7 +663,7 @@ const Profile: React.FC<ProfileProps> = ({ initialTab }) => {
                   />
                   <div className="flex items-center gap-6 p-6 bg-indigo-50/50 border border-indigo-100 rounded-3xl">
                     <img
-                      src="https://i.pravatar.cc/150?u=manager_lead"
+                      src="https://ui-avatars.com/api/?name=Marcus+Head&background=6366f1&color=fff"
                       className="w-16 h-16 rounded-2xl object-cover"
                     />
                     <div>

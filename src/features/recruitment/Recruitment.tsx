@@ -1085,7 +1085,7 @@ const Recruitment: React.FC = () => {
                       <div className="flex items-center justify-between pt-4 border-t border-slate-50">
                         <div className="flex items-center gap-2">
                           <img
-                            src={req.managerAvatar || `https://i.pravatar.cc/150?u=${req.id}`}
+                            src={req.managerAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(req.hiringManager || "Hiring Manager")}&background=6366f1&color=fff`}
                             className="w-6 h-6 rounded-lg object-cover"
                           />
                           <span className="text-[9px] font-black text-slate-500">
@@ -1223,7 +1223,7 @@ const Recruitment: React.FC = () => {
                   <div className="relative">
                     <img
                       src={
-                        req.managerAvatar || "https://i.pravatar.cc/150?u=man"
+                        req.managerAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(req.hiringManager || "Hiring Manager")}&background=6366f1&color=fff`
                       }
                       className="w-8 h-8 rounded-lg object-cover shadow-md"
                     />
@@ -1328,7 +1328,7 @@ const Recruitment: React.FC = () => {
                     <div className="flex items-center gap-3">
                       <img
                         src={
-                          req.managerAvatar || "https://i.pravatar.cc/150?u=man"
+                          req.managerAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(req.hiringManager || "Hiring Manager")}&background=6366f1&color=fff`
                         }
                         className="w-8 h-8 rounded-lg"
                       />
@@ -1460,9 +1460,19 @@ const Recruitment: React.FC = () => {
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
                 Active Pipeline
               </p>
-              <h2 className="text-2xl font-black text-slate-800">
-                {currentJob?.title || "Job Selection"}
-              </h2>
+              <div className="flex items-center gap-3">
+                <select
+                  value={currentJob?.id || ""}
+                  onChange={(e) => setActiveJobId(e.target.value)}
+                  className="text-2xl font-black text-slate-800 bg-transparent border-none p-0 focus:ring-0 cursor-pointer"
+                >
+                  {requisitions.map((r) => (
+                    <option key={r.id} value={r.id} className="text-sm font-bold">
+                      {r.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-4">
@@ -1483,27 +1493,32 @@ const Recruitment: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex gap-6 overflow-x-auto pb-10 scrollbar-hide px-2">
-          {columns.map((col) => (
-            <div key={col.id} className="shrink-0 w-80 flex flex-col gap-6">
-              <div className="flex justify-between items-center px-4">
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`w-2 h-2 rounded-full bg-${col.color}-500`}
-                  />
-                  <h3 className="text-xs font-black text-slate-800 uppercase tracking-[0.2em]">
-                    {col.label}
-                  </h3>
-                </div>
-                <span className="px-2.5 py-1 bg-slate-100 text-slate-500 rounded-lg text-[10px] font-black">
-                  {candidates.filter((c: Candidate) => c.status === col.id).length}
-                </span>
-              </div>
+        {(() => {
+          const pipelineCandidates = currentJob?.id
+            ? candidates.filter((c: Candidate) => c.requisitionId === currentJob.id)
+            : candidates;
+          return (
+            <div className="flex gap-6 overflow-x-auto pb-10 scrollbar-hide px-2">
+              {columns.map((col) => (
+                <div key={col.id} className="shrink-0 w-80 flex flex-col gap-6">
+                  <div className="flex justify-between items-center px-4">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`w-2 h-2 rounded-full bg-${col.color}-500`}
+                      />
+                      <h3 className="text-xs font-black text-slate-800 uppercase tracking-[0.2em]">
+                        {col.label}
+                      </h3>
+                    </div>
+                    <span className="px-2.5 py-1 bg-slate-100 text-slate-500 rounded-lg text-[10px] font-black">
+                      {pipelineCandidates.filter((c: Candidate) => c.status === col.id).length}
+                    </span>
+                  </div>
 
-              <div className="flex-1 space-y-4 min-h-[600px] p-2 bg-slate-50/50 rounded-[2.5rem] border-2 border-dashed border-slate-100">
-                {candidates
-                  .filter((c: Candidate) => c.status === col.id)
-                  .map((cand: Candidate) => (
+                  <div className="flex-1 space-y-4 min-h-[600px] p-2 bg-slate-50/50 rounded-[2.5rem] border-2 border-dashed border-slate-100">
+                    {pipelineCandidates
+                      .filter((c: Candidate) => c.status === col.id)
+                      .map((cand: Candidate) => (
                   <motion.div
                     key={cand.id}
                     layoutId={cand.id}
@@ -1634,6 +1649,8 @@ const Recruitment: React.FC = () => {
             </div>
           ))}
         </div>
+        );
+      })()}
       </div>
     );
   };
@@ -2218,7 +2235,7 @@ const Recruitment: React.FC = () => {
                         <section className="bg-white p-12 rounded-[3.5rem] border border-slate-200 shadow-sm overflow-hidden relative">
                           <div className="flex items-center justify-between mb-12">
                             <h3 className="text-xl font-black text-slate-800">
-                              Recruiter Scorecard
+                              Interview Scorecard
                             </h3>
                             <button
                               onClick={() => setCandidateDetailTab("interviews")}

@@ -973,7 +973,7 @@ const ManagerDashboard: React.FC = () => {
           {activeSection === "approvals" && (
             <ApprovalCenter
               approvals={approvalsData}
-              onLeaveAction={(id, status) => updateLeaveStatus.mutate({ id, status })}
+              onLeaveAction={(id, status, managerComment) => updateLeaveStatus.mutate({ id, status, managerComment })}
               isLeaveActionPending={updateLeaveStatus.isPending}
             />
           )}

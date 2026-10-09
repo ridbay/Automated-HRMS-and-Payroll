@@ -1,0 +1,153 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Figure 4.12: Automated Test Suite Output</title>
+<!--
+  Figure 4.12: Terminal output of the backend and frontend test suites.
+  Render: scripts/figures/render.sh figure_4_12 1100 860
+-->
+<style>
+  html, body { margin: 0; padding: 0; background: #fff; }
+  body {
+    font-family: 'SF Mono', Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+    color: #1e293b;
+    width: 1100px;
+    box-sizing: border-box;
+  }
+  .wrap { padding: 18px 22px; }
+  .terminal-window {
+    border: 1.5px solid #cbd5e1;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #f8fafc;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.07);
+  }
+  .terminal-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    background: #e2e8f0;
+    border-bottom: 1px solid #cbd5e1;
+  }
+  .dots { display: flex; gap: 7px; align-items: center; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+  .dot-red { background: #ef4444; border: 1px solid #dc2626; }
+  .dot-yellow { background: #f59e0b; border: 1px solid #d97706; }
+  .dot-green { background: #10b981; border: 1px solid #059669; }
+  .terminal-title {
+    flex: 1;
+    text-align: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: #475569;
+    letter-spacing: -0.2px;
+    margin-right: 48px;
+  }
+  .terminal-body {
+    padding: 18px 22px;
+    font-size: 12px;
+    line-height: 1.52;
+    color: #0f172a;
+    background: #fcfcfd;
+  }
+  .prompt { color: #0284c7; font-weight: 700; }
+  .cmd { color: #0f172a; font-weight: 700; }
+  .badge-run {
+    background: #0284c7;
+    color: #fff;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-weight: 800;
+    font-size: 10.5px;
+    margin-right: 8px;
+  }
+  .badge-pass {
+    background: #10b981;
+    color: #fff;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-weight: 800;
+    font-size: 10.5px;
+    margin-right: 8px;
+  }
+  .check { color: #10b981; font-weight: 800; margin-right: 6px; }
+  .dim { color: #64748b; }
+  .bold { font-weight: 700; }
+  .green { color: #059669; font-weight: 700; }
+  .cyan { color: #0284c7; }
+  .sep { border-top: 1px dashed #cbd5e1; margin: 12px 0 14px 0; }
+  .summary-box {
+    margin-top: 10px;
+    padding: 8px 12px;
+    background: #f1f5f9;
+    border-left: 4px solid #10b981;
+    border-radius: 0 6px 6px 0;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="terminal-window">
+    <div class="terminal-bar">
+      <div class="dots">
+        <span class="dot dot-red"></span>
+        <span class="dot dot-yellow"></span>
+        <span class="dot dot-green"></span>
+      </div>
+      <div class="terminal-title">zenhr_automated_hrms_payroll — zsh — 110×38</div>
+    </div>
+    <div class="terminal-body">
+      <div><span class="prompt">zenhr_automated_hrms_payroll %</span> <span class="cmd">npm run test:run --prefix api && npm run test:run</span></div>
+      <div style="height: 8px;"></div>
+      <div><span class="badge-run">RUN</span> <span class="cyan">v4.1.10</span> <span class="dim">/Users/ridbay/Projects/Personal/zenhr_automated_hrms_payroll/api</span></div>
+      <div style="height: 6px;"></div>
+      <div><span class="check">✓</span> tests/routes/crossTenant.test.ts <span class="dim">(11 tests)</span> <span class="dim">16ms</span></div>
+      <div><span class="check">✓</span> tests/routes/payroll.routes.test.ts <span class="dim">(8 tests)</span> <span class="dim">9ms</span></div>
+      <div><span class="check">✓</span> tests/services/payroll.service.test.ts <span class="dim">(24 tests)</span> <span class="dim">38ms</span></div>
+      <div><span class="check">✓</span> tests/services/ai.service.test.ts <span class="dim">(22 tests)</span> <span class="dim">18ms</span></div>
+      <div><span class="check">✓</span> tests/services/support.service.test.ts <span class="dim">(2 tests)</span> <span class="dim">4ms</span></div>
+      <div><span class="check">✓</span> tests/controllers/auth.controller.test.ts <span class="dim">(16 tests)</span> <span class="dim">6ms</span></div>
+      <div><span class="check">✓</span> tests/controllers/support.controller.test.ts <span class="dim">(10 tests)</span> <span class="dim">6ms</span></div>
+      <div><span class="check">✓</span> tests/controllers/admin/leave.controller.test.ts <span class="dim">(2 tests)</span> <span class="dim">4ms</span></div>
+      <div><span class="check">✓</span> tests/controllers/admin/learning.controller.test.ts <span class="dim">(4 tests)</span> <span class="dim">5ms</span></div>
+      <div><span class="dim">... [55 additional backend controller, route, middleware, and service test files]</span></div>
+      <div style="height: 6px;"></div>
+      <div class="summary-box">
+        <div><span class="bold">Test Files</span>  <span class="green">64 passed</span> (64)</div>
+        <div><span class="bold">Tests</span>       <span class="green">427 passed</span> (427)</div>
+        <div><span class="bold">Start at</span>    23:33:46</div>
+        <div><span class="bold">Duration</span>    <span class="bold">6.87s</span> <span class="dim">(transform 11.14s, setup 0ms, import 48.59s, tests 1.37s, environment 10ms)</span></div>
+      </div>
+
+      <div class="sep"></div>
+
+      <div><span class="dim">> zenhr---automated-hrms-&-payroll@0.0.0 test:run</span></div>
+      <div><span class="dim">> vitest run</span></div>
+      <div style="height: 4px;"></div>
+      <div><span class="badge-run">RUN</span> <span class="cyan">v5.0.1</span> <span class="dim">/Users/ridbay/Projects/Personal/zenhr_automated_hrms_payroll</span></div>
+      <div style="height: 6px;"></div>
+      <div><span class="check">✓</span> src/test/ApprovalCenter.test.tsx <span class="dim">(7 tests)</span> <span class="dim">99ms</span></div>
+      <div><span class="check">✓</span> src/test/Recruitment.test.tsx <span class="dim">(12 tests)</span> <span class="dim">754ms</span></div>
+      <div><span class="check">✓</span> src/test/AttendanceManagement.test.tsx <span class="dim">(20 tests)</span> <span class="dim">412ms</span></div>
+      <div><span class="check">✓</span> src/test/AssetManagement.test.tsx <span class="dim">(7 tests)</span> <span class="dim">418ms</span></div>
+      <div><span class="check">✓</span> src/test/Payroll.test.tsx <span class="dim">(17 tests)</span> <span class="dim">894ms</span></div>
+      <div><span class="check">✓</span> src/test/Reports.test.tsx <span class="dim">(18 tests)</span> <span class="dim">696ms</span></div>
+      <div><span class="check">✓</span> src/test/HRDashboard.test.tsx <span class="dim">(12 tests)</span> <span class="dim">579ms</span></div>
+      <div><span class="check">✓</span> src/test/EmployeeDetail.test.tsx <span class="dim">(29 tests)</span> <span class="dim">35085ms</span></div>
+      <div><span class="dim">... [41 additional frontend feature component and workflow test files]</span></div>
+      <div style="height: 6px;"></div>
+      <div class="summary-box">
+        <div><span class="bold">Test Files</span>  <span class="green">49 passed</span> (49)</div>
+        <div><span class="bold">Tests</span>       <span class="green">507 passed</span> (507)</div>
+        <div><span class="bold">Start at</span>    23:34:12</div>
+        <div><span class="bold">Duration</span>    <span class="bold">59.89s</span> <span class="dim">(environment 42%, tests 22%, transform 20%, import 11%, setup 4%)</span></div>
+      </div>
+      <div style="height: 10px;"></div>
+      <div><span class="badge-pass">PASS</span> <span class="green">All 113 test files and all 934 automated test cases passed (100% pass rate)</span></div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

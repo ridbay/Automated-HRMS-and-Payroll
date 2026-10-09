@@ -617,6 +617,12 @@ const Attendance: React.FC = () => {
                 {day}
               </div>
             ))}
+            {(() => {
+              const startDayOfWeek = (new Date(currentYear, currentMonth - 1, 1).getDay() + 6) % 7;
+              return Array.from({ length: startDayOfWeek }).map((_, i) => (
+                <div key={`empty-${i}`} className="h-16" />
+              ));
+            })()}
             {Array.from({ length: daysInMonth }).map((_, i) => {
               const day = i + 1;
               const dateStr = `${currentYear}-${currentMonthStr}-${day.toString().padStart(2, "0")}`;

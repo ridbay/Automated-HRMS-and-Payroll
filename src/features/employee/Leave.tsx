@@ -308,22 +308,43 @@ const Leave: React.FC = () => {
                   Availability
                 </h3>
                 <div className="space-y-6">
-                  <p className="text-xs text-slate-500 font-medium">
-                    3 colleagues are on leave this week.
-                  </p>
-                  <div className="flex -space-x-3 overflow-hidden py-2">
-                    {[1, 2, 3].map((_, i) => (
-                      <div
-                        key={i}
-                        className="w-10 h-10 rounded-full border-2 border-white bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-500"
-                      >
-                        {String.fromCharCode(65 + i)}
-                      </div>
-                    ))}
-                    <div className="w-10 h-10 rounded-full border-2 border-white bg-slate-100 flex items-center justify-center text-[10px] font-black text-slate-400">
-                      +2
-                    </div>
-                  </div>
+                  {(() => {
+                    const now = new Date();
+                    const activeTeamLeaves = (teamLeavesData || []).filter((req: any) => {
+                      if (req.status !== "approved") return false;
+                      const end = new Date(req.endDate);
+                      return end >= now;
+                    });
+                    if (activeTeamLeaves.length === 0) {
+                      return (
+                        <p className="text-xs text-slate-400 font-medium">
+                          No colleagues are currently on leave.
+                        </p>
+                      );
+                    }
+                    return (
+                      <>
+                        <p className="text-xs text-slate-500 font-medium">
+                          {activeTeamLeaves.length} colleague{activeTeamLeaves.length > 1 ? "s" : ""} on leave.
+                        </p>
+                        <div className="flex -space-x-3 overflow-hidden py-2">
+                          {activeTeamLeaves.slice(0, 4).map((req: any, i: number) => (
+                            <img
+                              key={i}
+                              src={`https://ui-avatars.com/api/?name=${encodeURIComponent(req.employeeName || "Colleague")}&background=random`}
+                              alt={req.employeeName}
+                              className="w-10 h-10 rounded-full border-2 border-white shadow-sm"
+                            />
+                          ))}
+                          {activeTeamLeaves.length > 4 && (
+                            <div className="w-10 h-10 rounded-full border-2 border-white bg-slate-100 flex items-center justify-center text-[10px] font-black text-slate-400">
+                              +{activeTeamLeaves.length - 4}
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    );
+                  })()}
                   <button
                     onClick={() => setLocalTab("calendar")}
                     className="w-full py-3 bg-slate-50 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-100 transition-all"
@@ -335,23 +356,26 @@ const Leave: React.FC = () => {
 
               <section className="bg-slate-900 p-8 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden">
                 <Info className="absolute -bottom-6 -right-6 w-32 h-32 text-indigo-500/20 rotate-12" />
-                <h3 className="text-lg font-black mb-4">Leave Policy</h3>
+                <h3 className="text-lg font-black mb-4">Leave Guidelines</h3>
                 <ul className="space-y-3 mb-6">
                   <li className="flex items-start gap-3">
                     <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 mt-1.5" />
                     <span className="text-xs text-slate-300 leading-relaxed font-medium">
-                      Annual leave must be requested 2 weeks in advance.
+                      Plan annual leave in advance with your line manager.
                     </span>
                   </li>
                   <li className="flex items-start gap-3">
                     <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 mt-1.5" />
                     <span className="text-xs text-slate-300 leading-relaxed font-medium">
-                      Sick leave requires a medical certificate if &gt; 2 days.
+                      Notify your team and set up a handover contact prior to departure.
                     </span>
                   </li>
                 </ul>
-                <button className="text-[10px] font-black text-indigo-300 uppercase tracking-widest hover:text-white flex items-center gap-2">
-                  Read Full Policy <ChevronRight size={12} />
+                <button
+                  onClick={() => setLocalTab("history")}
+                  className="text-[10px] font-black text-indigo-300 uppercase tracking-widest hover:text-white flex items-center gap-2"
+                >
+                  View Request History <ChevronRight size={12} />
                 </button>
               </section>
             </div>
