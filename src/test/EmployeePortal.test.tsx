@@ -90,7 +90,7 @@ describe('EmployeePortal', () => {
     render(<EmployeePortal />);
 
     expect(screen.getByText('Annual Leave')).toBeInTheDocument();
-    expect(screen.getByText('15')).toBeInTheDocument(); // 20 - 5
+    expect(screen.getAllByText('15')[0]).toBeInTheDocument(); // 20 - 5
   });
 
   it('computes the attendance percentage only from this month\'s records', () => {

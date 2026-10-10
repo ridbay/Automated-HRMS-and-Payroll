@@ -1,6 +1,6 @@
 import { D1Database } from '@cloudflare/workers-types';
 import { drizzle } from 'drizzle-orm/d1';
-import { eq, and, asc } from 'drizzle-orm';
+import { eq, and, asc, inArray } from 'drizzle-orm';
 import * as schema from '../db/schema';
 
 export interface TransitionActor {
@@ -111,7 +111,59 @@ export class TransitionService {
       orderBy: (t: any, { desc }: any) => [desc(t.createdAt)],
     });
 
-    return Promise.all(rows.map((row: any) => this.withDetail(row)));
+    if (rows.length === 0) return [];
+
+    const transitionIds = rows.map((r: any) => r.id);
+    const employeeIds = [...new Set(rows.map((r: any) => r.employeeId).filter(Boolean))];
+
+    // Batch-fetch all tasks and employees concurrently in 2 queries instead of 2*N queries
+    const [allTasks, allEmployees] = await Promise.all([
+      transitionIds.length > 0
+        ? this.db.query.transitionTasks.findMany({
+            where: inArray(schema.transitionTasks.transitionId, transitionIds),
+            orderBy: (t: any, { asc: ascFn }: any) => [ascFn(t.sortOrder)],
+          })
+        : [],
+      employeeIds.length > 0
+        ? this.db.query.employees.findMany({
+            where: inArray(schema.employees.id, employeeIds),
+          })
+        : [],
+    ]);
+
+    const tasksByTransitionId = new Map<string, any[]>();
+    for (const task of allTasks) {
+      const list = tasksByTransitionId.get(task.transitionId) || [];
+      list.push(task);
+      tasksByTransitionId.set(task.transitionId, list);
+    }
+
+    const employeeById = new Map<string, any>();
+    for (const emp of allEmployees) {
+      employeeById.set(emp.id, emp);
+    }
+
+    return rows.map((row: any) => {
+      const tasks = tasksByTransitionId.get(row.id) || [];
+      const employee = employeeById.get(row.employeeId);
+      return {
+        ...row,
+        employeeName: employee ? [employee.name, employee.lastName].filter(Boolean).join(' ') : 'Unknown',
+        employee: employee
+          ? {
+              id: employee.id,
+              name: employee.name,
+              lastName: employee.lastName,
+              avatar: employee.avatar,
+              role: employee.role,
+              department: employee.department,
+              status: employee.status,
+            }
+          : null,
+        progress: tasks.length ? Math.round((tasks.filter((t: any) => t.status === 'completed').length / tasks.length) * 100) : 0,
+        tasks,
+      };
+    });
   }
 
   async getById(companyId: string, id: string) {

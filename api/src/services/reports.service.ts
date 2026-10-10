@@ -308,7 +308,23 @@ export class ReportsService {
 
     const leaveConditions = [eq(schema.leaveRequests.companyId, companyId)];
     if (scope.employeeIds) leaveConditions.push(inArray(schema.leaveRequests.employeeId, scope.employeeIds));
-    const leaves = await this.db.query.leaveRequests.findMany({ where: and(...leaveConditions) });
+
+    const attConditions = [eq(schema.attendanceRecords.companyId, companyId)];
+    if (scope.employeeIds) attConditions.push(inArray(schema.attendanceRecords.employeeId, scope.employeeIds));
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 30);
+    attConditions.push(gte(schema.attendanceRecords.date, cutoff.toISOString().split('T')[0]));
+
+    const otConditions = [eq(schema.overtimeRequests.companyId, companyId)];
+    if (scope.employeeIds) otConditions.push(inArray(schema.overtimeRequests.employeeId, scope.employeeIds));
+
+    // Run leave, attendance, and overtime queries concurrently
+    const [leaves, records, overtimeRequests] = await Promise.all([
+      this.db.query.leaveRequests.findMany({ where: and(...leaveConditions) }),
+      this.db.query.attendanceRecords.findMany({ where: and(...attConditions) }),
+      this.db.query.overtimeRequests.findMany({ where: and(...otConditions) }),
+    ]);
+
     const approved = leaves.filter((l: any) => l.status === 'approved');
 
     const thisYear = String(new Date().getFullYear());
@@ -322,20 +338,11 @@ export class ReportsService {
       requests: leaves.filter((l: any) => l.appliedOn?.startsWith(key)).length,
     }));
 
-    const attConditions = [eq(schema.attendanceRecords.companyId, companyId)];
-    if (scope.employeeIds) attConditions.push(inArray(schema.attendanceRecords.employeeId, scope.employeeIds));
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - 30);
-    attConditions.push(gte(schema.attendanceRecords.date, cutoff.toISOString().split('T')[0]));
-    const records = await this.db.query.attendanceRecords.findMany({ where: and(...attConditions) });
     const withHours = records.filter((r: any) => (r.workHours || 0) > 0);
     const avgWorkHours = withHours.length
       ? +(withHours.reduce((s: number, r: any) => s + r.workHours, 0) / withHours.length).toFixed(2)
       : 0;
 
-    const otConditions = [eq(schema.overtimeRequests.companyId, companyId)];
-    if (scope.employeeIds) otConditions.push(inArray(schema.overtimeRequests.employeeId, scope.employeeIds));
-    const overtimeRequests = await this.db.query.overtimeRequests.findMany({ where: and(...otConditions) });
     const currentMonthKey = monthKey(new Date());
     const approvedOvertimeHoursThisMonth = overtimeRequests
       .filter((o: any) => o.status === 'approved' && o.date?.startsWith(currentMonthKey))
@@ -376,11 +383,15 @@ export class ReportsService {
 
     const goalConditions = [eq(schema.goals.companyId, companyId)];
     if (scope.employeeIds) goalConditions.push(inArray(schema.goals.employeeId, scope.employeeIds));
-    const goals = await this.db.query.goals.findMany({ where: and(...goalConditions) });
 
     const assessConditions = [eq(schema.assessments.companyId, companyId)];
     if (scope.employeeIds) assessConditions.push(inArray(schema.assessments.employeeId, scope.employeeIds));
-    const assessments = await this.db.query.assessments.findMany({ where: and(...assessConditions) });
+
+    // Run goals and assessments queries concurrently
+    const [goals, assessments] = await Promise.all([
+      this.db.query.goals.findMany({ where: and(...goalConditions) }),
+      this.db.query.assessments.findMany({ where: and(...assessConditions) }),
+    ]);
 
     return {
       goalsByStatus: toChartArray(groupCount(goals, (g: any) => g.status || 'unknown')),

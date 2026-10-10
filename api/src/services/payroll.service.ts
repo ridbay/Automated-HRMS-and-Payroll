@@ -574,11 +574,10 @@ export class PayrollService {
   }
 
   async previewRun(companyId: string, month: number, year: number, overrides: Record<string, any> = {}) {
-    const activeEmployees = await this.db.query.employees.findMany({
-      where: and(eq(schema.employees.companyId, companyId), eq(schema.employees.status, 'active')),
-    });
-
-    const [settings, brackets, components, attendanceMap, loanMap] = await Promise.all([
+    const [activeEmployees, settings, brackets, components, attendanceMap, loanMap] = await Promise.all([
+      this.db.query.employees.findMany({
+        where: and(eq(schema.employees.companyId, companyId), eq(schema.employees.status, 'active')),
+      }),
       this.getSettings(companyId),
       this.getTaxBrackets(companyId),
       this.getSalaryComponents(companyId),

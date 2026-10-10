@@ -183,7 +183,18 @@ export class BenefitsService {
     const planIds = [...new Set(rows.map((r) => r.planId))];
 
     const [emps, plans] = await Promise.all([
-      employeeIds.length ? this.db.select().from(employees).where(inArray(employees.id, employeeIds)) : [],
+      employeeIds.length
+        ? this.db
+            .select({
+              id: employees.id,
+              name: employees.name,
+              lastName: employees.lastName,
+              avatar: employees.avatar,
+              department: employees.department,
+            })
+            .from(employees)
+            .where(inArray(employees.id, employeeIds))
+        : [],
       planIds.length ? this.db.select().from(schema.benefitPlans).where(inArray(schema.benefitPlans.id, planIds)) : [],
     ]);
 
@@ -389,8 +400,10 @@ export class BenefitsService {
     const [existing] = await this.db.select().from(schema.wellnessPrograms)
       .where(and(eq(schema.wellnessPrograms.id, programId), eq(schema.wellnessPrograms.companyId, companyId)));
     if (!existing) return null;
-    await this.db.delete(schema.wellnessParticipants).where(eq(schema.wellnessParticipants.programId, programId));
-    await this.db.delete(schema.wellnessPrograms).where(eq(schema.wellnessPrograms.id, programId));
+    await this.db.batch([
+      this.db.delete(schema.wellnessParticipants).where(eq(schema.wellnessParticipants.programId, programId)),
+      this.db.delete(schema.wellnessPrograms).where(eq(schema.wellnessPrograms.id, programId)),
+    ]);
     return existing;
   }
 
@@ -401,7 +414,15 @@ export class BenefitsService {
 
     if (rows.length === 0) return [];
     const employeeIds = [...new Set(rows.map((r: any) => r.employeeId))];
-    const emps = await this.db.select().from(employees).where(inArray(employees.id, employeeIds));
+    const emps = await this.db
+      .select({
+        id: employees.id,
+        name: employees.name,
+        lastName: employees.lastName,
+        avatar: employees.avatar,
+      })
+      .from(employees)
+      .where(inArray(employees.id, employeeIds));
     const empMap = new Map(emps.map((e: any) => [e.id, e]));
 
     return rows.map((r: any) => ({
@@ -478,7 +499,16 @@ export class BenefitsService {
   private async enrichClaims(rows: any[]) {
     if (rows.length === 0) return [];
     const employeeIds = [...new Set(rows.map((r) => r.employeeId))];
-    const emps = await this.db.select().from(employees).where(inArray(employees.id, employeeIds));
+    const emps = await this.db
+      .select({
+        id: employees.id,
+        name: employees.name,
+        lastName: employees.lastName,
+        avatar: employees.avatar,
+        department: employees.department,
+      })
+      .from(employees)
+      .where(inArray(employees.id, employeeIds));
     const empMap = new Map(emps.map((e: any) => [e.id, e]));
     return rows.map((r) => ({
       ...r,

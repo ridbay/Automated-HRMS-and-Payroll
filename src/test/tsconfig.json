@@ -1,7 +1,8 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {
-    "types": ["node", "vite/client", "@testing-library/jest-dom"]
+    "types": ["node", "vite/client", "@testing-library/jest-dom", "react"]
   },
-  "include": ["."]
+  "include": ["."],
+  "exclude": []
 }

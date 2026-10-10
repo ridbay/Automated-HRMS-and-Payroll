@@ -141,8 +141,10 @@ export class AiService {
   }
 
   // ---------------- Role-scoping helpers ----------------
-  private async getManagedEmployeeIds(managerId: string): Promise<Set<string>> {
-    const reports = await this.db.query.employees.findMany({ where: eq(schema.employees.managerId, managerId) });
+  private async getManagedEmployeeIds(companyId: string, managerId: string): Promise<Set<string>> {
+    const reports = await this.db.query.employees.findMany({
+      where: and(eq(schema.employees.companyId, companyId), eq(schema.employees.managerId, managerId)),
+    });
     return new Set(reports.map((r: any) => r.id));
   }
 
@@ -157,7 +159,7 @@ export class AiService {
     if (!isPrivileged(caller.role) && targetId !== caller.employeeId) {
       let hasFullAccess = false;
       if (caller.role === 'MANAGER') {
-        const reports = await this.getManagedEmployeeIds(caller.employeeId);
+        const reports = await this.getManagedEmployeeIds(caller.companyId, caller.employeeId);
         hasFullAccess = reports.has(targetId);
       }
       // Not privileged and not a manager-of-this-person: fall back to the
@@ -225,7 +227,7 @@ export class AiService {
 
     if (!isPrivileged(caller.role) && targetId !== caller.employeeId) {
       if (caller.role === 'MANAGER') {
-        const reports = await this.getManagedEmployeeIds(caller.employeeId);
+        const reports = await this.getManagedEmployeeIds(caller.companyId, caller.employeeId);
         if (!reports.has(targetId)) return { error: "You can only view your own leave balance or your direct reports'." };
       } else {
         return { error: 'You can only view your own leave balance.' };
@@ -233,8 +235,16 @@ export class AiService {
     }
 
     const [balances, requests] = await Promise.all([
-      this.db.query.leaveBalances.findMany({ where: eq(schema.leaveBalances.employeeId, targetId) }),
-      this.db.query.leaveRequests.findMany({ where: and(eq(schema.leaveRequests.employeeId, targetId), eq(schema.leaveRequests.status, 'approved')) }),
+      this.db.query.leaveBalances.findMany({
+        where: and(eq(schema.leaveBalances.companyId, caller.companyId), eq(schema.leaveBalances.employeeId, targetId)),
+      }),
+      this.db.query.leaveRequests.findMany({
+        where: and(
+          eq(schema.leaveRequests.companyId, caller.companyId),
+          eq(schema.leaveRequests.employeeId, targetId),
+          eq(schema.leaveRequests.status, 'approved')
+        ),
+      }),
     ]);
 
     const takenByType = new Map<string, number>();
@@ -253,7 +263,7 @@ export class AiService {
     });
 
     if (caller.role === 'MANAGER') {
-      const reports = await this.getManagedEmployeeIds(caller.employeeId);
+      const reports = await this.getManagedEmployeeIds(caller.companyId, caller.employeeId);
       rows = (rows as any[]).filter((r) => reports.has(r.employeeId));
     }
 
@@ -269,7 +279,7 @@ export class AiService {
     });
 
     if (caller.role === 'MANAGER') {
-      const reports = await this.getManagedEmployeeIds(caller.employeeId);
+      const reports = await this.getManagedEmployeeIds(caller.companyId, caller.employeeId);
       employees = (employees as any[]).filter((e) => reports.has(e.id));
     } else if (args.departmentId && (isPrivileged(caller.role) || caller.role === 'PAYROLL_OFFICER')) {
       employees = (employees as any[]).filter((e) => e.departmentId === args.departmentId);

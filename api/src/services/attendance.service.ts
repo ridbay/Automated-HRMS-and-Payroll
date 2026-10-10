@@ -306,27 +306,29 @@ export class AttendanceService {
       return { date, totalEmployees: 0, present: 0, late: 0, absent: 0, onLeave: 0, stillClockedIn: 0, avgWorkHours: 0 };
     }
 
-    const records = await this.db.query.attendanceRecords.findMany({
-      where: and(
-        eq(schema.attendanceRecords.companyId, companyId),
-        eq(schema.attendanceRecords.date, date),
-        inArray(schema.attendanceRecords.employeeId, scopedIds)
-      ),
-    });
+    // Run attendance records and leave requests queries concurrently
+    const [records, leaveRows] = await Promise.all([
+      this.db.query.attendanceRecords.findMany({
+        where: and(
+          eq(schema.attendanceRecords.companyId, companyId),
+          eq(schema.attendanceRecords.date, date),
+          inArray(schema.attendanceRecords.employeeId, scopedIds)
+        ),
+      }),
+      this.db.query.leaveRequests.findMany({
+        where: and(
+          eq(schema.leaveRequests.companyId, companyId),
+          eq(schema.leaveRequests.status, 'approved'),
+          lte(schema.leaveRequests.startDate, date),
+          gte(schema.leaveRequests.endDate, date),
+          inArray(schema.leaveRequests.employeeId, scopedIds)
+        ),
+      }),
+    ]);
 
     const presentIds = new Set(records.map((r: any) => r.employeeId));
     const lateIds = new Set(records.filter((r: any) => r.status === 'late').map((r: any) => r.employeeId));
     const stillClockedIn = records.filter((r: any) => !r.clockOut).length;
-
-    const leaveRows = await this.db.query.leaveRequests.findMany({
-      where: and(
-        eq(schema.leaveRequests.companyId, companyId),
-        eq(schema.leaveRequests.status, 'approved'),
-        lte(schema.leaveRequests.startDate, date),
-        gte(schema.leaveRequests.endDate, date),
-        inArray(schema.leaveRequests.employeeId, scopedIds)
-      ),
-    });
     const onLeaveIds = new Set(
       leaveRows.map((r: any) => r.employeeId).filter((id: string) => !presentIds.has(id))
     );

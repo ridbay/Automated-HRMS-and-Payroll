@@ -116,13 +116,21 @@ export class LeaveService {
   }
 
   async calculateLeaveBalances(companyId: string, employeeId: string) {
-    const requests = await this.db.query.leaveRequests.findMany({
-      where: and(
-        eq(schema.leaveRequests.companyId, companyId),
-        eq(schema.leaveRequests.employeeId, employeeId),
-        eq(schema.leaveRequests.status, 'approved')
-      )
-    });
+    const [requests, initialBalances] = await Promise.all([
+      this.db.query.leaveRequests.findMany({
+        where: and(
+          eq(schema.leaveRequests.companyId, companyId),
+          eq(schema.leaveRequests.employeeId, employeeId),
+          eq(schema.leaveRequests.status, 'approved')
+        ),
+      }),
+      this.db.query.leaveBalances.findMany({
+        where: and(
+          eq(schema.leaveBalances.companyId, companyId),
+          eq(schema.leaveBalances.employeeId, employeeId)
+        ),
+      }),
+    ]);
 
     // Sum approved days per leave type generically — not just the three
     // built-in defaults — so a custom type (HR can add one via the employee
@@ -132,12 +140,7 @@ export class LeaveService {
       usedByType.set(r.type, (usedByType.get(r.type) || 0) + r.days);
     }
 
-    let balances: any[] = await this.db.query.leaveBalances.findMany({
-      where: and(
-        eq(schema.leaveBalances.companyId, companyId),
-        eq(schema.leaveBalances.employeeId, employeeId)
-      )
-    });
+    let balances: any[] = initialBalances;
 
     if (!balances || balances.length === 0) {
       balances = [

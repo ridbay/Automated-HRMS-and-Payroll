@@ -382,12 +382,12 @@ export class DataExportService {
 
   async getStats(companyId: string) {
     const [employees, departments, locations, documents, payrollRuns, requisitions] = await Promise.all([
-      this.db.select().from(schema.employees).where(eq(schema.employees.companyId, companyId)).all(),
-      this.db.select().from(schema.departments).where(eq(schema.departments.companyId, companyId)).all(),
-      this.db.select().from(schema.locations).where(eq(schema.locations.companyId, companyId)).all(),
-      this.db.select().from(schema.employeeDocuments).where(eq(schema.employeeDocuments.companyId, companyId)).all(),
-      this.db.select().from(schema.payrollRuns).where(eq(schema.payrollRuns.companyId, companyId)).all(),
-      this.db.select().from(schema.jobRequisitions).where(eq(schema.jobRequisitions.companyId, companyId)).all(),
+      this.db.select({ id: schema.employees.id, status: schema.employees.status }).from(schema.employees).where(eq(schema.employees.companyId, companyId)).all(),
+      this.db.select({ id: schema.departments.id }).from(schema.departments).where(eq(schema.departments.companyId, companyId)).all(),
+      this.db.select({ id: schema.locations.id }).from(schema.locations).where(eq(schema.locations.companyId, companyId)).all(),
+      this.db.select({ id: schema.employeeDocuments.id }).from(schema.employeeDocuments).where(eq(schema.employeeDocuments.companyId, companyId)).all(),
+      this.db.select({ id: schema.payrollRuns.id }).from(schema.payrollRuns).where(eq(schema.payrollRuns.companyId, companyId)).all(),
+      this.db.select({ id: schema.jobRequisitions.id }).from(schema.jobRequisitions).where(eq(schema.jobRequisitions.companyId, companyId)).all(),
     ]);
 
     return {
